@@ -1,76 +1,89 @@
-import os
+import streamlit as st
+import pandas as pd
+import numpy as np
 import time
 import datetime
-
-import numpy as np
-import pandas as pd
+import os
 import pytz
-import streamlit as st
-from libsql_client import ClientSync, create_client_sync
-from lightweight_charts.widgets import StreamlitChart
-from streamlit_autorefresh import st_autorefresh  # requires: pip install streamlit-autorefresh
 from streamlit_js_eval import streamlit_js_eval
+from lightweight_charts.widgets import StreamlitChart
+from libsql_client import create_client_sync, ClientSync
 
 # ========================================
-# PAGE CONFIG
+# 1. PAGE CONFIG
 # ========================================
 st.set_page_config(
     layout="wide",
     page_title="Market Rewind",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="collapsed"
 )
 
 # ========================================
-# CSS: CLEAN PADDING
+# 2. CSS STYLING
 # ========================================
-st.markdown(
-    """
+st.markdown("""
     <style>
+        /* Reduce padding around the main block */
         .block-container {
-            padding-top: 1rem;
+            padding-top: 3rem;
             padding-bottom: 0rem;
             padding-left: 1rem;
             padding-right: 1rem;
         }
+        
+        /* Tighten vertical gaps between elements */
         div[data-testid="stVerticalBlock"] > div {
             gap: 0.5rem;
         }
+        
         /* Better alignment for the playback buttons */
         div.stButton > button {
             width: 100%;
+            border-radius: 4px;
+        }
+        
+        /* Centered Global Time Display */
+        .global-time {
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #4CAF50; /* Green highlight for time */
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        
+        /* Error Message Styling for Missing Data */
+        .no-data-msg {
+            text-align: center;
+            color: #ef5350;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        /* Sidebar Status */
+        .db-status-ok {
+            padding: 10px;
+            background-color: #d4edda;
+            color: #155724;
+            border-radius: 5px;
+            border: 1px solid #c3e6cb;
+            text-align: center;
+            font-weight: bold;
         }
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 # ========================================
-# DYNAMIC HEIGHT CALC
-# ========================================
-def get_dynamic_chart_height(num_charts, viewport_height):
-    """
-    Compute per-chart height based on viewport.
-    """
-    if viewport_height is None or viewport_height <= 0:
-        viewport_height = 900
-
-    reserved_top_px = 40
-    reserved_bottom_px = 10
-
-    usable = max(300, viewport_height - reserved_top_px - reserved_bottom_px)
-
-    rows = 1 if num_charts <= 2 else 2
-    per_chart = usable / rows
-
-    return int(per_chart)
-
-
-# ========================================
-# DATABASE CONNECTION
+# 3. DATABASE CONNECTION & HELPERS
 # ========================================
 @st.cache_resource
 def get_db_connection():
+    """
+    Establishes a connection to the Turso (LibSQL) database.
+    Performs a strict connectivity check.
+    """
     try:
+        # 1. Credentials
         if "turso" in st.secrets:
             url = st.secrets["turso"]["db_url"]
             token = st.secrets["turso"]["auth_token"]
@@ -79,19 +92,34 @@ def get_db_connection():
             token = os.environ.get("TURSO_AUTH_TOKEN")
 
         if not url or not token:
-            st.error("Missing Turso credentials.")
-            return None
+            st.error("❌ CRITICAL: Missing Turso DB credentials (Secrets/Env Vars).")
+            st.stop()
 
+        # 2. Connection Logic
         http_url = url.replace("libsql://", "https://")
         config = {"url": http_url, "auth_token": token}
-        return create_client_sync(**config)
-    except Exception as e:
-        st.error(f"Failed to create Turso client: {e}")
-        return None
+        
+        client = create_client_sync(**config)
+        
+        # 3. Connectivity Check (The 'Ping')
+        try:
+            client.execute("SELECT 1")
+        except Exception as ping_error:
+            st.error(f"❌ DATABASE CONNECTION FAILED.\n\nCould not execute handshake query.\nError: {ping_error}")
+            st.stop()
+            
+        return client
 
+    except Exception as e:
+        st.error(f"❌ DATABASE INITIALIZATION ERROR: {e}")
+        st.stop()
+        return None
 
 @st.cache_data
 def get_available_tickers(_client: ClientSync):
+    """
+    Fetches the list of available tickers from the symbol_map table.
+    """
     try:
         rs = _client.execute("SELECT user_ticker FROM symbol_map ORDER BY user_ticker;")
         return [row["user_ticker"] for row in rs.rows]
@@ -99,427 +127,478 @@ def get_available_tickers(_client: ClientSync):
         st.error(f"Failed to fetch tickers: {e}")
         return []
 
-
 @st.cache_data
 def load_master_data(_client: ClientSync, ticker: str, earliest_date_str: str, include_eth: bool):
+    """
+    Loads raw 1-minute data from the database.
+    Includes explicit error reporting for debugging data issues.
+    """
     try:
         if include_eth:
             query = """
-                SELECT timestamp, open, high, low, close, volume
-                FROM market_data
+                SELECT timestamp, open, high, low, close, volume 
+                FROM market_data 
                 WHERE symbol = ? AND timestamp >= ?
                 ORDER BY timestamp;
             """
             params = [ticker, earliest_date_str]
         else:
             query = """
-                SELECT timestamp, open, high, low, close, volume
-                FROM market_data
+                SELECT timestamp, open, high, low, close, volume 
+                FROM market_data 
                 WHERE symbol = ? AND session = 'REG' AND timestamp >= ?
                 ORDER BY timestamp;
             """
             params = [ticker, earliest_date_str]
-
+            
         rs = _client.execute(query, params)
-
+        
     except Exception as e:
-        st.error(f"DB Query failed for {ticker}: {e}")
+        # EXPLICIT ERROR REPORTING
+        st.error(f"❌ DB READ ERROR for {ticker}: {e}")
         return pd.DataFrame()
 
     df = pd.DataFrame(rs.rows, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    
     if df.empty:
+        # Debug info if data is missing but no error occurred
+        # Only show this if specific dates (like 2024/2025) are expected but missing
+        # st.warning(f"⚠️ Query returned 0 rows for {ticker} (>= {earliest_date_str}).")
         return df
 
     # Ensure timezone aware (UTC)
-    df["time"] = pd.to_datetime(df["timestamp"], utc=True)
+    # If the DB string format is weird, this line might fail, so we wrap it
+    try:
+        df['time'] = pd.to_datetime(df['timestamp'], utc=True)
+        # Convert numeric columns
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            df[col] = pd.to_numeric(df[col])
+    except Exception as parse_error:
+        st.error(f"❌ DATA PARSING ERROR: {parse_error}")
+        return pd.DataFrame()
+    
+    return df[['time', 'open', 'high', 'low', 'close', 'volume']]
 
-    for col in ["open", "high", "low", "close", "volume"]:
-        df[col] = pd.to_numeric(df[col])
-
-    # Color logic
-    df["color"] = np.where(
-        df["open"] > df["close"],
-        "rgba(239, 83, 80, 0.8)",
-        "rgba(38, 166, 154, 0.8)",
-    )
-
-    return df[["time", "open", "high", "low", "close", "volume", "color"]]
-
-
-@st.cache_data
 def resample_data(df, timeframe):
+    """
+    Aggregates raw 1-minute data into larger candles (5Min, 15Min, 1Day, etc).
+    """
     if df.empty:
-        return pd.DataFrame(columns=["time", "open", "high", "low", "close", "volume", "color"])
+        return pd.DataFrame(columns=['time', 'open', 'high', 'low', 'close', 'volume', 'color'])
 
-    df = df.set_index("time")
+    df = df.set_index('time')
+    
     agg = {
-        "open": "first",
-        "high": "max",
-        "low": "min",
-        "close": "last",
-        "volume": "sum",
+        'open': 'first', 
+        'high': 'max', 
+        'low': 'min', 
+        'close': 'last', 
+        'volume': 'sum'
     }
+    
     resampled = df.resample(timeframe).agg(agg).dropna().reset_index()
-
-    # Re-apply color after resampling
-    resampled["color"] = np.where(
-        resampled["open"] > resampled["close"],
-        "rgba(239, 83, 80, 0.8)",
-        "rgba(38, 166, 154, 0.8)",
+    
+    # Apply color logic AFTER aggregation
+    resampled['color'] = np.where(
+        resampled['open'] > resampled['close'],
+        'rgba(239, 83, 80, 0.8)',  # Red
+        'rgba(38, 166, 154, 0.8)'   # Green
     )
     return resampled
 
-
 # ========================================
-# GLOBAL TIMEFRAME MAP & PLAYBACK HELPERS
+# 4. CHART LAYOUT HELPER
 # ========================================
-TIMEFRAME_MAP = {
-    "1 Min": ("1min", 1),
-    "5 Min": ("5min", 5),
-    "15 Min": ("15min", 15),
-    "30 Min": ("30min", 30),
-    "1 Hr": ("1H", 60),
-    "1 Day": ("1D", 1440),
-}
-
-
-def init_global_playback_state():
-    if "global_playing" not in st.session_state:
-        st.session_state["global_playing"] = False
-    if "global_speed" not in st.session_state:
-        st.session_state["global_speed"] = 1.0  # seconds
-    if "global_date" not in st.session_state:
-        st.session_state["global_date"] = None
-    if "global_dt" not in st.session_state:
-        st.session_state["global_dt"] = None
-    if "global_date_prev" not in st.session_state:
-        st.session_state["global_date_prev"] = None
-    if "global_last_tick" not in st.session_state:
-        st.session_state["global_last_tick"] = None
-
-
-def get_min_step_minutes(num_charts: int) -> int:
-    mins = []
-    for i in range(num_charts):
-        tf_label = st.session_state.get(f"c{i}_tf", "1 Min")
-        _, step_min = TIMEFRAME_MAP.get(tf_label, ("1min", 1))
-        mins.append(step_min)
-    return min(mins) if mins else 1
-
-
-def ensure_global_dt_initialized():
-    """Ensure global_dt exists, using global_date at 9:30 AM ET."""
-    if st.session_state.get("global_date") is None:
-        return
-    if st.session_state.get("global_dt") is None:
-        ny_tz = pytz.timezone("America/New_York")
-        start_dt_ny = datetime.datetime.combine(
-            st.session_state["global_date"],
-            datetime.time(9, 30),
-        )
-        st.session_state["global_dt"] = ny_tz.localize(start_dt_ny).astimezone(pytz.UTC)
-
-
-def step_global_dt(direction: int = 1):
-    """Move global_dt by +/- one smallest timeframe unit."""
-    ensure_global_dt_initialized()
-    if st.session_state.get("global_dt") is None:
-        return
-    n = st.session_state.get("num_charts", 1)
-    minutes = get_min_step_minutes(n)
-    delta = datetime.timedelta(minutes=minutes * direction)
-    st.session_state["global_dt"] = st.session_state["global_dt"] + delta
-
-
-def render_global_controls():
-    init_global_playback_state()
-    ensure_global_dt_initialized()
-
-    c_date, c_prev, c_play, c_next, c_speed = st.columns([2, 0.7, 1.5, 0.7, 1.5])
-
-    # Global Date picker: reset global_dt to 9:30 AM ET on new date
-    with c_date:
-        date_val = st.date_input(
-            "Date",
-            key="global_date",
-            help="Trading date for Market Rewind (resets time to 9:30 AM ET when changed).",
-        )
-        if st.session_state["global_date_prev"] != date_val:
-            st.session_state["global_date_prev"] = date_val
-            st.session_state["global_date"] = date_val
-            ny_tz = pytz.timezone("America/New_York")
-            start_dt_ny = datetime.datetime.combine(
-                date_val,
-                datetime.time(9, 30),
-            )
-            st.session_state["global_dt"] = ny_tz.localize(start_dt_ny).astimezone(pytz.UTC)
-            st.session_state["global_playing"] = False
-            st.rerun()
-
-    # Previous: step back by one unit
-    with c_prev:
-        if st.button("⏮", use_container_width=True, help="Step Back (Previous Unit)"):
-            step_global_dt(direction=-1)
-            st.rerun()
-
-    # Play / Pause toggle
-    with c_play:
-        if st.session_state.get("global_playing", False):
-            if st.button("⏸ Pause", use_container_width=True):
-                st.session_state["global_playing"] = False
-                st.rerun()
-        else:
-            if st.button("▶ Play", use_container_width=True):
-                st.session_state["global_playing"] = True
-                st.rerun()
-
-    # Next: step forward by one unit
-    with c_next:
-        if st.button("⏭", use_container_width=True, help="Step Forward (Next Unit)"):
-            step_global_dt(direction=1)
-            st.rerun()
-
-    # Global speed selector
-    with c_speed:
-        speed_options = [0.1, 0.25, 0.5, 1.0, 2.0, 5.0]
-        current_speed = st.session_state.get("global_speed", 1.0)
-        if current_speed not in speed_options:
-            current_speed = 1.0
-        st.session_state["global_speed"] = st.selectbox(
-            "Spd",
-            speed_options,
-            index=speed_options.index(current_speed),
-            format_func=lambda x: f"{x:.2f}s" if x < 1 else f"{x:.0f}s",
-            key="global_speed_widget",
-            label_visibility="collapsed",
-            help="Time delay between each global step (lower is faster).",
-        )
-
-    # Display current global time in NY
-    if st.session_state.get("global_dt") is not None:
-        ny_tz = pytz.timezone("America/New_York")
-        ts_ny = st.session_state["global_dt"].astimezone(ny_tz)
-        st.caption(f"Global replay time: {ts_ny.strftime('%Y-%m-%d %H:%M %Z')}")
-
-
-# ========================================
-# CHART UNIT (PURE VIEW OF GLOBAL_DT)
-# ========================================
-@st.fragment
-def render_chart_unit(chart_id, db_client, show_border=True, default_tf="1 Min"):
+def get_dynamic_chart_height(num_charts, viewport_height):
     """
-    Renders a chart unit that is fully driven by global_dt.
-    No local playback loop or local time state.
+    Calculates the height of each chart based on the window size.
     """
-    # STATE KEYS
+    if viewport_height is None or viewport_height <= 0:
+        viewport_height = 900 
+
+    reserved_top_px = 40 
+    reserved_bottom_px = 120 # Space for control bar and time display
+
+    usable = max(300, viewport_height - reserved_top_px - reserved_bottom_px)
+
+    rows = 1 if num_charts <= 2 else 2
+    per_chart = usable / rows
+
+    return int(per_chart)
+
+# ========================================
+# 5. RENDER CHART UNIT (The Logic Core)
+# ========================================
+def render_chart_unit(chart_id, db_client, chart_height, global_dt, show_border=True, default_tf="1 Min", default_ticker=None):
+    """
+    Renders a single chart unit.
+    Implements Dynamic Construction (Slice -> Resample) to prevent look-ahead bias.
+    """
+    # Unique keys for session state
     k_ticker = f"c{chart_id}_ticker"
     k_tf = f"c{chart_id}_tf"
-    k_eth = f"c{chart_id}_eth"
-    k_view_mode = f"c{chart_id}_view_mode"
-    k_active = f"c{chart_id}_active"
-    k_data = f"c{chart_id}_data"
-    k_last_sig = f"c{chart_id}_last_signature"
-
-    # Initialize per-chart state
-    if k_active not in st.session_state:
-        st.session_state[k_active] = True
+    k_eth = f"c{chart_id}_eth" 
+    k_view_mode = f"c{chart_id}_view_mode" 
+    
+    # --- Initialize Local State ---
+    if k_ticker not in st.session_state:
+        tickers = get_available_tickers(db_client)
+        if default_ticker and default_ticker in tickers:
+            st.session_state[k_ticker] = default_ticker
+        else:
+            st.session_state[k_ticker] = tickers[0] if tickers else ""
+        
     if k_tf not in st.session_state:
         st.session_state[k_tf] = default_tf
+        
     if k_eth not in st.session_state:
-        st.session_state[k_eth] = False
+        st.session_state[k_eth] = False 
+    
     if k_view_mode not in st.session_state:
         st.session_state[k_view_mode] = "Viewer Mode"
-    if k_data not in st.session_state:
-        st.session_state[k_data] = pd.DataFrame()
-    if k_last_sig not in st.session_state:
-        st.session_state[k_last_sig] = None
 
-    chart_height = st.session_state.get("chart_height_px", 600)
-
+    # --- Render Controls ---
     with st.container(border=show_border):
-        # --- CONTROLS ROW 1: SELECTORS ---
         c1, c2, c3, c4, _ = st.columns([1.5, 1.5, 2.0, 1.0, 1.0])
-
+        
         with c1:
             tickers = get_available_tickers(db_client)
             sel_ticker = st.selectbox(
-                "Ticker",
-                tickers,
-                key=k_ticker,
-                label_visibility="collapsed",
-                placeholder="Ticker",
-                help="Select the stock symbol to analyze.",
+                "Ticker", tickers, 
+                key=k_ticker, 
+                label_visibility="collapsed"
             )
-
+        
         with c2:
-            tf_label = st.selectbox(
-                "TF",
-                list(TIMEFRAME_MAP.keys()),
-                key=k_tf,
-                label_visibility="collapsed",
-                help="Select the chart timeframe.",
+            tf_map = {
+                "1 Min": "1min", 
+                "5 Min": "5min", 
+                "15 Min": "15min", 
+                "30 Min": "30min", 
+                "1 Hr": "1H", 
+                "1 Day": "1D"
+            }
+            sel_tf_str = st.selectbox(
+                "TF", list(tf_map.keys()), 
+                key=k_tf, 
+                label_visibility="collapsed"
             )
-            sel_tf_agg, _ = TIMEFRAME_MAP[tf_label]
-
+            sel_tf_agg = tf_map[sel_tf_str]
+        
         with c3:
             st.selectbox(
-                "Mode",
-                ["Viewer Mode", "Replay Mode"],
-                key=k_view_mode,
-                label_visibility="collapsed",
-                help=(
-                    "Viewer Mode: Dense, thin candles for overview.\n"
-                    "Replay Mode: Zoomed, thick candles for simulation."
-                ),
+                "Mode", ["Viewer Mode", "Replay Mode"], 
+                key=k_view_mode, 
+                label_visibility="collapsed"
             )
 
         with c4:
-            is_eth = st.toggle(
-                "ETH",
-                key=k_eth,
-                help=(
-                    "Toggle Extended Trading Hours (Pre/Post Market).\n\n"
-                    "⚠️ Toggling this will reload data for this chart."
-                ),
-            )
+            is_eth = st.toggle("ETH", key=k_eth)
 
-        is_replay_mode = st.session_state[k_view_mode] == "Replay Mode"
+        is_replay_mode = (st.session_state[k_view_mode] == "Replay Mode")
 
-        # --- DATA PREP ---
-        if not sel_ticker:
-            st.info("Select ticker")
-            return
-
+        # --- Data Loading (Raw 1-Min) ---
         EARLIEST = "2024-01-01"
-        master_data = load_master_data(db_client, sel_ticker, EARLIEST, is_eth)
-        if master_data.empty:
-            st.warning("No data found.")
-            return
+        master_data_raw = load_master_data(db_client, sel_ticker, EARLIEST, is_eth)
+        
+        # Determine latest date for initial setup (runs once)
+        if not master_data_raw.empty and "global_latest_db_date" not in st.session_state:
+            st.session_state.global_latest_db_date = master_data_raw['time'].max().date()
 
-        # Initialize global_date / global_dt once using actual data
-        latest_db_date = master_data["time"].max().date()
-        if st.session_state.get("global_date") is None:
-            st.session_state["global_date"] = latest_db_date
-        ensure_global_dt_initialized()
+        # --- Data Guard (Check if Date Exists) ---
+        if not master_data_raw.empty:
+            current_picker_date = st.session_state.get("global_picker_val", datetime.date.today())
+            # Check if we have data for this specific day
+            has_data_for_date = (master_data_raw['time'].dt.date == current_picker_date).any()
+            if has_data_for_date:
+                st.session_state.has_valid_data = True
+        
+        # Report Timeframe Delta (for Global Stepper)
+        if "chart_deltas" not in st.session_state: 
+            st.session_state.chart_deltas = {}
+        st.session_state.chart_deltas[chart_id] = pd.to_timedelta(sel_tf_agg)
 
-        # (Re)build resampled data only when signature changes
-        current_signature = f"{sel_ticker}_{sel_tf_agg}_{is_eth}"
-        if st.session_state[k_last_sig] != current_signature:
-            full_resampled = resample_data(master_data, sel_tf_agg)
-            st.session_state[k_data] = full_resampled
-            st.session_state[k_last_sig] = current_signature
+        # --- Dynamic Resampling Logic ---
+        if not master_data_raw.empty:
+            if is_replay_mode and global_dt is not None:
+                # Filter raw data to current time
+                sliced_raw = master_data_raw[master_data_raw['time'] <= global_dt]
+                # Resample ONLY the visible data
+                final_chart_data = resample_data(sliced_raw, sel_tf_agg)
+            else:
+                # Viewer Mode: Full Data
+                final_chart_data = resample_data(master_data_raw, sel_tf_agg)
+        else:
+             final_chart_data = pd.DataFrame(columns=['time', 'open', 'high', 'low', 'close', 'volume', 'color'])
 
-        df = st.session_state[k_data]
-
-        # --- CHART RENDERING ---
+        # --- Chart Rendering ---
         try:
             chart = StreamlitChart(height=chart_height)
             chart.layout(background_color="#0f111a", text_color="#ffffff")
             chart.price_scale()
             chart.volume_config()
 
-            # DYNAMIC VISUAL SETTINGS
+            # --- Visual Settings (Spacing & Offsets) ---
             if is_replay_mode:
-                offset = 45
-                if tf_label == "1 Min":
+                # Custom Spacing & Offset per Timeframe
+                if sel_tf_str == "1 Min": 
                     spacing = 8.0
-                elif tf_label == "5 Min":
+                    offset = 45
+                elif sel_tf_str == "5 Min": 
                     spacing = 10.0
-                elif tf_label == "15 Min":
+                    offset = 30
+                elif sel_tf_str == "15 Min": 
                     spacing = 12.0
-                elif tf_label == "30 Min":
+                    offset = 20
+                elif sel_tf_str == "30 Min": 
                     spacing = 14.0
-                elif tf_label == "1 Hr":
+                    offset = 10 
+                elif sel_tf_str == "1 Hr": 
                     spacing = 16.0
-                elif tf_label == "1 Day":
+                    offset = 5
+                elif sel_tf_str == "1 Day": 
                     spacing = 20.0
-                else:
+                    offset = 2 
+                else: 
                     spacing = 10.0
+                    offset = 20
             else:
+                # Viewer Mode (Dense Overview)
                 offset = 5
-                if tf_label == "1 Min":
-                    spacing = 0.5
-                elif tf_label == "5 Min":
-                    spacing = 2.0
-                elif tf_label == "15 Min":
-                    spacing = 4.0
-                elif tf_label == "30 Min":
-                    spacing = 7.0
-                elif tf_label == "1 Hr":
-                    spacing = 8.0
-                elif tf_label == "1 Day":
-                    spacing = 10.0
-                else:
-                    spacing = 5.0
+                if sel_tf_str == "1 Min": spacing = 0.5
+                elif sel_tf_str == "5 Min": spacing = 2.0
+                elif sel_tf_str == "15 Min": spacing = 4.0
+                elif sel_tf_str == "30 Min": spacing = 7.0
+                elif sel_tf_str == "1 Hr": spacing = 8.0
+                elif sel_tf_str == "1 Day": spacing = 10.0
+                else: spacing = 5.0
 
             chart.time_scale(min_bar_spacing=spacing, right_offset=offset)
 
+            # --- Set Data ---
+            if not final_chart_data.empty:
+                c_data = final_chart_data.copy()
+                # Format time for Lightweight Charts
+                c_data['time'] = c_data['time'].apply(lambda x: x.isoformat())
+                chart.set(c_data)
+            
+            chart.load()
+
         except Exception as e:
             st.error(f"Chart Error: {e}")
+
+# ========================================
+# 6. WORKSPACE FRAGMENT (The Global Loop)
+# ========================================
+@st.fragment
+def render_workspace_fragment(db_client, num_charts, chart_height):
+    """
+    Renders the unified chart grid and the global control bar.
+    """
+    
+    # Define Timezone
+    ny_tz = pytz.timezone('America/New_York')
+
+    # --- Initialize Global Session State ---
+    if "global_dt" not in st.session_state:
+        start_date = st.session_state.get("global_latest_db_date", datetime.date.today())
+        # Default start: 9:29 AM ET (Pre-open)
+        dt_ny = datetime.datetime.combine(start_date, datetime.time(9, 29))
+        st.session_state.global_dt = ny_tz.localize(dt_ny).astimezone(pytz.UTC)
+    
+    if "global_playing" not in st.session_state:
+        st.session_state.global_playing = False
+        
+    if "global_speed_val" not in st.session_state:
+        st.session_state.global_speed_val = 1.0 
+
+    if "replay_active" not in st.session_state:
+        st.session_state.replay_active = False
+
+    if "global_picker_val" not in st.session_state:
+        st.session_state.global_picker_val = st.session_state.get("global_latest_db_date", datetime.date.today())
+
+    # Reset frame-specific flags
+    st.session_state.has_valid_data = False
+    st.session_state.chart_deltas = {}
+
+    # --- CALLBACKS ---
+    def on_date_change():
+        """Handles date change logic: Slice data to 9:29 AM immediately."""
+        new_date = st.session_state.global_picker_input
+        st.session_state.global_picker_val = new_date
+        
+        # 1. Reset Time to 9:29 AM
+        dt_ny = datetime.datetime.combine(new_date, datetime.time(9, 29))
+        st.session_state.global_dt = ny_tz.localize(dt_ny).astimezone(pytz.UTC)
+        
+        # 2. Activate Replay State (Planning Mode)
+        st.session_state.global_playing = False
+        st.session_state.replay_active = True 
+        
+        # 3. Force All Charts to Replay Mode
+        for i in range(num_charts):
+            st.session_state[f"c{i}_view_mode"] = "Replay Mode"
+
+    def on_play_click():
+        if not st.session_state.get("has_valid_data", False):
+            st.toast("⚠️ No data available for this date!", icon="🚫")
             return
+            
+        st.session_state.global_playing = True
+        st.session_state.replay_active = True
+        
+        # Ensure mode is correct
+        for i in range(num_charts):
+            st.session_state[f"c{i}_view_mode"] = "Replay Mode"
 
-        # --- APPLY GLOBAL TIME TO THIS CHART ---
-        if (
-            not df.empty
-            and st.session_state.get("global_dt") is not None
-        ):
-            global_dt = st.session_state["global_dt"]
-            # include all candles <= global_dt
-            idx = df["time"].searchsorted(global_dt, side="right")
-            idx = min(max(0, idx), len(df))
-            current_slice = df.iloc[:idx].copy()
+    def on_pause_click():
+        st.session_state.global_playing = False
+    
+    def on_prev_click():
+        if not st.session_state.get("has_valid_data", False):
+             st.toast("⚠️ No data available for this date!", icon="🚫")
+             return
+
+        if st.session_state.chart_deltas:
+            md = min(st.session_state.chart_deltas.values())
         else:
-            current_slice = pd.DataFrame(columns=df.columns) if not df.empty else df
+            md = pd.Timedelta("1min")
+        st.session_state.global_dt -= md
+        st.session_state.replay_active = True
 
-        if not current_slice.empty:
-            current_slice["time"] = current_slice["time"].apply(lambda x: x.isoformat())
-            chart.set(current_slice)
-            if is_replay_mode:
-                # current_slice["time"] is ISO strings now; parse for display
-                try:
-                    last_time_dt = pd.to_datetime(current_slice["time"].iloc[-1])
-                    ts_str = last_time_dt.strftime("%H:%M")
-                except Exception:
-                    ts_str = "--:--"
-                st.caption(f"Replay: {ts_str} ({len(current_slice)}/{len(df)})")
+    def on_next_click():
+        if not st.session_state.get("has_valid_data", False):
+             st.toast("⚠️ No data available for this date!", icon="🚫")
+             return
+
+        if st.session_state.chart_deltas:
+            md = min(st.session_state.chart_deltas.values())
         else:
-            chart.set(
-                pd.DataFrame(
-                    columns=["time", "open", "high", "low", "close", "volume", "color"],
-                )
-            )
+            md = pd.Timedelta("1min")
+        st.session_state.global_dt += md
+        st.session_state.replay_active = True
+        
+    def on_reset_click():
+        # Reset to 9:29 AM on the current date
+        dt_ny = datetime.datetime.combine(st.session_state.global_picker_val, datetime.time(9, 29))
+        st.session_state.global_dt = ny_tz.localize(dt_ny).astimezone(pytz.UTC)
+        st.session_state.global_playing = False
+        st.session_state.replay_active = True
+        
+        # Force Replay Mode
+        for i in range(num_charts):
+            st.session_state[f"c{i}_view_mode"] = "Replay Mode"
 
-        chart.load()
+    # --- RENDER CHART GRID ---
+    current_dt = st.session_state.global_dt
 
+    if num_charts == 1:
+        render_chart_unit(0, db_client, chart_height, current_dt, show_border=False, default_tf="1 Min")
+    
+    elif num_charts == 2:
+        c1, c2 = st.columns(2)
+        with c1: render_chart_unit(0, db_client, chart_height, current_dt, default_tf="1 Min")
+        with c2: render_chart_unit(1, db_client, chart_height, current_dt, default_tf="1 Day")
+    
+    elif num_charts == 3:
+        c1, c2 = st.columns(2)
+        with c1: render_chart_unit(0, db_client, chart_height, current_dt, default_tf="1 Min")
+        with c2: render_chart_unit(1, db_client, chart_height, current_dt, default_tf="30 Min")
+        render_chart_unit(2, db_client, chart_height, current_dt, default_tf="1 Day")
+    
+    elif num_charts == 4:
+        c1, c2 = st.columns(2)
+        with c1: render_chart_unit(0, db_client, chart_height, current_dt, default_tf="1 Min")
+        with c2: render_chart_unit(1, db_client, chart_height, current_dt, default_tf="30 Min")
+        c3, c4 = st.columns(2)
+        with c3: render_chart_unit(2, db_client, chart_height, current_dt, default_tf="1 Day")
+        with c4: render_chart_unit(3, db_client, chart_height, current_dt, default_tf="30 Min", default_ticker="SPY")
+
+    # --- Determine Minimum Step ---
+    if st.session_state.chart_deltas:
+        min_delta = min(st.session_state.chart_deltas.values())
+    else:
+        min_delta = pd.Timedelta("1min")
+
+    st.markdown("---")
+
+    # --- Display Global Time ---
+    if not st.session_state.get("has_valid_data", False):
+        st.markdown(f"<div class='no-data-msg'>⚠️ No market data available for {st.session_state.global_picker_val}. Select another date.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='global-time' style='color:transparent'>.</div>", unsafe_allow_html=True)
+    elif st.session_state.replay_active:
+        curr_ny = st.session_state.global_dt.astimezone(ny_tz)
+        time_str = curr_ny.strftime('%Y-%m-%d  %H:%M:%S %Z')
+        st.markdown(f"<div class='global-time'>{time_str}</div>", unsafe_allow_html=True)
+    else:
+        # Placeholder to keep layout stable
+        st.markdown("<div class='global-time' style='color:transparent'>.</div>", unsafe_allow_html=True)
+
+    # --- RENDER UNIFIED CONTROL BAR ---
+    c_date, c_prev, c_play, c_next, c_reset, c_speed = st.columns([2, 0.7, 1.5, 0.7, 1.5, 1.5])
+
+    with c_date:
+        # Date Input with Callback
+        st.date_input(
+            "Start", 
+            value=st.session_state.global_picker_val,
+            key="global_picker_input",
+            label_visibility="collapsed",
+            on_change=on_date_change
+        )
+
+    with c_prev:
+        st.button("⏮", key="g_prev", use_container_width=True, help="Step Back", on_click=on_prev_click)
+
+    with c_play:
+        if st.session_state.global_playing:
+            st.button("⏸ Pause", key="g_pause", use_container_width=True, type="primary", on_click=on_pause_click)
+        else:
+            st.button("▶ Play", key="g_play", use_container_width=True, on_click=on_play_click)
+
+    with c_next:
+        st.button("⏭", key="g_next", use_container_width=True, help="Step Forward", on_click=on_next_click)
+
+    with c_reset:
+        st.button("↺ 9:30 AM", key="g_reset", use_container_width=True, help="Reset to Market Open", on_click=on_reset_click)
+
+    with c_speed:
+        speed_options = [0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0]
+        st.selectbox(
+            "Spd", 
+            speed_options,
+            index=3, # Default 1.0s
+            format_func=lambda x: f"{x}s",
+            key="global_speed_val",
+            label_visibility="collapsed"
+        )
+
+    # --- EXECUTE PLAY LOOP ---
+    if st.session_state.global_playing:
+        time.sleep(float(st.session_state.global_speed_val))
+        st.session_state.global_dt += min_delta
+        st.rerun()
 
 # ========================================
-# MAIN EXECUTION FLOW
+# 7. MAIN EXECUTION FLOW
 # ========================================
+
 db_client = get_db_connection()
 if not db_client:
+    # This point is usually unreachable due to st.stop() in get_db_connection
+    # but kept for safety.
     st.stop()
 
-st.markdown("### Market Rewind")
-
-# STEP 1: LAYOUT CONFIG
-if "layout_set" not in st.session_state:
-    st.info("Configure your workspace to begin.")
-    with st.form("layout_config"):
-        num_charts = st.selectbox("How many charts do you want?", [1, 2, 3, 4])
-        submitted = st.form_submit_button("Initialize Workspace")
-        if submitted:
-            st.session_state.num_charts = num_charts
-            st.session_state.layout_set = True
-            st.rerun()
-
-else:
-    n = st.session_state.num_charts
-
-    # Initialize global playback state now that n is known
-    init_global_playback_state()
-
-    # ===== GLOBAL CHART CONTROLS (LAYOUT / HEIGHT) =====
-    with st.expander("Global chart controls", expanded=False):
+# --- SIDEBAR: GLOBAL SETTINGS ---
+with st.sidebar:
+    st.header("Market Rewind")
+    
+    # NEW: Connection Status Indicator
+    st.markdown("<div class='db-status-ok'>✅ Connected to Turso DB</div>", unsafe_allow_html=True)
+    st.markdown("---")
+    
+    with st.expander("⚙️ Layout & Settings", expanded=True):
         screen_height = streamlit_js_eval(
             js_code="window.innerHeight",
             key="screen_height_js",
@@ -527,84 +606,43 @@ else:
         )
         default_height = int(screen_height or 1080)
 
-        label_col_btn, label_col_height = st.columns(2)
-        with label_col_btn:
-            st.markdown("🔁 Layout & workspace")
-        with label_col_height:
-            st.markdown("↕ Height override (px)")
-
-        col_btn, col_height = st.columns(2)
-        with col_btn:
-            if st.button(
-                "Click here to reconfigure charts",
-                type="secondary",
-                use_container_width=True,
-            ):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
-
-        with col_height:
-            manual_height = st.number_input(
-                "Height override (px)",
-                min_value=600,
-                max_value=2000,
-                value=default_height,
-                step=10,
-                label_visibility="collapsed",
-            )
-
-    viewport_height = manual_height or screen_height
-    st.session_state["chart_height_px"] = get_dynamic_chart_height(n, viewport_height)
-
-    # ===== NON-BLOCKING GLOBAL PLAYBACK TIMER =====
-    if st.session_state.get("global_playing", False):
-        interval_ms = int(st.session_state.get("global_speed", 1.0) * 1000)
-        tick = st_autorefresh(
-            interval=interval_ms,
-            limit=None,
-            key="global_playback_tick",
-            debounce=True,
+        st.markdown("**Chart Height Override (px)**")
+        manual_height = st.number_input(
+            "Height",
+            min_value=300,
+            max_value=2000,
+            value=default_height,
+            step=50,
+            label_visibility="collapsed",
+            key="manual_height_input"
         )
-        last_tick = st.session_state.get("global_last_tick")
-        if last_tick is None:
-            st.session_state["global_last_tick"] = tick
-        elif tick != last_tick:
-            st.session_state["global_last_tick"] = tick
-            step_global_dt(direction=1)
+        
+        st.markdown("---")
+        
+        if st.button("⚠️ Reset Entire Layout", type="secondary", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
 
-    # ====== RENDER GRID ======
-    if n == 1:
-        render_chart_unit(0, db_client, show_border=False)
+# --- STEP 1: LAYOUT CONFIGURATION ---
+if "layout_set" not in st.session_state:
+    st.info("Configure your workspace to begin.")
+    with st.form("layout_config"):
+        st.markdown("#### Initialize Workspace")
+        num_charts = st.selectbox("Number of Charts", [1, 2, 3, 4])
+        submitted = st.form_submit_button("Start Market Rewind")
+        if submitted:
+            st.session_state.num_charts = num_charts
+            st.session_state.layout_set = True
+            st.rerun()
 
-    elif n == 2:
-        c1, c2 = st.columns(2)
-        with c1:
-            render_chart_unit(0, db_client)
-        with c2:
-            render_chart_unit(1, db_client)
-
-    elif n == 3:
-        c1, c2 = st.columns(2)
-        with c1:
-            render_chart_unit(0, db_client)
-        with c2:
-            render_chart_unit(1, db_client)
-        render_chart_unit(2, db_client)
-
-    elif n == 4:
-        c1, c2 = st.columns(2)
-        with c1:
-            render_chart_unit(0, db_client)
-        with c2:
-            render_chart_unit(1, db_client)
-
-        c3, c4 = st.columns(2)
-        with c3:
-            render_chart_unit(2, db_client)
-        with c4:
-            render_chart_unit(3, db_client)
-
-    # ===== GLOBAL CONTROL BAR (BOTTOM) =====
-    st.markdown("---")
-    render_global_controls()
+# --- STEP 2: RENDER WORKSPACE ---
+else:
+    n = st.session_state.num_charts
+    
+    # Calculate chart height dynamically
+    viewport_height = manual_height if 'manual_height' in locals() else screen_height
+    st.session_state["chart_height_px"] = get_dynamic_chart_height(n, viewport_height)
+    
+    # Render the main application fragment
+    render_workspace_fragment(db_client, n, st.session_state["chart_height_px"])
