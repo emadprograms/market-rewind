@@ -14,8 +14,11 @@ export default function ChartUnit({
   initialTf 
 }) {
   const chartContainerRef = useRef();
-  const chartRef = useRef();
-  const seriesRef = useRef();
+  const volumeContainerRef = useRef();
+  
+  const priceChartRef = useRef();
+  const volumeChartRef = useRef();
+  const priceSeriesRef = useRef();
   const volumeSeriesRef = useRef();
   const lastDataCountRef = useRef(0);
   
@@ -24,7 +27,7 @@ export default function ChartUnit({
   const [timeframe, setTimeframe] = useState(initialTf || '1min');
   const [showEth, setShowEth] = useState(false);
 
-  // 0. Fetch local master data when ticker/date changes
+  // 0. Fetch local master data
   useEffect(() => {
     async function load() {
       const data = await fetchMarketData(ticker, selectedDate);
@@ -33,43 +36,38 @@ export default function ChartUnit({
     load();
   }, [ticker, selectedDate]);
 
-  // 1. Prepare data for this specific chart
+  // 1. Prepare data
   const chartData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
-    
-    // Filter by session if ETH is off
     const filteredRaw = showEth ? localMasterData : localMasterData.filter(d => d.session === 'REG');
-    
-    // Resample
     const resampled = resampleData(filteredRaw, timeframe);
-    
-    // Slice for Replay Mode
     if (isReplayMode && globalTime) {
       const gt = new Date(globalTime).getTime();
       return resampled.filter(d => new Date(d.time).getTime() <= gt);
     }
-    
     return resampled;
   }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
 
-  // 2. Initialize Chart
+  const chartOptions = {
+    layout: {
+      background: { color: 'transparent' },
+      textColor: '#94a3b8',
+      attributionLogo: false,
+    },
+    grid: {
+      vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
+      horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+    },
+    crosshair: { mode: 0 },
+    handleScroll: true,
+    handleScale: true,
+  };
+
+  // 2. Initialize Charts
   useEffect(() => {
-    chartRef.current = createChart(chartContainerRef.current, {
-      layout: {
-        background: { color: 'transparent' },
-        textColor: '#94a3b8',
-        attributionLogo: false,
-      },
-      grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
-      },
-      crosshair: {
-        mode: 0,
-      },
-      priceScale: {
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-      },
+    // --- Price Chart ---
+    priceChartRef.current = createChart(chartContainerRef.current, {
+      ...chartOptions,
       localization: {
         timeFormatter: (time) => {
           const date = new Date(time * 1000);
@@ -80,58 +78,56 @@ export default function ChartUnit({
         borderColor: 'rgba(255, 255, 255, 0.1)',
         timeVisible: true,
         secondsVisible: false,
-        shiftVisibleRangeOnNewBar: false, // CRITICAL: Stop auto-scroll on new data
-        rightOffset: 15, // Give some breathing room on the right
+        shiftVisibleRangeOnNewBar: false,
+        rightOffset: 15,
         tickMarkFormatter: (time, tickMarkType) => {
           const date = new Date(time * 1000);
-          if (tickMarkType <= 2) { 
-             return date.toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
-          } else {
-             return date.toLocaleString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false });
-          }
+          if (tickMarkType <= 2) return date.toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+          return date.toLocaleString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false });
         }
       },
-      handleScroll: true,
-      handleScale: true,
     });
 
-    seriesRef.current = chartRef.current.addCandlestickSeries({
-      upColor: '#26a69a',
-      downColor: '#ef5350',
-      borderVisible: false,
-      wickUpColor: '#26a69a',
-      wickDownColor: '#ef5350',
+    priceSeriesRef.current = priceChartRef.current.addCandlestickSeries({
+      upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
     });
 
-    volumeSeriesRef.current = chartRef.current.addHistogramSeries({
-      color: '#26a69a',
-      priceFormat: {
-        type: 'volume',
-      },
-      priceScaleId: '', // Overlay on the same scale, but we'll scale it down
-    });
-
-    chartRef.current.priceScale('').applyOptions({
-      scaleMargins: {
-        top: 0.1,
-        bottom: 0.05,
+    // --- Volume Chart ---
+    volumeChartRef.current = createChart(volumeContainerRef.current, {
+      ...chartOptions,
+      timeScale: {
+        visible: true, // Show it but it will be synced
+        borderColor: 'rgba(255, 255, 255, 0.1)',
       },
     });
 
-    // Configure a separate scale for volume to keep it at the bottom
-    volumeSeriesRef.current.priceScale().applyOptions({
-      scaleMargins: {
-        top: 0.8, // 80% from top
-        bottom: 0,
-      },
+    volumeSeriesRef.current = volumeChartRef.current.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+    });
+
+    // --- Synchronization ---
+    const priceTimeScale = priceChartRef.current.timeScale();
+    const volumeTimeScale = volumeChartRef.current.timeScale();
+
+    let isSyncing = false;
+    priceTimeScale.subscribeVisibleTimeRangeChange(range => {
+       if (isSyncing) return;
+       isSyncing = true;
+       volumeTimeScale.setVisibleRange(range);
+       isSyncing = false;
+    });
+
+    volumeTimeScale.subscribeVisibleTimeRangeChange(range => {
+       if (isSyncing) return;
+       isSyncing = true;
+       priceTimeScale.setVisibleRange(range);
+       isSyncing = false;
     });
 
     const handleResize = () => {
-      if (chartContainerRef.current) {
-        chartRef.current.applyOptions({ 
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight 
-        });
+      if (chartContainerRef.current && volumeContainerRef.current) {
+        priceChartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight });
+        volumeChartRef.current.applyOptions({ width: volumeContainerRef.current.clientWidth, height: volumeContainerRef.current.clientHeight });
       }
     };
 
@@ -140,13 +136,14 @@ export default function ChartUnit({
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      chartRef.current.remove();
+      priceChartRef.current.remove();
+      volumeChartRef.current.remove();
     };
   }, []);
 
   // 3. Update Chart Data
   useEffect(() => {
-    if (seriesRef.current && chartData.length > 0) {
+    if (priceSeriesRef.current && volumeSeriesRef.current && chartData.length > 0) {
       const formatted = chartData.map(d => {
         const isoString = d.time.replace(' ', 'T') + 'Z';
         return {
@@ -159,10 +156,10 @@ export default function ChartUnit({
         };
       });
 
-      // If we are just adding one bar to the end, use .update() to preserve scroll/zoom
+      // If we are just adding one bar, use .update()
       if (formatted.length === lastDataCountRef.current + 1) {
         const lastBar = formatted[formatted.length - 1];
-        seriesRef.current.update({
+        priceSeriesRef.current.update({
           time: lastBar.time,
           open: lastBar.open,
           high: lastBar.high,
@@ -175,8 +172,8 @@ export default function ChartUnit({
           color: lastBar.close >= lastBar.open ? '#26a69a' : '#ef5350'
         });
       } else {
-        // Full reset (e.g. timeframe change or big jump)
-        seriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+        // Full reset (e.g. timeframe change or symbol change)
+        priceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
           time, open, high, low, close
         })));
 
@@ -185,11 +182,14 @@ export default function ChartUnit({
           value: volume,
           color: close >= open ? '#26a69a' : '#ef5350'
         })));
+
+        // FIX: Force price scale to reset to auto-range when a new symbol is loaded
+        priceChartRef.current.priceScale('right').applyOptions({ autoScale: true });
       }
 
       lastDataCountRef.current = formatted.length;
-    } else if (seriesRef.current) {
-        seriesRef.current.setData([]);
+    } else if (priceSeriesRef.current) {
+        priceSeriesRef.current.setData([]);
         volumeSeriesRef.current.setData([]);
         lastDataCountRef.current = 0;
     }
@@ -220,7 +220,11 @@ export default function ChartUnit({
            <button className="btn-icon"><Settings2 size={14} /></button>
         </div>
       </div>
-      <div ref={chartContainerRef} style={{ flex: 1, position: 'relative' }} />
+      <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div ref={chartContainerRef} style={{ flex: 3, position: 'relative' }} />
+        <div style={{ height: '1px', background: 'var(--border-color)', opacity: 0.3 }} />
+        <div ref={volumeContainerRef} style={{ flex: 1, position: 'relative' }} />
+      </div>
     </div>
   );
 }

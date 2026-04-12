@@ -28,8 +28,10 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - **Intuitive Toggles**: Features a 'Collapse' button inside the sidebar and a floating 'Expand' button in the workspace for 100% full-screen chart focus.
     - **Playhead Safety**: Initializes Replay `currentTime` to exactly 09:30 AM on the explicitly selected date, despite the larger payload of historical data.
 - [x] `src/components/ChartUnit.jsx`:
+    - **Multi-Pane Architecture**: Refactored to a dual-chart system where Price and Volume reside in separate, synchronized panes (75/25 split). X-axes are locked together.
+    - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes, ensuring that switching between stocks with different price levels (e.g. AAPL vs AMD) always auto-centers the data.
     - Applies a **Strict UTC Parsing Strategy** across data handling and LightweightCharts localization formats so UTC timestamps from the DB display correctly regardless of the user's physical timezone.
-    - **Volume Visualization**: Includes a secondary histogram series for volume, mapped and colored relative to price action, with dedicated vertical scaling.
+    - **Volume Visualization**: Moved to a dedicated pane with its own scaling to prevent price action overlap.
     - **Smooth Replay Engine**: Implemented an incremental `.update()` logic and explicitly disabled `shiftVisibleRangeOnNewBar` while adding a 15-bar `rightOffset`. This prevents the viewport from snapping to the right edge during replay, preserving the user's custom zoom/scroll position and giving price action breathing room.
 - [x] `src/lib/resampling.js`:
     - **Timeframe Aggregation**: Implemented robust logic to compile 5m, 15m, 30m, 1H, and 1D OHLCV bars from raw 1-minute records while maintaining format compatibility with the replay engine.
