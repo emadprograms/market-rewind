@@ -1,6 +1,0 @@
-streamlit
-pandas
-numpy
-lightweight-charts
-libsql-client
-streamlit-js-eval
