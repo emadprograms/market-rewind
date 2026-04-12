@@ -9,7 +9,8 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
 - **Frontend Storage**: Uses Browser **OPFS** (Origin Private File System) for lightning-fast database access.
 - **Manual Upload Workflow**: Instead of automatic fetching (which caused massive CORS/Vite/CDN/Vercel failures), the user downloads the latest release and manually uploads the `.db` file into the sidebar UI once. OPFS persists it across sessions.
 - **WASM Engine**: **sql.js** (Self-hosted). The engine is initiated by directly passing the WASM binary data from fetch into `initSqlJs({ wasmBinary })`, which bypasses Vite's aggressive bundle rewriting that breaks `locateFile`.
-- **Read Strategy**: **0 Turso Reads** for end-users. Turso is only touched during your manual sync.
+- **Read Strategy**: **Distributed Chart-Level Fetching**. Each `ChartUnit` is responsible for fetching its own raw data based on its locally selected symbol. `App.jsx` handles global time synchronization using a reference ticker.
+- **Data Storage**: **0 Turso Reads** for end-users. Turso is only touched during your manual sync.
 
 ### 🚥 Component Breakdown
 

@@ -250,8 +250,8 @@ export default function App() {
               <ChartUnit 
                 key={i} 
                 id={i} 
-                masterData={masterData} 
                 globalTime={currentTime} 
+                selectedDate={selectedDate}
                 isReplayMode={true} 
                 tickers={tickers}
                 initialTicker={i === 3 ? 'SPY' : tickers[0]}

@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
 import { Maximize2, Settings2, Share2 } from 'lucide-react';
+import { fetchMarketData } from '../lib/db';
 
 export default function ChartUnit({ 
   id, 
-  masterData, 
   globalTime, 
+  selectedDate,
   isReplayMode, 
   tickers, 
   initialTicker, 
@@ -19,15 +20,25 @@ export default function ChartUnit({
   const lastDataCountRef = useRef(0);
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
+  const [localMasterData, setLocalMasterData] = useState([]);
   const [timeframe, setTimeframe] = useState(initialTf || '1min');
   const [showEth, setShowEth] = useState(false);
 
+  // 0. Fetch local master data when ticker/date changes
+  useEffect(() => {
+    async function load() {
+      const data = await fetchMarketData(ticker, selectedDate);
+      setLocalMasterData(data);
+    }
+    load();
+  }, [ticker, selectedDate]);
+
   // 1. Prepare data for this specific chart
   const chartData = useMemo(() => {
-    if (!masterData) return [];
+    if (!localMasterData || localMasterData.length === 0) return [];
     
     // Filter by session if ETH is off
-    const filteredRaw = showEth ? masterData : masterData.filter(d => d.session === 'REG');
+    const filteredRaw = showEth ? localMasterData : localMasterData.filter(d => d.session === 'REG');
     
     // Resample
     const resampled = resampleData(filteredRaw, timeframe);
@@ -39,7 +50,7 @@ export default function ChartUnit({
     }
     
     return resampled;
-  }, [masterData, timeframe, showEth, isReplayMode, globalTime]);
+  }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
 
   // 2. Initialize Chart
   useEffect(() => {
