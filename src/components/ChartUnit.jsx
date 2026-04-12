@@ -15,6 +15,7 @@ export default function ChartUnit({
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const seriesRef = useRef();
+  const volumeSeriesRef = useRef();
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [timeframe, setTimeframe] = useState(initialTf || '1min');
@@ -88,6 +89,29 @@ export default function ChartUnit({
       wickDownColor: '#ef5350',
     });
 
+    volumeSeriesRef.current = chartRef.current.addHistogramSeries({
+      color: '#26a69a',
+      priceFormat: {
+        type: 'volume',
+      },
+      priceScaleId: '', // Overlay on the same scale, but we'll scale it down
+    });
+
+    chartRef.current.priceScale('').applyOptions({
+      scaleMargins: {
+        top: 0.1,
+        bottom: 0.05,
+      },
+    });
+
+    // Configure a separate scale for volume to keep it at the bottom
+    volumeSeriesRef.current.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.8, // 80% from top
+        bottom: 0,
+      },
+    });
+
     const handleResize = () => {
       if (chartContainerRef.current) {
         chartRef.current.applyOptions({ 
@@ -119,15 +143,26 @@ export default function ChartUnit({
           high: d.high,
           low: d.low,
           close: d.close,
+          volume: d.volume,
         };
       });
-      seriesRef.current.setData(formatted);
+
+      seriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+        time, open, high, low, close
+      })));
+
+      volumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
+        time,
+        value: volume,
+        color: close >= open ? '#26a69a' : '#ef5350'
+      })));
       
       if (isReplayMode) {
         chartRef.current.timeScale().scrollToPosition(0, false);
       }
     } else if (seriesRef.current) {
         seriesRef.current.setData([]);
+        volumeSeriesRef.current.setData([]);
     }
   }, [chartData, isReplayMode]);
 

@@ -27,6 +27,7 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - **Playhead Safety**: Initializes Replay `currentTime` to exactly 09:30 AM on the explicitly selected date, despite the larger payload of historical data.
 - [x] `src/components/ChartUnit.jsx`:
     - Applies a **UTC Proxy Parsing Hack** across data handling and LightweightCharts localization formats so "Eastern Time" strings from the DB display strictly correctly regardless of the user's physical timezone.
+    - **Volume Visualization**: Includes a secondary histogram series for volume, mapped and colored relative to price action, with dedicated vertical scaling.
 - [x] `package.json`: `postinstall` script securely caches standard WASM binary.
 - [x] `vite.config.js`: Excludes `sql.js` from pre-bundling.
 
