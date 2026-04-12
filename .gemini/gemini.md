@@ -12,24 +12,23 @@ Refactoring the Market Rewind application from a single-file Streamlit app to a 
 
 ### Phase 1: Planning & Setup
 - [x] Analyze current Streamlit app logic.
-- [x] Create implementation plan artifact.
+- [x] Create local-first implementation plan.
 - [x] Initialize repository structure.
 
-### Phase 2: Backend (GitHub Actions)
-- [x] Port Yahoo Finance fetcher logic.
-- [x] Create Python data management script.
-- [x] Configure GitHub Actions workflow.
+### Phase 2: Local-First Sync Engine
+- [x] Implement `vercel.json` with COOP/COEP headers.
+- [x] Refactor `db.js` for `@tursodatabase/sync-wasm` & OPFS.
+- [x] Implement manual `syncWithRemote` logic.
 
-### Phase 3: Frontend (React)
-- [x] Initialize Vite + React project.
-- [x] Implement browser-side resampling logic.
+### Phase 3: UI Implementation
 - [x] Build premium Replay UI with Vanilla CSS.
-- [x] Integrate lightweight-charts.
+- [x] Integrate manual Sync button & progress state.
+- [x] Ensure 100% offline playback from local replica.
 
 ### Phase 4: Integration & Deployment
-- [ ] Connect Frontend to Turso.
 - [ ] Deploy to Vercel.
-- [ ] Final verification.
+- [x] Cleanup legacy backend & Yahoo code.
+- [x] Update documentation.
 
 ---
 *Updated: 2026-04-12*

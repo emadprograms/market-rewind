@@ -1,39 +1,42 @@
 # Market Rewind ⏪
 
-Market Rewind is a high-performance market replay tool designed for traders to practice and backtest strategies. It features a modern, premium web interface and a managed data ingestion pipeline.
+Market Rewind is a professional, **Local-First** market replay tool. It uses Turso's advanced WASM-based synchronization to pull data from a remote database into your browser's persistent storage (OPFS), allowing for buttery-smooth playback with minimal database overhead.
 
 ## 🏗️ Architecture
 
-- **Frontend**: A high-performance Vite + React application optimized for Vercel. Performs real-time resampling of 1-minute data in the browser to minimize database costs.
-- **Backend**: A Python-based ingestion engine running as a GitHub Action. Fetches 1-minute historical data from Yahoo Finance and populates the Turso database.
-- **Database**: Turso (LibSQL) serves as the persistent store for all market data.
+- **Local-First Sync**: Powered by `@tursodatabase/sync-wasm`, the app creates a full SQLite replica inside your browser. This means once you sync, you can work entirely offline.
+- **Client-Side Processing**: All OHLCV resampling (1m → 5m, 1h, etc.) is performed in the browser, eliminating the need for a backend and saving on DB read costs.
+- **Vercel Optimized**: Configured with COOP/COEP headers to support multi-threaded WASM and high-performance storage.
 
 ## 🚀 Getting Started
 
-### Backend (Data Ingestion)
+### Prerequisites
 
-The backend runs automatically via GitHub Actions.
-1. Add `TURSO_DB_URL` and `TURSO_AUTH_TOKEN` to your GitHub Repository Secrets.
-2. The workflow in `.github/workflows/backend_runner.yml` will keep your database updated every 30 minutes during market hours.
+- A Turso (LibSQL) database populated with 1-minute market data.
 
-### Frontend (React App)
+### Running Locally
 
-To run the frontend locally:
 1. Navigate to the `frontend/` directory.
 2. Install dependencies: `npm install`.
-3. Create a `.env` file with your Turso credentials:
+3. Create a `.env` file:
    ```env
    VITE_TURSO_DB_URL=your_db_url
    VITE_TURSO_AUTH_TOKEN=your_auth_token
    ```
 4. Run the dev server: `npm run dev`.
 
+### Using the App
+
+1. **Click "Sync with Turso"**: This will download the remote data to your browser's local storage.
+2. **Select Date & Ticker**: The app will read directly from the local replica.
+3. **Playback**: Use the playback controls to rewind the market.
+
 ## 🛠️ Tech Stack
 
-- **UI**: React, Lightweight Charts, Lucide Icons, Vanilla CSS (Glassmorphism).
-- **Processing**: Client-side OHLCV resampling engine.
-- **Ingestion**: Python, yfinance, GitHub Actions.
-- **Hosting**: Vercel (Frontend), GitHub (Backend).
+- **Frontend**: React 18, Vite.
+- **Database**: libSQL (@tursodatabase/sync-wasm).
+- **Charting**: Lightweight Charts.
+- **Hosting**: Vercel (Frontend only, no backend required).
 
 ## 📄 License
 

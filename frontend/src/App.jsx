@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, LayoutGrid, Calendar as CalendarIcon, Activity } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, LayoutGrid, Calendar as CalendarIcon, Activity, RefreshCw, HardDrive } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
-import { fetchTickers, fetchMarketData } from './lib/db';
+import { fetchTickers, fetchMarketData, syncWithRemote } from './lib/db';
 
 export default function App() {
   // --- Global State ---
@@ -13,36 +13,61 @@ export default function App() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [gridSize, setGridSize] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState(null);
 
   const playbackRef = useRef();
 
-  // 1. Initial Load: Tickers
+  // 1. Load data from LOCAL whenever Date or Tickers change
+  // Note: We don't fetch tickers on mount anymore, we let the user Sync first
+  // OR we try to fetch from local on mount.
   useEffect(() => {
-    fetchTickers().then(setTickers);
+    loadMetaData();
   }, []);
 
-  // 2. Data Fetching when Date changes
+  async function loadMetaData() {
+    const t = await fetchTickers();
+    if (t.length > 0) {
+      setTickers(t);
+    }
+  }
+
   useEffect(() => {
     if (tickers.length > 0) {
-      loadData();
+      loadMarketData();
     }
   }, [selectedDate, tickers]);
 
-  async function loadData() {
+  async function loadMarketData() {
     setIsLoading(true);
-    // Fetch 1m data for the first ticker as master data source for the session
     const data = await fetchMarketData(tickers[0], selectedDate);
     setMasterData(data);
     
     if (data.length > 0) {
-      // Set initial time to 9:30 AM ET or first bar
       const firstBar = data.find(d => d.session === 'REG') || data[0];
       setCurrentTime(firstBar.time);
+    } else {
+        setCurrentTime(null);
     }
     setIsLoading(false);
   }
 
-  // 3. Replay Engine Loop
+  // 2. Manual Sync Handler
+  const handleSync = async () => {
+    try {
+      setIsSyncing(true);
+      await syncWithRemote();
+      setLastSync(new Date().toLocaleTimeString());
+      await loadMetaData(); // Reload tickers from local
+      await loadMarketData(); // Reload current view from local
+    } catch (error) {
+      alert("Sync failed: " + error.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 3. Replay Engine Loop (unchanged logic)
   useEffect(() => {
     if (isPlaying && masterData.length > 0) {
       playbackRef.current = setInterval(() => {
@@ -101,10 +126,36 @@ export default function App() {
           <Activity size={24} />
           MARKET<span>REWIND</span>
         </div>
-        <div className="status-badge status-online">
-          <div style={{width: 8, height: 8, borderRadius: '50%', background: 'currentColor'}} />
-          LIVE DATA SYNC
+        
+        <div style={{display: 'flex', gap: '16px', alignItems: 'center'}}>
+           <button 
+             className={`btn-sync ${isSyncing ? 'syncing' : ''}`} 
+             onClick={handleSync}
+             disabled={isSyncing}
+             style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: isSyncing ? 'rgba(255,255,255,0.05)' : 'rgba(38, 166, 154, 0.1)',
+                color: 'var(--accent-green)',
+                border: '1px solid var(--accent-green)',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+             }}
+           >
+             <RefreshCw size={16} className={isSyncing ? 'spin' : ''} />
+             {isSyncing ? 'Syncing...' : 'Sync with Turso'}
+           </button>
+
+           <div className="status-badge status-online" style={{background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)'}}>
+             <HardDrive size={14} />
+             {lastSync ? `Last Sync: ${lastSync}` : 'Local Mode (No Sync)'}
+           </div>
         </div>
+
         <div style={{display: 'flex', gap: '12px'}}>
            <div style={{display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '0.8rem'}}>
              <CalendarIcon size={14} />
