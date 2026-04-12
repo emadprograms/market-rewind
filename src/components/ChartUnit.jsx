@@ -111,14 +111,14 @@ export default function ChartUnit({
 
     let isSyncing = false;
     priceTimeScale.subscribeVisibleTimeRangeChange(range => {
-       if (isSyncing) return;
+       if (isSyncing || !range) return;
        isSyncing = true;
        volumeTimeScale.setVisibleRange(range);
        isSyncing = false;
     });
 
     volumeTimeScale.subscribeVisibleTimeRangeChange(range => {
-       if (isSyncing) return;
+       if (isSyncing || !range) return;
        isSyncing = true;
        priceTimeScale.setVisibleRange(range);
        isSyncing = false;
