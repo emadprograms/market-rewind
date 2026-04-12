@@ -1,4 +1,23 @@
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Python
 venv/
 __pycache__/
 *.pyc
-.streamlit/secrets.toml
+
+# Local Database (Avoid 100MB limit issues)
+database/*.db
+
+# Env
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# System
+.DS_Store
