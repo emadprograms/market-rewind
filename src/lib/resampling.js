@@ -8,10 +8,6 @@ export function resampleData(data, timeframe) {
   if (timeframe === '1min') return data;
 
   const resampled = [];
-  let currentBucket = null;
-  let bucketDuration = 0;
-
-  // Map timeframe string to minutes
   const tfMap = {
     '5min': 5,
     '15min': 15,
@@ -21,38 +17,43 @@ export function resampleData(data, timeframe) {
   };
 
   const durationMin = tfMap[timeframe] || 1;
+  let currentBucket = null;
 
   data.forEach((bar) => {
-    const timestamp = new Date(bar.time);
-    // Calculate the start of the bucket (e.g., floor to 5 minutes)
-    const bucketTime = new Date(Math.floor(timestamp.getTime() / (durationMin * 60000)) * (durationMin * 60000));
-    const bucketIso = bucketTime.toISOString();
+    const date = new Date(bar.time.replace(' ', 'T') + 'Z');
+    const timestamp = date.getTime();
+    
+    // Group into duration-sized buckets
+    const bucketStartMs = Math.floor(timestamp / (durationMin * 60000)) * (durationMin * 60000);
+    const bucketDate = new Date(bucketStartMs);
+    
+    // Format back to DB style "YYYY-MM-DD HH:MM:00" to keep replay engine happy
+    const yyyy = bucketDate.getUTCFullYear();
+    const mm = String(bucketDate.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(bucketDate.getUTCDate()).padStart(2, '0');
+    const hh = String(bucketDate.getUTCHours()).padStart(2, '0');
+    const min = String(bucketDate.getUTCMinutes()).padStart(2, '0');
+    const bucketTimeStr = `${yyyy}-${mm}-${dd} ${hh}:${min}:00`;
 
-    if (!currentBucket || currentBucket.time !== bucketIso) {
-      if (currentBucket) {
-        resampled.push(currentBucket);
-      }
+    if (!currentBucket || currentBucket.time !== bucketTimeStr) {
+      if (currentBucket) resampled.push(currentBucket);
       currentBucket = {
-        time: bucketIso,
+        time: bucketTimeStr,
         open: bar.open,
         high: bar.high,
         low: bar.low,
         close: bar.close,
         volume: bar.volume,
-        color: bar.close >= bar.open ? 'rgba(38, 166, 154, 0.8)' : 'rgba(239, 83, 80, 0.8)'
+        session: bar.session
       };
     } else {
       currentBucket.high = Math.max(currentBucket.high, bar.high);
       currentBucket.low = Math.min(currentBucket.low, bar.low);
       currentBucket.close = bar.close;
       currentBucket.volume += bar.volume;
-      currentBucket.color = currentBucket.close >= currentBucket.open ? 'rgba(38, 166, 154, 0.8)' : 'rgba(239, 83, 80, 0.8)';
     }
   });
 
-  if (currentBucket) {
-    resampled.push(currentBucket);
-  }
-
+  if (currentBucket) resampled.push(currentBucket);
   return resampled;
 }
