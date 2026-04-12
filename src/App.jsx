@@ -152,7 +152,7 @@ export default function App() {
       minute: '2-digit',
       second: '2-digit',
       hour12: true
-    }) + ' ET';
+    }) + ' UTC';
   };
 
   return (
