@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
 import { fetchTickers, fetchMarketData, loadDatabaseFromFile, isDBLoaded, initDB } from './lib/db';
 
@@ -160,6 +160,24 @@ export default function App() {
         <div className={`status-badge ${isDbLoaded ? 'status-online' : ''}`}>
           <Database size={16} />
           <span>{dbStatus}</span>
+        </div>
+
+        <div className="sidebar-section">
+          <h3>Release Data</h3>
+          <a 
+            href="https://github.com/emadprograms/market-rewind/releases/tag/latest-data" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="upload-zone"
+            style={{ textDecoration: 'none', color: 'inherit', borderStyle: 'solid', borderColor: 'rgba(38, 166, 154, 0.3)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-green)', fontWeight: '600', fontSize: '0.85rem' }}>
+              <ExternalLink size={16} /> Open GitHub 
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+              Download <b>market_data.db</b>
+            </div>
+          </a>
         </div>
 
         <div className="sidebar-section">
