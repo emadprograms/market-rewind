@@ -2,14 +2,9 @@ name: Market Rewind Backend
 
 on:
   workflow_dispatch:
-    inputs:
-      duration:
-        description: 'How many hours to run the backend session?'
-        required: true
-        default: '1'
 
 jobs:
-  run-session:
+  run-sync:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,11 +21,10 @@ jobs:
         run: |
           pip install libsql
 
-      - name: Run Backend Session
+      - name: Run Master Sync
         env:
           TURSO_DB_URL: ${{ secrets.TURSO_DB_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-          DURATION_HOURS: ${{ github.event.inputs.duration }}
         run: |
           # 1. Setup Git Identity
           git config --global user.name "github-actions[bot]"
@@ -51,12 +45,7 @@ jobs:
           mv .tmp_db database/market_data.db
           
           git add database/market_data.db
-          git commit -m "Final Master Sync [$(date)]"
+          git commit -m "Master Data Refresh [$(date)]"
           git push origin data-storage --force
           
-          # 4. Stay active for the requested duration without doing any more syncs
-          echo "Sync finished. Staying idle for $DURATION_HOURS hours..."
-          SLEEP_SECONDS=$(echo "$DURATION_HOURS * 3600" | bc | cut -d. -f1)
-          sleep $SLEEP_SECONDS
-          
-          echo "Backend session complete."
+          echo "Sync complete. Backend task finished."
