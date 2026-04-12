@@ -141,9 +141,10 @@ export default function App() {
 
   const formatDisplayTime = (isoStr) => {
     if (!isoStr) return '--:--:--';
-    const date = new Date(isoStr);
+    // isoStr is "2026-04-09 09:30:00". Append Z to parse identically without local shift.
+    const date = new Date(isoStr.replace(' ', 'T') + 'Z');
     return date.toLocaleString('en-US', { 
-      timeZone: 'America/New_York',
+      timeZone: 'UTC',
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -151,7 +152,7 @@ export default function App() {
       minute: '2-digit',
       second: '2-digit',
       hour12: true
-    }) + ' EST';
+    }) + ' ET';
   };
 
   return (

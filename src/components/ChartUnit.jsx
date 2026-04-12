@@ -57,10 +57,24 @@ export default function ChartUnit({
       priceScale: {
         borderColor: 'rgba(255, 255, 255, 0.1)',
       },
+      localization: {
+        timeFormatter: (time) => {
+          const date = new Date(time * 1000);
+          return date.toLocaleString('en-US', { timeZone: 'UTC', hour12: false, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+      },
       timeScale: {
         borderColor: 'rgba(255, 255, 255, 0.1)',
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time, tickMarkType) => {
+          const date = new Date(time * 1000);
+          if (tickMarkType <= 2) { 
+             return date.toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+          } else {
+             return date.toLocaleString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false });
+          }
+        }
       },
       handleScroll: true,
       handleScale: true,
@@ -97,13 +111,16 @@ export default function ChartUnit({
     if (seriesRef.current && chartData.length > 0) {
       // Lightweight charts expects time in 'YYYY-MM-DD' or Unix timestamp or ISO string (depending on scale)
       // We'll use ISO string format which it handles well for intraday
-      const formatted = chartData.map(d => ({
-        time: Math.floor(new Date(d.time).getTime() / 1000), // Unix timestamp
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.close,
-      }));
+      const formatted = chartData.map(d => {
+        const isoString = d.time.replace(' ', 'T') + 'Z';
+        return {
+          time: Math.floor(new Date(isoString).getTime() / 1000), // Strict UTC Unix timestamp
+          open: d.open,
+          high: d.high,
+          low: d.low,
+          close: d.close,
+        };
+      });
       seriesRef.current.setData(formatted);
       
       if (isReplayMode) {
