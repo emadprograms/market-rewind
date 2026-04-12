@@ -1,28 +1,34 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v4 Production - Final)
+## Project State: COMPLETED (v4.5 - Manual Upload Architecture)
 
-Market Rewind is a zero-read, local-first market replay tool. It operates entirely within the user's browser, eliminating Turso "Rows Read" costs and Vercel compute costs.
+Market Rewind is a zero-read, local-first market replay tool. It operates entirely within the user's browser, eliminating Turso "Rows Read" costs, avoiding network fetching errors, and bypassing Vercel compute costs.
 
 ### 🏗️ Architecture Map
-- **Data Sync Utility (GitHub Actions)**: Manual trigger. Pulls from Turso once using libSQL, then uploads `market_data.db` as a **GitHub Release** asset (bypasses 100MB Git limit, supports up to 2GB).
-- **Data Storage**: GitHub Releases (`latest-data` tag). 
-- **WASM Engine**: **sql.js** (Self-hosted). The WASM binary is copied to `public/` via a `postinstall` script to guarantee reliability on Vercel without CDN dependencies.
-- **Frontend Persistence**: Uses Browser **OPFS** (Origin Private File System) for lightning-fast database access.
+- **Data Sync Utility (GitHub Actions)**: Manual trigger. Pulls from Turso once using libSQL, then uploads `market_data.db` as a **GitHub Release** asset.
+- **Frontend Storage**: Uses Browser **OPFS** (Origin Private File System) for lightning-fast database access.
+- **Manual Upload Workflow**: Instead of automatic fetching (which caused massive CORS/Vite/CDN/Vercel failures), the user downloads the latest release and manually uploads the `.db` file into the sidebar UI once. OPFS persists it across sessions.
+- **WASM Engine**: **sql.js** (Self-hosted). The engine is initiated by directly passing the WASM binary data from fetch into `initSqlJs({ wasmBinary })`, which bypasses Vite's aggressive bundle rewriting that breaks `locateFile`.
 - **Read Strategy**: **0 Turso Reads** for end-users. Turso is only touched during your manual sync.
 
 ### 🚥 Component Breakdown
 
-#### Data Sync Logic (database/)
+#### Data Sync Logic (`database/`)
 - [x] `sync_backend.py`: Python master sync script (Single Pull logic).
 - [x] `.github/workflows/market_backend.yml`: Manual sync utility with GitHub CLI release management.
 
-#### Core Application (root)
-- [x] `src/lib/db.js`: Auto-loading client. Checks OPFS cache first, falls back to GitHub Release download.
-- [x] `src/App.jsx`: Clean Replay UI with auto-load state and today's date default.
-- [x] `package.json`: `postinstall` script for self-hosting standard WASM binary.
-- [x] `vite.config.js`: Configured to exclude `sql.js` from pre-bundling to ensure stable WASM resolution.
-- [x] `vercel.json`: Standard SPA routing (COOP/COEP removed as they are no longer required for sql.js).
+#### Core Application (`src/`)
+- [x] `src/lib/db.js`:
+    - Provides Manual Upload parser that writes `.db` ArrayBuffer into OPFS.
+    - Extracts `tickers` via guaranteed dynamic `SELECT DISTINCT symbol` query.
+    - Fetches historical chart data inclusive of all previous available days `timestamp <= [selectedDate] 23:59:59` to render broader context.
+- [x] `src/App.jsx`:
+    - **Toggleable Sidebar UI**: Contains File UI, Grid Selection, and explicit GitHub external URL.
+    - **Playhead Safety**: Initializes Replay `currentTime` to exactly 09:30 AM on the explicitly selected date, despite the larger payload of historical data.
+- [x] `src/components/ChartUnit.jsx`:
+    - Applies a **UTC Proxy Parsing Hack** across data handling and LightweightCharts localization formats so "Eastern Time" strings from the DB display strictly correctly regardless of the user's physical timezone.
+- [x] `package.json`: `postinstall` script securely caches standard WASM binary.
+- [x] `vite.config.js`: Excludes `sql.js` from pre-bundling.
 
 ### 📦 Key Dependencies
 - **Frontend**: `sql.js` (SQLite WASM), `lightweight-charts`, `lucide-react`, `react`.
