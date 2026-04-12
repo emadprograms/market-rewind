@@ -19,7 +19,7 @@ export default function App() {
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSessionStarted, setIsSessionStarted] = useState(false);
-  const [entryTime, setEntryTime] = useState('09:30');
+  const [entryTime, setEntryTime] = useState('13:30');
   
   const playbackRef = useRef();
 
