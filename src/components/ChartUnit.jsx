@@ -109,10 +109,6 @@ export default function ChartUnit({
     const priceTimeScale = priceChartRef.current.timeScale();
     const volumeTimeScale = volumeChartRef.current.timeScale();
 
-    // --- Synchronization ---
-    const priceTimeScale = priceChartRef.current.timeScale();
-    const volumeTimeScale = volumeChartRef.current.timeScale();
-
     let isSyncing = false;
     priceTimeScale.subscribeVisibleTimeRangeChange(range => {
        if (isSyncing || !range || !volumeChartRef.current) return;
