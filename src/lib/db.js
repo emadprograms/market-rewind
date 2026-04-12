@@ -1,4 +1,4 @@
-import { connect } from "@tursodatabase/database-wasm";
+import { connect } from "@tursodatabase/sync-wasm";
 
 let dbInstance = null;
 
