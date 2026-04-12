@@ -24,6 +24,7 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - Fetches historical chart data inclusive of all previous available days `timestamp <= [selectedDate] 23:59:59` to render broader context.
 - [x] `src/App.jsx`:
     - **Toggleable Sidebar UI**: Contains File UI, Grid Selection, and explicit GitHub external URL.
+    - **Intuitive Toggles**: Features a 'Collapse' button inside the sidebar and a floating 'Expand' button in the workspace for 100% full-screen chart focus.
     - **Playhead Safety**: Initializes Replay `currentTime` to exactly 09:30 AM on the explicitly selected date, despite the larger payload of historical data.
 - [x] `src/components/ChartUnit.jsx`:
     - Applies a **UTC Proxy Parsing Hack** across data handling and LightweightCharts localization formats so "Eastern Time" strings from the DB display strictly correctly regardless of the user's physical timezone.

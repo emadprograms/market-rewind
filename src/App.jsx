@@ -159,9 +159,14 @@ export default function App() {
     <div className="app-container">
       
       {/* --- SIDEBAR --- */}
-      <aside className={`sidebar ${isSidebarOpen ? '' : 'closed'}`}>
-        <div className="logo">
-          <Activity size={24} /> MARKET<span>REWIND</span>
+      <aside className={`sidebar ${isSidebarOpen ? '' : 'closed'}`} style={{ flexShrink: 0 }}>
+        <div className="logo" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Activity size={24} /> MARKET<span>REWIND</span>
+          </div>
+          <button className="btn-icon" onClick={() => setIsSidebarOpen(false)} title="Close Sidebar">
+            <Menu size={20} />
+          </button>
         </div>
 
         <div className={`status-badge ${isDbLoaded ? 'status-online' : ''}`}>
@@ -219,7 +224,14 @@ export default function App() {
       </aside>
 
       {/* --- MAIN CONTENT --- */}
-      <div className="main-content">
+      <div className="main-content" style={{ position: 'relative' }}>
+        {!isSidebarOpen && (
+          <div style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 110 }}>
+            <button className="btn-icon" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', width: '40px', height: '40px' }} onClick={() => setIsSidebarOpen(true)} title="Open Sidebar">
+              <Menu size={24} />
+            </button>
+          </div>
+        )}
         <main className={`workspace grid-${gridSize}`}>
           {isLoading ? (
             <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
@@ -250,10 +262,6 @@ export default function App() {
         </main>
 
         <div className="playback-bar">
-          <button className="btn-icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} title="Toggle Sidebar">
-            <Menu size={24} />
-          </button>
-          
           <div className="time-display">
             {formatDisplayTime(currentTime)}
           </div>
