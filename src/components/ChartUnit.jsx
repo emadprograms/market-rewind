@@ -80,6 +80,8 @@ export default function ChartUnit({
         borderColor: 'rgba(255, 255, 255, 0.1)',
         timeVisible: true,
         secondsVisible: false,
+        shiftVisibleRangeOnNewBar: false, // CRITICAL: Stop auto-scroll on new data
+        rightOffset: 15, // Give some breathing room on the right
         tickMarkFormatter: (time, tickMarkType) => {
           const date = new Date(time * 1000);
           if (tickMarkType <= 2) { 
