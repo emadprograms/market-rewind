@@ -45,6 +45,7 @@ export default function ChartUnit({
       layout: {
         background: { color: 'transparent' },
         textColor: '#94a3b8',
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
