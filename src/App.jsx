@@ -50,9 +50,12 @@ export default function App() {
         setTickers(t);
         setIsDbLoaded(true);
         setDbStatus(`${t.length} Tickers active`);
+      } else {
+        setDbStatus('Database is empty (0 tickers found).');
+        setIsDbLoaded(false);
       }
     } catch (e) {
-      setDbStatus('Database error. Requires re-upload.');
+      setDbStatus('Database error. Requires a valid file.');
       setIsDbLoaded(false);
     }
   }

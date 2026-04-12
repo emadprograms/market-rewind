@@ -123,18 +123,18 @@ export async function fetchMarketData(ticker, dateIso) {
 }
 
 /**
- * Fetches all available tickers from the LOCAL symbol_map.
+ * Fetches all available tickers from the LOCAL database.
  */
 export async function fetchTickers() {
   const db = await initDB();
   if (!db) return [];
   
   try {
-    const results = db.exec('SELECT user_ticker FROM symbol_map ORDER BY user_ticker');
+    const results = db.exec('SELECT DISTINCT symbol FROM market_data ORDER BY symbol');
     if (!results || results.length === 0) return [];
     return results[0].values.map(row => row[0]);
   } catch (error) {
     console.error('Failed to fetch local tickers:', error);
-    return [];
+    throw error; // Rethrow to ensure App.jsx exits loading state
   }
 }
