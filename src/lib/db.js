@@ -11,7 +11,7 @@ const REPO_URL = "https://github.com/emadprograms/market-rewind/releases/downloa
 async function getSqlJs() {
   if (SQL) return SQL;
   SQL = await initSqlJs({
-    locateFile: (file) => `https://sql.js.org/dist/${file}`
+    locateFile: (file) => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}`
   });
   return SQL;
 }
