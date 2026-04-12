@@ -1,34 +1,36 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, LayoutGrid, Calendar as CalendarIcon, Activity, RefreshCw, HardDrive } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, LayoutGrid, Calendar as CalendarIcon, Activity, Download, HardDrive } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
-import { fetchTickers, fetchMarketData, syncWithRemote } from './lib/db';
+import { fetchTickers, fetchMarketData, refreshMasterData } from './lib/db';
 
 export default function App() {
   // --- Global State ---
   const [tickers, setTickers] = useState([]);
-  const [selectedDate, setSelectedDate] = useState('2024-04-10'); // Fallback default
+  const [selectedDate, setSelectedDate] = useState('2024-04-10'); 
   const [masterData, setMasterData] = useState([]);
   const [currentTime, setCurrentTime] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [gridSize, setGridSize] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
   const playbackRef = useRef();
 
-  // 1. Load data from LOCAL whenever Date or Tickers change
-  // Note: We don't fetch tickers on mount anymore, we let the user Sync first
-  // OR we try to fetch from local on mount.
+  // 1. Initial Load: Try fetching from local (already downloaded)
   useEffect(() => {
     loadMetaData();
   }, []);
 
   async function loadMetaData() {
-    const t = await fetchTickers();
-    if (t.length > 0) {
-      setTickers(t);
+    try {
+      const t = await fetchTickers();
+      if (t.length > 0) {
+        setTickers(t);
+      }
+    } catch (e) {
+      console.log("No local data found. Please Refresh from GitHub.");
     }
   }
 
@@ -52,22 +54,22 @@ export default function App() {
     setIsLoading(false);
   }
 
-  // 2. Manual Sync Handler
-  const handleSync = async () => {
+  // 2. Manual Refresh from GitHub
+  const handleRefresh = async () => {
     try {
-      setIsSyncing(true);
-      await syncWithRemote();
-      setLastSync(new Date().toLocaleTimeString());
-      await loadMetaData(); // Reload tickers from local
-      await loadMarketData(); // Reload current view from local
+      setIsRefreshing(true);
+      await refreshMasterData();
+      setLastUpdate(new Date().toLocaleTimeString());
+      await loadMetaData(); 
+      await loadMarketData();
     } catch (error) {
-      alert("Sync failed: " + error.message);
+      alert("Refresh failed. Ensure the GitHub 'data-storage' branch exists.");
     } finally {
-      setIsSyncing(false);
+      setIsRefreshing(false);
     }
   };
 
-  // 3. Replay Engine Loop (unchanged logic)
+  // 3. Replay Engine Loop
   useEffect(() => {
     if (isPlaying && masterData.length > 0) {
       playbackRef.current = setInterval(() => {
@@ -129,14 +131,14 @@ export default function App() {
         
         <div style={{display: 'flex', gap: '16px', alignItems: 'center'}}>
            <button 
-             className={`btn-sync ${isSyncing ? 'syncing' : ''}`} 
-             onClick={handleSync}
-             disabled={isSyncing}
+             className={`btn-sync ${isRefreshing ? 'syncing' : ''}`} 
+             onClick={handleRefresh}
+             disabled={isRefreshing}
              style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                background: isSyncing ? 'rgba(255,255,255,0.05)' : 'rgba(38, 166, 154, 0.1)',
+                background: isRefreshing ? 'rgba(255,255,255,0.05)' : 'rgba(38, 166, 154, 0.1)',
                 color: 'var(--accent-green)',
                 border: '1px solid var(--accent-green)',
                 padding: '6px 12px',
@@ -146,13 +148,13 @@ export default function App() {
                 transition: 'all 0.3s'
              }}
            >
-             <RefreshCw size={16} className={isSyncing ? 'spin' : ''} />
-             {isSyncing ? 'Syncing...' : 'Sync with Turso'}
+             <Download size={16} className={isRefreshing ? 'spin' : ''} />
+             {isRefreshing ? 'Updating Master File...' : 'Fetch latest from GitHub'}
            </button>
 
-           <div className="status-badge status-online" style={{background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)'}}>
+           <div className="status-badge" style={{background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)'}}>
              <HardDrive size={14} />
-             {lastSync ? `Last Sync: ${lastSync}` : 'Local Mode (No Sync)'}
+             {lastUpdate ? `Last Fetch: ${lastUpdate}` : 'No Local Storage'}
            </div>
         </div>
 

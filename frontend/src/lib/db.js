@@ -1,42 +1,52 @@
-import { connect } from "@tursodatabase/sync-wasm";
+import { connect } from "@tursodatabase/database-wasm";
 
 let dbInstance = null;
 
-const url = import.meta.env.VITE_TURSO_DB_URL || '';
-const authToken = import.meta.env.VITE_TURSO_AUTH_TOKEN || '';
+const REPO_URL = "https://raw.githubusercontent.com/emadprograms/market-rewind/data-storage/database/market_data.db";
 
 /**
- * Initializes and returns the local-first database instance.
+ * Downloads the master database from GitHub and saves it to OPFS.
  */
-export async function getDB() {
-  if (dbInstance) return dbInstance;
-
-  if (!url || !authToken) {
-    throw new Error('TURSO_DB_URL or TURSO_AUTH_TOKEN is missing. Please check your .env file.');
-  }
-
+export async function refreshMasterData() {
+  console.log("Fetching master data from GitHub...");
   try {
-    // This creates/connects to a persistent local.db file in OPFS
-    dbInstance = await connect({
-      path: "market_rewind_local.db",
-      url: url.replace('libsql://', 'https://'),
-      authToken: authToken,
-    });
-    return dbInstance;
+    const response = await fetch(REPO_URL);
+    if (!response.ok) throw new Error("Failed to download master data from GitHub.");
+    
+    const buffer = await response.arrayBuffer();
+    
+    // Write to OPFS
+    const root = await navigator.storage.getDirectory();
+    const fileHandle = await root.getFileHandle("market_data.db", { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(buffer);
+    await writable.close();
+    
+    console.log("Master data updated in local storage.");
+    
+    // Force reconnect next time
+    dbInstance = null;
   } catch (error) {
-    console.error("Failed to initialize sync-wasm DB:", error);
+    console.error("Master Refresh Error:", error);
     throw error;
   }
 }
 
 /**
- * Manually pulls changes from the remote Turso database.
+ * Initializes and returns the local database instance.
  */
-export async function syncWithRemote() {
-  const db = await getDB();
-  console.log("Starting manual sync (pull) from Turso...");
-  await db.pull();
-  console.log("Sync complete.");
+export async function getDB() {
+  if (dbInstance) return dbInstance;
+
+  try {
+    // Connect to the file in OPFS
+    // Note: If the file doesn't exist yet, we should probably trigger a refresh.
+    dbInstance = await connect("market_data.db");
+    return dbInstance;
+  } catch (error) {
+    console.error("Failed to connect to local DB:", error);
+    throw error;
+  }
 }
 
 /**
@@ -45,8 +55,6 @@ export async function syncWithRemote() {
 export async function fetchMarketData(ticker, dateIso) {
   const db = await getDB();
   try {
-    // Note: sync-wasm execute might return different format than standard client
-    // typically it returns { columns: [], rows: [] }
     const rs = await db.execute({
       sql: `SELECT timestamp, open, high, low, close, volume, session 
             FROM market_data 
@@ -56,8 +64,6 @@ export async function fetchMarketData(ticker, dateIso) {
     });
     
     return rs.rows.map(row => {
-        // Handle both object-based and array-based row formats if necessary
-        // Most wasm drivers return arrays for rows.
         const [timestamp, open, high, low, close, volume, session] = Array.isArray(row) ? row : 
             [row.timestamp, row.open, row.high, row.low, row.close, row.volume, row.session];
         

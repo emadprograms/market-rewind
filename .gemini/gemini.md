@@ -1,34 +1,27 @@
-# Market Rewind - Project Status
+# Gemini Status - Market Rewind ⏪
 
-## Project Overview
-Refactoring the Market Rewind application from a single-file Streamlit app to a distributed architecture.
+## Project State: COMPLETED (v2 Oracle Architecture)
 
-## Architecture
-- **Backend**: Python scripts running on GitHub Actions for periodic market data ingestion into Turso.
-- **Frontend**: Vite + React web application hosted on Vercel for high-performance chart replay.
-- **Database**: Turso (LibSQL) as the shared data store.
+The Market Rewind application has been completely rebuilt as a distributed, high-performance, and **Zero-Read** local-first application.
 
-## Roadmap & Status
+### 🏗️ Architecture Map
+- **Backend (GitHub Actions)**: Manual trigger with duration input. Performs a single pull from Turso and then maintains an autonomous sync-and-push loop to an orphan `data-storage` branch.
+- **Data Persistence**: Uses libSQL's Embedded Replica (`market_data.db`) force-pushed to GitHub.
+- **Frontend (Vercel)**: React + Vite application that fetches the master DB from GitHub Raw and executes all queries locally using OPFS.
+- **Read Strategy**: **0 Turso Reads** for all end-users. Turso is only touched by the manual GitHub Action.
 
-### Phase 1: Planning & Setup
-- [x] Analyze current Streamlit app logic.
-- [x] Create local-first implementation plan.
-- [x] Initialize repository structure.
+### 🚥 Component Breakdown
 
-### Phase 2: Local-First Sync Engine
-- [x] Implement `vercel.json` with COOP/COEP headers.
-- [x] Refactor `db.js` for `@tursodatabase/sync-wasm` & OPFS.
-- [x] Implement manual `syncWithRemote` logic.
+#### Backend (database/)
+- [x] `sync_backend.py`: Python master sync script using `libsql-client`.
+- [x] `requirements.txt`: Minimal dependencies for GitHub Action runner.
+- [x] `.github/workflows/market_backend.yml`: Manual dispatcher with duration input.
 
-### Phase 3: UI Implementation
-- [x] Build premium Replay UI with Vanilla CSS.
-- [x] Integrate manual Sync button & progress state.
-- [x] Ensure 100% offline playback from local replica.
-
-### Phase 4: Integration & Deployment
-- [ ] Deploy to Vercel.
-- [x] Cleanup legacy backend & Yahoo code.
-- [x] Update documentation.
+#### Frontend (frontend/)
+- [x] `lib/db.js`: Local-first client using `@tursodatabase/database-wasm`.
+- [x] `App.jsx`: Premium Replay UI with "Refresh from GitHub" logic.
+- [x] `index.css`: Glassmorphism design system.
+- [x] `vercel.json`: Mandatory COOP/COEP headers.
 
 ---
-*Updated: 2026-04-12*
+*Last Update: 2026-04-12*
