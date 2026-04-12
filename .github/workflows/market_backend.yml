@@ -36,38 +36,27 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 2. Determine End Time
-          START_TIME=$(date +%s)
-          DURATION_SECONDS=$(echo "$DURATION_HOURS * 3600" | bc | cut -d. -f1)
-          END_TIME=$((START_TIME + DURATION_SECONDS))
+          echo "Starting Master Sync once..."
           
-          echo "Starting session for $DURATION_HOURS hours..."
+          # 2. Run the sync script ONCE
+          python database/sync_backend.py
           
-          while [ $(date +%s) -lt $END_TIME ]; do
-            echo "--- Syncing at $(date) ---"
-            
-            # Run the sync script once
-            python database/sync_backend.py 0 
-            
-            # Save to orphan branch data-storage
-            git checkout --orphan data-storage || git checkout data-storage
-            git rm -rf . --quiet || true
-            mkdir -p database
-            mv database/market_data.db .tmp_db
-            rm -rf *
-            mkdir -p database
-            mv .tmp_db database/market_data.db
-            
-            git add database/market_data.db
-            git commit -m "Update Market Data [$(date)]"
-            git push origin data-storage --force
-            
-            # Switch back to main to get the script for next loop
-            git checkout main
-            
-            # Sleep for 15 minutes
-            echo "Waiting 15 minutes for next sync..."
-            sleep 900
-          done
+          # 3. Save to orphan branch data-storage ONCE
+          git checkout --orphan data-storage || git checkout data-storage
+          git rm -rf . --quiet || true
+          mkdir -p database
+          mv database/market_data.db .tmp_db
+          rm -rf *
+          mkdir -p database
+          mv .tmp_db database/market_data.db
+          
+          git add database/market_data.db
+          git commit -m "Final Master Sync [$(date)]"
+          git push origin data-storage --force
+          
+          # 4. Stay active for the requested duration without doing any more syncs
+          echo "Sync finished. Staying idle for $DURATION_HOURS hours..."
+          SLEEP_SECONDS=$(echo "$DURATION_HOURS * 3600" | bc | cut -d. -f1)
+          sleep $SLEEP_SECONDS
           
           echo "Backend session complete."
