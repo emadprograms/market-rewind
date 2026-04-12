@@ -1,29 +1,32 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v3 Final Oracle)
+## Project State: COMPLETED (v4 Production)
 
-The Market Rewind application is now a distributed, high-performance, and **Zero-Read** local-first application. There is no active backend server; instead, it uses a manual repository synchronization workflow to protect Turso read limits.
+Market Rewind is a zero-read, local-first market replay tool. There is no active backend server. Data is synced manually via GitHub Actions and served to users as a static file download.
 
 ### 🏗️ Architecture Map
-- **Data Sync Utility (GitHub Actions)**: A manual script you trigger when you want to update the master record. It performs a **single sync** from Turso and exits.
-- **Data Persistence**: Uses libSQL's Embedded Replica (`market_data.db`) stored on an orphan `data-storage` branch to keep the main code branch clean.
-- **Frontend (Vercel)**: React + Vite application that fetches the master file from GitHub Raw and executes all queries locally using browser OPFS.
-- **Read Strategy**: **0 Turso Reads** for all end-users. Turso is only touched once during your manual data refresh.
+- **Data Sync Utility (GitHub Actions)**: Manual trigger. Pulls from Turso once using libSQL embedded replicas, then uploads `market_data.db` as a **GitHub Release** asset (bypasses the 100MB Git file limit, supports up to 2GB).
+- **Data Storage**: GitHub Releases (`latest-data` tag). Not stored in Git history or branches.
+- **App (Vercel)**: React + Vite. Downloads the `.db` file from the GitHub Release URL, saves it to browser OPFS, and queries it locally using **sql.js** (SQLite compiled to WASM).
+- **Read Strategy**: **0 Turso Reads** for all end-users. Turso is only touched once during your manual sync.
 
 ### 🚥 Component Breakdown
 
 #### Data Sync Logic (database/)
-- [x] `sync_backend.py`: Python master sync script (Single Pull logic).
-- [x] `requirements.txt`: Minimal dependencies for GitHub Action runner.
-- [x] `.github/workflows/market_backend.yml`: Manual sync utility.
+- [x] `sync_backend.py`: Python script using `libsql` (single pull, then exit).
+- [x] `requirements.txt`: `libsql` only.
+- [x] `.github/workflows/market_backend.yml`: Manual dispatch, uploads to GitHub Releases.
 
 #### Core Application (root)
-- [x] `src/lib/db.js`: Local-first client (GitHub Raw -> OPFS).
-- [x] `App.jsx`: Premium Replay UI with "Fetch latest from GitHub" master refresh.
-- [x] `index.css`: Glassmorphism design system.
-- [x] `vercel.json`: Mandatory COOP/COEP headers for WASM.
+- [x] `src/lib/db.js`: Local-first client using `sql.js`. Fetches from GitHub Releases → OPFS → local SQL queries.
+- [x] `src/App.jsx`: Replay UI with "Fetch latest from GitHub" button.
+- [x] `src/index.css`: Glassmorphism design system.
+- [x] `vercel.json`: COEP (`credentialless`) + COOP headers. Rewrites for SPA routing.
 - [x] `vite.config.js`: Root-level build configuration.
 
+### 📦 Key Dependencies
+- **Frontend**: `sql.js`, `lightweight-charts`, `lucide-react`, `react`
+- **Backend (GitHub Action only)**: `libsql` (Python)
+
 ---
-*Last Update: 2026-04-12*
- Greenland
+*Last Update: 2026-04-13*
