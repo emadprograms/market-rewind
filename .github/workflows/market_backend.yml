@@ -25,6 +25,7 @@ jobs:
         env:
           TURSO_DB_URL: ${{ secrets.TURSO_DB_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # 1. Setup Git Identity
           git config --global user.name "github-actions[bot]"
@@ -35,17 +36,11 @@ jobs:
           # 2. Run the sync script ONCE
           python database/sync_backend.py
           
-          # 3. Save to orphan branch data-storage ONCE
-          git checkout --orphan data-storage || git checkout data-storage
-          git rm -rf . --quiet || true
-          mkdir -p database
-          mv database/market_data.db .tmp_db
-          rm -rf *
-          mkdir -p database
-          mv .tmp_db database/market_data.db
-          
-          git add database/market_data.db
-          git commit -m "Master Data Refresh [$(date)]"
-          git push origin data-storage --force
+          # 3. Upload as a GitHub Release to bypass the 100MB limit
+          echo "Uploading database as a GitHub Release..."
+          gh release delete latest-data --cleanup-tag -y || true
+          git tag latest-data
+          git push origin latest-data --force
+          gh release create latest-data database/market_data.db -t "Latest Market Data" -n "Auto-synced from Turso"
           
           echo "Sync complete. Backend task finished."

@@ -2,7 +2,7 @@ import { connect } from "@tursodatabase/database-wasm";
 
 let dbInstance = null;
 
-const REPO_URL = "https://raw.githubusercontent.com/emadprograms/market-rewind/data-storage/database/market_data.db";
+const REPO_URL = "https://github.com/emadprograms/market-rewind/releases/download/latest-data/market_data.db";
 
 /**
  * Downloads the master database from GitHub and saves it to OPFS.
