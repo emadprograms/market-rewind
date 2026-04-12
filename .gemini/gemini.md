@@ -29,6 +29,7 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
 - [x] `src/components/ChartUnit.jsx`:
     - Applies a **Strict UTC Parsing Strategy** across data handling and LightweightCharts localization formats so UTC timestamps from the DB display correctly regardless of the user's physical timezone.
     - **Volume Visualization**: Includes a secondary histogram series for volume, mapped and colored relative to price action, with dedicated vertical scaling.
+    - **Smooth Replay Engine**: Implemented an incremental `.update()` logic to prevent the viewport from snapping to the right edge during replay, preserving the user's custom zoom/scroll position.
 - [x] `package.json`: `postinstall` script securely caches standard WASM binary.
 - [x] `vite.config.js`: Excludes `sql.js` from pre-bundling.
 

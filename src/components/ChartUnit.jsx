@@ -16,6 +16,7 @@ export default function ChartUnit({
   const chartRef = useRef();
   const seriesRef = useRef();
   const volumeSeriesRef = useRef();
+  const lastDataCountRef = useRef(0);
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [timeframe, setTimeframe] = useState(initialTf || '1min');
@@ -133,12 +134,10 @@ export default function ChartUnit({
   // 3. Update Chart Data
   useEffect(() => {
     if (seriesRef.current && chartData.length > 0) {
-      // Lightweight charts expects time in 'YYYY-MM-DD' or Unix timestamp or ISO string (depending on scale)
-      // We'll use ISO string format which it handles well for intraday
       const formatted = chartData.map(d => {
         const isoString = d.time.replace(' ', 'T') + 'Z';
         return {
-          time: Math.floor(new Date(isoString).getTime() / 1000), // Strict UTC Unix timestamp
+          time: Math.floor(new Date(isoString).getTime() / 1000),
           open: d.open,
           high: d.high,
           low: d.low,
@@ -147,22 +146,39 @@ export default function ChartUnit({
         };
       });
 
-      seriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
-        time, open, high, low, close
-      })));
+      // If we are just adding one bar to the end, use .update() to preserve scroll/zoom
+      if (formatted.length === lastDataCountRef.current + 1) {
+        const lastBar = formatted[formatted.length - 1];
+        seriesRef.current.update({
+          time: lastBar.time,
+          open: lastBar.open,
+          high: lastBar.high,
+          low: lastBar.low,
+          close: lastBar.close,
+        });
+        volumeSeriesRef.current.update({
+          time: lastBar.time,
+          value: lastBar.volume,
+          color: lastBar.close >= lastBar.open ? '#26a69a' : '#ef5350'
+        });
+      } else {
+        // Full reset (e.g. timeframe change or big jump)
+        seriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+          time, open, high, low, close
+        })));
 
-      volumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
-        time,
-        value: volume,
-        color: close >= open ? '#26a69a' : '#ef5350'
-      })));
-      
-      if (isReplayMode) {
-        chartRef.current.timeScale().scrollToPosition(0, false);
+        volumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
+          time,
+          value: volume,
+          color: close >= open ? '#26a69a' : '#ef5350'
+        })));
       }
+
+      lastDataCountRef.current = formatted.length;
     } else if (seriesRef.current) {
         seriesRef.current.setData([]);
         volumeSeriesRef.current.setData([]);
+        lastDataCountRef.current = 0;
     }
   }, [chartData, isReplayMode]);
 
