@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, RefreshCw } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
-import { fetchTickers, fetchMarketData, forceRefresh } from './lib/db';
+import { fetchTickers, fetchMarketData, loadDatabaseFromFile, isDBLoaded, initDB } from './lib/db';
 
-// Today's date in YYYY-MM-DD format
 const TODAY = new Date().toISOString().split('T')[0];
 
 export default function App() {
@@ -16,41 +15,72 @@ export default function App() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [gridSize, setGridSize] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  const [statusMessage, setStatusMessage] = useState('Connecting to database...');
-
+  const [dbStatus, setDbStatus] = useState('Checking storage...');
+  const [isDbLoaded, setIsDbLoaded] = useState(false);
+  
   const playbackRef = useRef();
 
-  // 1. Auto-load on startup
+  // 1. Check OPFS on load
   useEffect(() => {
-    bootApp();
+    checkLocalDatabase();
   }, []);
 
-  async function bootApp() {
+  async function checkLocalDatabase() {
+    setIsLoading(true);
+    setDbStatus('Checking local storage...');
     try {
-      setIsLoading(true);
-      setStatusMessage('Loading database...');
-      
+      const db = await initDB();
+      if (db) {
+        await loadMetaData();
+      } else {
+        setDbStatus('No data. Please upload market_data.db');
+        setIsDbLoaded(false);
+      }
+    } catch(e) {
+      setDbStatus('No data. Please upload market_data.db');
+      setIsDbLoaded(false);
+    }
+    setIsLoading(false);
+  }
+
+  async function loadMetaData() {
+    try {
       const t = await fetchTickers();
       if (t.length > 0) {
         setTickers(t);
-        setStatusMessage(`${t.length} tickers loaded`);
-      } else {
-        setStatusMessage('Database loaded but no tickers found');
+        setIsDbLoaded(true);
+        setDbStatus(`${t.length} Tickers active`);
       }
     } catch (e) {
-      console.error("Boot failed:", e);
-      setStatusMessage('Failed to load database. Run the GitHub Action first.');
+      setDbStatus('Database error. Requires re-upload.');
+      setIsDbLoaded(false);
+    }
+  }
+
+  // 2. Handle File Upload
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+      setIsLoading(true);
+      setDbStatus('Loading file into memory...');
+      await loadDatabaseFromFile(file);
+      await loadMetaData();
+    } catch(err) {
+      setDbStatus('Upload failed. Must be a valid SQLite file.');
+      setIsDbLoaded(false);
     } finally {
       setIsLoading(false);
     }
   }
 
-  // 2. Load market data when date or tickers change
+  // 3. Load market data when date or tickers change
   useEffect(() => {
-    if (tickers.length > 0) {
+    if (tickers.length > 0 && isDbLoaded) {
       loadMarketData();
     }
-  }, [selectedDate, tickers]);
+  }, [selectedDate, tickers, isDbLoaded]);
 
   async function loadMarketData() {
     setIsLoading(true);
@@ -60,24 +90,11 @@ export default function App() {
     if (data.length > 0) {
       const firstBar = data.find(d => d.session === 'REG') || data[0];
       setCurrentTime(firstBar.time);
-      setStatusMessage(`${data.length} bars loaded for ${selectedDate}`);
     } else {
       setCurrentTime(null);
-      setStatusMessage(`No data available for ${selectedDate}`);
     }
     setIsLoading(false);
   }
-
-  // 3. Manual refresh (small icon button, not prominent)
-  const handleRefresh = async () => {
-    try {
-      setStatusMessage('Refreshing from GitHub...');
-      await forceRefresh();
-      await bootApp();
-    } catch (error) {
-      setStatusMessage('Refresh failed. Is the GitHub Release available?');
-    }
-  };
 
   // 4. Replay Engine Loop
   useEffect(() => {
@@ -133,94 +150,105 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <header>
+      
+      {/* --- SIDEBAR --- */}
+      <aside className="sidebar">
         <div className="logo">
-          <Activity size={24} />
-          MARKET<span>REWIND</span>
-        </div>
-        
-        <div style={{display: 'flex', gap: '16px', alignItems: 'center'}}>
-           <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>{statusMessage}</span>
-           <button 
-             onClick={handleRefresh}
-             title="Force refresh database from GitHub"
-             style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: 'none',
-                color: 'var(--text-secondary)',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '4px',
-                opacity: 0.6,
-                transition: 'opacity 0.2s'
-             }}
-             onMouseEnter={(e) => e.target.style.opacity = 1}
-             onMouseLeave={(e) => e.target.style.opacity = 0.6}
-           >
-             <RefreshCw size={14} />
-           </button>
+          <Activity size={24} /> MARKET<span>REWIND</span>
         </div>
 
-        <div style={{display: 'flex', gap: '12px'}}>
-           <div style={{display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '0.8rem'}}>
-             <CalendarIcon size={14} />
-             <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+        <div className={`status-badge ${isDbLoaded ? 'status-online' : ''}`}>
+          <Database size={16} />
+          <span>{dbStatus}</span>
+        </div>
+
+        <div className="sidebar-section">
+          <h3>Load Data</h3>
+          <label className="upload-zone">
+            <UploadCloud size={24} className="file-icon" />
+            <div style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>
+              Click to select <b>market_data.db</b>
+            </div>
+            <input type="file" accept=".db,.sqlite" onChange={handleFileUpload} />
+          </label>
+        </div>
+
+        <div className="sidebar-section" style={{marginTop: '16px'}}>
+           <h3>Replay Settings</h3>
+           <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+             <div>
+               <label style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Date</label>
+               <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+             </div>
+             <div>
+               <label style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Layout Grid</label>
+               <select value={gridSize} onChange={(e) => setGridSize(parseInt(e.target.value))}>
+                 <option value={1}>1 Chart</option>
+                 <option value={2}>2 Charts</option>
+                 <option value={3}>3 Charts</option>
+                 <option value={4}>4 Charts</option>
+               </select>
+             </div>
            </div>
-           <select value={gridSize} onChange={(e) => setGridSize(parseInt(e.target.value))}>
-             <option value={1}>1 Chart</option>
-             <option value={2}>2 Charts</option>
-             <option value={3}>3 Charts</option>
-             <option value={4}>4 Charts</option>
-           </select>
         </div>
-      </header>
+      </aside>
 
-      <main className={`workspace grid-${gridSize}`}>
-        {isLoading ? (
-          <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
-            {statusMessage}
+      {/* --- MAIN CONTENT --- */}
+      <div className="main-content">
+        <main className={`workspace grid-${gridSize}`}>
+          {isLoading ? (
+            <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
+              Processing...
+            </div>
+          ) : !isDbLoaded ? (
+            <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
+               Please upload your database file on the left to begin.
+            </div>
+          ) : masterData.length === 0 ? (
+            <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
+              No trading data found for {selectedDate}.
+            </div>
+          ) : (
+            Array.from({ length: gridSize }).map((_, i) => (
+              <ChartUnit 
+                key={i} 
+                id={i} 
+                masterData={masterData} 
+                globalTime={currentTime} 
+                isReplayMode={true} 
+                tickers={tickers}
+                initialTicker={i === 3 ? 'SPY' : tickers[0]}
+                initialTf={i === 1 ? '5min' : i === 2 ? '1H' : '1min'}
+              />
+            ))
+          )}
+        </main>
+
+        <div className="playback-bar">
+          <div className="time-display">
+            {formatDisplayTime(currentTime)}
           </div>
-        ) : (
-          Array.from({ length: gridSize }).map((_, i) => (
-            <ChartUnit 
-              key={i} 
-              id={i} 
-              masterData={masterData} 
-              globalTime={currentTime} 
-              isReplayMode={true} 
-              tickers={tickers}
-              initialTicker={i === 3 ? 'SPY' : tickers[0]}
-              initialTf={i === 1 ? '5min' : i === 2 ? '1H' : '1min'}
-            />
-          ))
-        )}
-      </main>
 
-      <div className="playback-bar">
-        <div className="time-display">
-          {formatDisplayTime(currentTime)}
-        </div>
+          <div className="playback-controls">
+            <button className="btn-icon" onClick={stepBackward}><SkipBack size={20} /></button>
+            <button className="btn-primary" onClick={togglePlay} disabled={!isDbLoaded || masterData.length === 0}>
+              {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+              {isPlaying ? 'PAUSE' : 'PLAY'}
+            </button>
+            <button className="btn-icon" onClick={stepForward}><SkipForward size={20} /></button>
+            <button className="btn-icon" onClick={resetToOpen} title="Reset to Market Open"><RotateCcw size={20} /></button>
+          </div>
 
-        <div className="playback-controls">
-          <button className="btn-icon" onClick={stepBackward}><SkipBack size={20} /></button>
-          <button className="btn-primary" onClick={togglePlay}>
-            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-            {isPlaying ? 'PAUSE' : 'PLAY'}
-          </button>
-          <button className="btn-icon" onClick={stepForward}><SkipForward size={20} /></button>
-          <button className="btn-icon" onClick={resetToOpen} title="Reset to Market Open"><RotateCcw size={20} /></button>
-        </div>
-
-        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-          <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>SPEED</span>
-          <select value={playbackSpeed} onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}>
-            <option value={0.5}>0.5x</option>
-            <option value={1}>1.0x</option>
-            <option value={2}>2.0x</option>
-            <option value={5}>5.0x</option>
-            <option value={10}>10.0x</option>
-          </select>
+          <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+            <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>SPEED</span>
+            <select value={playbackSpeed} onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))} style={{width: 'auto'}}>
+              <option value={0.5}>0.5x</option>
+              <option value={1}>1.0x</option>
+              <option value={2}>2.0x</option>
+              <option value={5}>5.0x</option>
+              <option value={10}>10.0x</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>

@@ -3,8 +3,6 @@ import initSqlJs from "sql.js";
 let dbInstance = null;
 let SQL = null;
 
-const REPO_URL = "https://github.com/emadprograms/market-rewind/releases/download/latest-data/market_data.db";
-
 /**
  * Initializes sql.js engine.
  * The WASM file is served from public/sql-wasm.wasm (same origin, no CDN).
@@ -33,63 +31,58 @@ async function loadFromOPFS() {
 }
 
 /**
- * Downloads the latest database from GitHub Releases and saves to OPFS.
- * Returns the raw bytes so the caller can open the DB immediately.
+ * Saves a new database ArrayBuffer to OPFS and loads it into memory.
  */
-async function downloadFromGitHub() {
-  console.log("Downloading master data from GitHub Releases...");
-  const response = await fetch(REPO_URL);
-  if (!response.ok) throw new Error(`GitHub download failed: ${response.status}`);
-  
-  const buffer = await response.arrayBuffer();
-  const data = new Uint8Array(buffer);
-  
-  // Persist to OPFS for next time
+export async function loadDatabaseFromFile(file) {
   try {
+    const buffer = await file.arrayBuffer();
+    const data = new Uint8Array(buffer);
+    
+    // Save to OPFS so it survives a page reload
     const root = await navigator.storage.getDirectory();
     const fileHandle = await root.getFileHandle("market_data.db", { create: true });
     const writable = await fileHandle.createWritable();
     await writable.write(buffer);
     await writable.close();
-    console.log("Saved to OPFS for offline use.");
-  } catch (e) {
-    console.warn("OPFS save failed (will re-download next time):", e);
+    console.log("Database saved to OPFS successfully.");
+
+    // Load into sql.js
+    const sqlJs = await getSqlJs();
+    dbInstance = new sqlJs.Database(data);
+    return true;
+  } catch (error) {
+    console.error("Failed to load uploaded file:", error);
+    throw error;
   }
-  
-  return data;
 }
 
 /**
- * Initializes the database. Tries OPFS first, falls back to GitHub download.
- * This is called automatically on app startup.
+ * Initializes the database from existing OPFS cache.
+ * Called automatically on app startup. Returns null if no localized file is found.
  */
 export async function initDB() {
   if (dbInstance) return dbInstance;
   
   const sqlJs = await getSqlJs();
   
-  // 1. Try cached copy from OPFS
-  let data = await loadFromOPFS();
+  // Try cached copy from OPFS
+  const data = await loadFromOPFS();
   
-  // 2. If no cache, download from GitHub
-  if (!data) {
-    console.log("No local cache found. Downloading from GitHub...");
-    data = await downloadFromGitHub();
+  if (data) {
+    dbInstance = new sqlJs.Database(data);
+    console.log("Database loaded from local storage.");
+    return dbInstance;
   }
   
-  dbInstance = new sqlJs.Database(data);
-  console.log("Database ready.");
-  return dbInstance;
+  console.log("No local database found. Needs manual upload.");
+  return null;
 }
 
 /**
- * Forces a fresh download from GitHub (for manual refresh if needed).
+ * Checks if DB is loaded
  */
-export async function forceRefresh() {
-  const sqlJs = await getSqlJs();
-  const data = await downloadFromGitHub();
-  dbInstance = new sqlJs.Database(data);
-  return dbInstance;
+export function isDBLoaded() {
+  return dbInstance !== null;
 }
 
 /**

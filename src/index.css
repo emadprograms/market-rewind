@@ -20,28 +20,29 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: var(--bg-dark);
   color: var(--text-primary);
-  overflow-x: hidden;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
 .app-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
   width: 100vw;
   background: radial-gradient(circle at top right, rgba(38, 166, 154, 0.05), transparent),
               radial-gradient(circle at bottom left, rgba(239, 83, 80, 0.05), transparent);
 }
 
-header {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--border-color);
-  background: rgba(10, 11, 16, 0.8);
+/* --- Sidebar --- */
+.sidebar {
+  width: 320px;
+  background: rgba(10, 11, 16, 0.85);
   backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px;
+  gap: 24px;
   z-index: 100;
 }
 
@@ -52,10 +53,71 @@ header {
   font-weight: 700;
   font-size: 1.25rem;
   letter-spacing: -0.5px;
+  margin-bottom: 8px;
 }
 
 .logo span {
   color: var(--accent-green);
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar-section h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.upload-zone {
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  transition: all 0.2s;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-zone:hover {
+  border-color: var(--accent-green);
+  background: rgba(38, 166, 154, 0.05);
+}
+
+.upload-zone input[type="file"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-icon {
+  color: var(--text-secondary);
+}
+
+.upload-zone:hover .file-icon {
+  color: var(--accent-green);
+}
+
+/* --- Main Content Area --- */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .workspace {
@@ -81,11 +143,6 @@ header {
   flex-direction: column;
   overflow: hidden;
   transition: all 0.3s ease;
-}
-
-.chart-card:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .chart-header {
@@ -119,14 +176,15 @@ header {
   color: var(--text-primary);
 }
 
-select, input {
+select, input:not([type="file"]) {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
   font-size: 0.85rem;
   outline: none;
+  width: 100%;
 }
 
 select:focus, input:focus {
@@ -170,19 +228,6 @@ select:focus, input:focus {
   transform: translateY(-1px);
 }
 
-.btn-primary:active {
-  transform: translateY(0);
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
 .time-display {
   font-family: var(--font-mono);
   font-size: 1.1rem;
@@ -192,18 +237,21 @@ select:focus, input:focus {
 }
 
 .status-badge {
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
 }
 
 .status-online {
   background: rgba(38, 166, 154, 0.1);
   color: var(--accent-green);
+  border: 1px solid rgba(38, 166, 154, 0.2);
 }
 
 /* Custom Scrollbar */
