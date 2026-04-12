@@ -109,18 +109,30 @@ export default function ChartUnit({
     const priceTimeScale = priceChartRef.current.timeScale();
     const volumeTimeScale = volumeChartRef.current.timeScale();
 
+    // --- Synchronization ---
+    const priceTimeScale = priceChartRef.current.timeScale();
+    const volumeTimeScale = volumeChartRef.current.timeScale();
+
     let isSyncing = false;
     priceTimeScale.subscribeVisibleTimeRangeChange(range => {
-       if (isSyncing || !range) return;
+       if (isSyncing || !range || !volumeChartRef.current) return;
        isSyncing = true;
-       volumeTimeScale.setVisibleRange(range);
+       try {
+         volumeChartRef.current.timeScale().setVisibleRange(range);
+       } catch (e) {
+         console.warn("Sync failed: Volume scale not ready");
+       }
        isSyncing = false;
     });
 
     volumeTimeScale.subscribeVisibleTimeRangeChange(range => {
-       if (isSyncing || !range) return;
+       if (isSyncing || !range || !priceChartRef.current) return;
        isSyncing = true;
-       priceTimeScale.setVisibleRange(range);
+       try {
+         priceChartRef.current.timeScale().setVisibleRange(range);
+       } catch (e) {
+         console.warn("Sync failed: Price scale not ready");
+       }
        isSyncing = false;
     });
 
