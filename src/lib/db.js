@@ -6,43 +6,11 @@ let SQL = null;
 const REPO_URL = "https://github.com/emadprograms/market-rewind/releases/download/latest-data/market_data.db";
 
 /**
- * Downloads the master database from GitHub and saves it to OPFS.
- */
-export async function refreshMasterData() {
-  console.log("Fetching master data from GitHub...");
-  try {
-    const response = await fetch(REPO_URL);
-    if (!response.ok) throw new Error("Failed to download master data from GitHub.");
-    
-    const buffer = await response.arrayBuffer();
-    
-    // Write to OPFS for persistent storage
-    const root = await navigator.storage.getDirectory();
-    const fileHandle = await root.getFileHandle("market_data.db", { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(buffer);
-    await writable.close();
-    
-    console.log("Master data updated in local storage.");
-    
-    // Force reconnect next time
-    dbInstance = null;
-    
-    // Return the buffer so we can use it immediately
-    return buffer;
-  } catch (error) {
-    console.error("Master Refresh Error:", error);
-    throw error;
-  }
-}
-
-/**
  * Initializes sql.js engine.
  */
 async function getSqlJs() {
   if (SQL) return SQL;
   SQL = await initSqlJs({
-    // Load the WASM binary from CDN
     locateFile: (file) => `https://sql.js.org/dist/${file}`
   });
   return SQL;
@@ -59,29 +27,67 @@ async function loadFromOPFS() {
     const buffer = await file.arrayBuffer();
     return new Uint8Array(buffer);
   } catch {
-    return null; // File doesn't exist yet
+    return null;
   }
 }
 
 /**
- * Initializes and returns the local database instance.
+ * Downloads the latest database from GitHub Releases and saves to OPFS.
+ * Returns the raw bytes so the caller can open the DB immediately.
  */
-export async function getDB() {
-  if (dbInstance) return dbInstance;
-
-  const sqlJs = await getSqlJs();
+async function downloadFromGitHub() {
+  console.log("Downloading master data from GitHub Releases...");
+  const response = await fetch(REPO_URL);
+  if (!response.ok) throw new Error(`GitHub download failed: ${response.status}`);
   
-  // Try loading from OPFS first
-  const data = await loadFromOPFS();
+  const buffer = await response.arrayBuffer();
+  const data = new Uint8Array(buffer);
   
-  if (data) {
-    dbInstance = new sqlJs.Database(data);
-    console.log("Database loaded from local storage.");
-  } else {
-    console.log("No local data found. Click 'Fetch latest from GitHub' to download.");
-    return null;
+  // Persist to OPFS for next time
+  try {
+    const root = await navigator.storage.getDirectory();
+    const fileHandle = await root.getFileHandle("market_data.db", { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(buffer);
+    await writable.close();
+    console.log("Saved to OPFS for offline use.");
+  } catch (e) {
+    console.warn("OPFS save failed (will re-download next time):", e);
   }
   
+  return data;
+}
+
+/**
+ * Initializes the database. Tries OPFS first, falls back to GitHub download.
+ * This is called automatically on app startup.
+ */
+export async function initDB() {
+  if (dbInstance) return dbInstance;
+  
+  const sqlJs = await getSqlJs();
+  
+  // 1. Try cached copy from OPFS
+  let data = await loadFromOPFS();
+  
+  // 2. If no cache, download from GitHub
+  if (!data) {
+    console.log("No local cache found. Downloading from GitHub...");
+    data = await downloadFromGitHub();
+  }
+  
+  dbInstance = new sqlJs.Database(data);
+  console.log("Database ready.");
+  return dbInstance;
+}
+
+/**
+ * Forces a fresh download from GitHub (for manual refresh if needed).
+ */
+export async function forceRefresh() {
+  const sqlJs = await getSqlJs();
+  const data = await downloadFromGitHub();
+  dbInstance = new sqlJs.Database(data);
   return dbInstance;
 }
 
@@ -89,7 +95,7 @@ export async function getDB() {
  * Fetches data from the LOCAL database.
  */
 export async function fetchMarketData(ticker, dateIso) {
-  const db = await getDB();
+  const db = await initDB();
   if (!db) return [];
   
   try {
@@ -122,7 +128,7 @@ export async function fetchMarketData(ticker, dateIso) {
  * Fetches all available tickers from the LOCAL symbol_map.
  */
 export async function fetchTickers() {
-  const db = await getDB();
+  const db = await initDB();
   if (!db) return [];
   
   try {

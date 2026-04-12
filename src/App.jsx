@@ -1,39 +1,51 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, LayoutGrid, Calendar as CalendarIcon, Activity, Download, HardDrive } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, RefreshCw } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
-import { fetchTickers, fetchMarketData, refreshMasterData } from './lib/db';
+import { fetchTickers, fetchMarketData, forceRefresh } from './lib/db';
+
+// Today's date in YYYY-MM-DD format
+const TODAY = new Date().toISOString().split('T')[0];
 
 export default function App() {
   // --- Global State ---
   const [tickers, setTickers] = useState([]);
-  const [selectedDate, setSelectedDate] = useState('2024-04-10'); 
+  const [selectedDate, setSelectedDate] = useState(TODAY);
   const [masterData, setMasterData] = useState([]);
   const [currentTime, setCurrentTime] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [gridSize, setGridSize] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [statusMessage, setStatusMessage] = useState('Connecting to database...');
 
   const playbackRef = useRef();
 
-  // 1. Initial Load: Try fetching from local (already downloaded)
+  // 1. Auto-load on startup
   useEffect(() => {
-    loadMetaData();
+    bootApp();
   }, []);
 
-  async function loadMetaData() {
+  async function bootApp() {
     try {
+      setIsLoading(true);
+      setStatusMessage('Loading database...');
+      
       const t = await fetchTickers();
       if (t.length > 0) {
         setTickers(t);
+        setStatusMessage(`${t.length} tickers loaded`);
+      } else {
+        setStatusMessage('Database loaded but no tickers found');
       }
     } catch (e) {
-      console.log("No local data found. Please Refresh from GitHub.");
+      console.error("Boot failed:", e);
+      setStatusMessage('Failed to load database. Run the GitHub Action first.');
+    } finally {
+      setIsLoading(false);
     }
   }
 
+  // 2. Load market data when date or tickers change
   useEffect(() => {
     if (tickers.length > 0) {
       loadMarketData();
@@ -48,28 +60,26 @@ export default function App() {
     if (data.length > 0) {
       const firstBar = data.find(d => d.session === 'REG') || data[0];
       setCurrentTime(firstBar.time);
+      setStatusMessage(`${data.length} bars loaded for ${selectedDate}`);
     } else {
-        setCurrentTime(null);
+      setCurrentTime(null);
+      setStatusMessage(`No data available for ${selectedDate}`);
     }
     setIsLoading(false);
   }
 
-  // 2. Manual Refresh from GitHub
+  // 3. Manual refresh (small icon button, not prominent)
   const handleRefresh = async () => {
     try {
-      setIsRefreshing(true);
-      await refreshMasterData();
-      setLastUpdate(new Date().toLocaleTimeString());
-      await loadMetaData(); 
-      await loadMarketData();
+      setStatusMessage('Refreshing from GitHub...');
+      await forceRefresh();
+      await bootApp();
     } catch (error) {
-      alert("Refresh failed. Ensure the GitHub 'data-storage' branch exists.");
-    } finally {
-      setIsRefreshing(false);
+      setStatusMessage('Refresh failed. Is the GitHub Release available?');
     }
   };
 
-  // 3. Replay Engine Loop
+  // 4. Replay Engine Loop
   useEffect(() => {
     if (isPlaying && masterData.length > 0) {
       playbackRef.current = setInterval(() => {
@@ -130,32 +140,26 @@ export default function App() {
         </div>
         
         <div style={{display: 'flex', gap: '16px', alignItems: 'center'}}>
+           <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>{statusMessage}</span>
            <button 
-             className={`btn-sync ${isRefreshing ? 'syncing' : ''}`} 
              onClick={handleRefresh}
-             disabled={isRefreshing}
+             title="Force refresh database from GitHub"
              style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                background: isRefreshing ? 'rgba(255,255,255,0.05)' : 'rgba(38, 166, 154, 0.1)',
-                color: 'var(--accent-green)',
-                border: '1px solid var(--accent-green)',
-                padding: '6px 12px',
-                borderRadius: '6px',
-                fontSize: '0.85rem',
+                background: 'none',
+                color: 'var(--text-secondary)',
+                border: 'none',
                 cursor: 'pointer',
-                transition: 'all 0.3s'
+                padding: '4px',
+                opacity: 0.6,
+                transition: 'opacity 0.2s'
              }}
+             onMouseEnter={(e) => e.target.style.opacity = 1}
+             onMouseLeave={(e) => e.target.style.opacity = 0.6}
            >
-             <Download size={16} className={isRefreshing ? 'spin' : ''} />
-             {isRefreshing ? 'Updating Master File...' : 'Fetch latest from GitHub'}
+             <RefreshCw size={14} />
            </button>
-
-           <div className="status-badge" style={{background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)'}}>
-             <HardDrive size={14} />
-             {lastUpdate ? `Last Fetch: ${lastUpdate}` : 'No Local Storage'}
-           </div>
         </div>
 
         <div style={{display: 'flex', gap: '12px'}}>
@@ -175,7 +179,7 @@ export default function App() {
       <main className={`workspace grid-${gridSize}`}>
         {isLoading ? (
           <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
-            Loading market data...
+            {statusMessage}
           </div>
         ) : (
           Array.from({ length: gridSize }).map((_, i) => (
