@@ -5,13 +5,17 @@ let SQL = null;
 
 /**
  * Initializes sql.js engine.
- * The WASM file is served from public/sql-wasm.wasm (same origin, no CDN).
+ * Manually fetches the WASM binary and passes it directly, bypassing all
+ * locateFile resolution issues with Vite's ESM bundler.
  */
 async function getSqlJs() {
   if (SQL) return SQL;
-  SQL = await initSqlJs({
-    locateFile: () => '/sql-wasm.wasm'
-  });
+  
+  const wasmResp = await fetch('/sql-wasm.wasm');
+  if (!wasmResp.ok) throw new Error(`WASM fetch failed: ${wasmResp.status}`);
+  const wasmBinary = await wasmResp.arrayBuffer();
+  
+  SQL = await initSqlJs({ wasmBinary });
   return SQL;
 }
 
