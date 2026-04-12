@@ -18,6 +18,8 @@ export default function App() {
   const [dbStatus, setDbStatus] = useState('Checking storage...');
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSessionStarted, setIsSessionStarted] = useState(false);
+  const [entryTime, setEntryTime] = useState('09:30');
   
   const playbackRef = useRef();
 
@@ -79,12 +81,12 @@ export default function App() {
     }
   }
 
-  // 3. Load market data when date or tickers change
+  // 3. Load market data when date or tickers change (only if session started)
   useEffect(() => {
-    if (tickers.length > 0 && isDbLoaded) {
+    if (tickers.length > 0 && isDbLoaded && isSessionStarted) {
       loadMarketData();
     }
-  }, [selectedDate, tickers, isDbLoaded]);
+  }, [selectedDate, entryTime, tickers, isDbLoaded, isSessionStarted]);
 
   async function loadMarketData() {
     setIsLoading(true);
@@ -92,9 +94,10 @@ export default function App() {
     setMasterData(data);
     
     if (data.length > 0) {
-      const todayBars = data.filter(d => d.time.startsWith(selectedDate));
-      const firstBar = todayBars.find(d => d.session === 'REG') || todayBars[0] || data[data.length - 1];
-      setCurrentTime(firstBar ? firstBar.time : null);
+      // Find the first bar exactly at or closely following the chosen start time
+      const targetTimeStr = `${selectedDate} ${entryTime}:00`;
+      const startBar = data.find(d => d.time >= targetTimeStr) || data[data.length - 1];
+      setCurrentTime(startBar ? startBar.time : null);
     } else {
       setCurrentTime(null);
     }
@@ -123,9 +126,9 @@ export default function App() {
   // --- Handlers ---
   const togglePlay = () => setIsPlaying(!isPlaying);
   const resetToOpen = () => {
-    const todayBars = masterData.filter(d => d.time.startsWith(selectedDate));
-    const firstBar = todayBars.find(d => d.session === 'REG') || todayBars[0] || masterData[masterData.length - 1];
-    if (firstBar) setCurrentTime(firstBar.time);
+    const targetTimeStr = `${selectedDate} ${entryTime}:00`;
+    const startBar = masterData.find(d => d.time >= targetTimeStr) || masterData[masterData.length - 1];
+    if (startBar) setCurrentTime(startBar.time);
     setIsPlaying(false);
   };
 
@@ -208,7 +211,7 @@ export default function App() {
            <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
              <div>
                <label style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Date</label>
-               <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+               <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} disabled={!isSessionStarted} />
              </div>
              <div>
                <label style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Layout Grid</label>
@@ -219,6 +222,11 @@ export default function App() {
                  <option value={4}>4 Charts</option>
                </select>
              </div>
+             {isSessionStarted && (
+               <button className="btn-outline" onClick={() => setIsSessionStarted(false)} style={{marginTop: '8px', fontSize: '0.8rem'}}>
+                 <RotateCcw size={14} /> End Session & Reset
+               </button>
+             )}
            </div>
         </div>
       </aside>
@@ -240,6 +248,28 @@ export default function App() {
           ) : !isDbLoaded ? (
             <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
                Please upload your database file on the left to begin.
+            </div>
+          ) : !isSessionStarted ? (
+            <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+               <div className="session-card">
+                 <div style={{marginBottom: '24px', textAlign: 'center'}}>
+                   <h2 style={{color: 'var(--accent-green)', marginBottom: '8px'}}>Configure Session</h2>
+                   <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)'}}>Set your starting parameters to prevent look-ahead bias.</p>
+                 </div>
+                 <div style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                   <div>
+                     <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>Target Date</label>
+                     <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{fontSize: '1rem', padding: '10px'}} />
+                   </div>
+                   <div>
+                     <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>Start Time (UTC)</label>
+                     <input type="time" value={entryTime} onChange={(e) => setEntryTime(e.target.value)} style={{fontSize: '1rem', padding: '10px'}} />
+                   </div>
+                   <button className="btn-primary" onClick={() => setIsSessionStarted(true)} style={{marginTop: '12px', justifyContent: 'center', padding: '12px'}}>
+                     <Activity size={18} /> Launch Simulator
+                   </button>
+                 </div>
+               </div>
             </div>
           ) : masterData.length === 0 ? (
             <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>

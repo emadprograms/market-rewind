@@ -273,6 +273,39 @@ select:focus, input:focus {
   transform: translateY(-1px);
 }
 
+.btn-outline {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.session-card {
+  background: rgba(20, 22, 30, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--accent-green);
+  border-radius: 16px;
+  padding: 32px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(38, 166, 154, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
 .time-display {
   font-family: var(--font-mono);
   font-size: 1.1rem;
