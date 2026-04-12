@@ -17,11 +17,13 @@ The Market Rewind application is now a distributed, high-performance, and **Zero
 - [x] `requirements.txt`: Minimal dependencies for GitHub Action runner.
 - [x] `.github/workflows/market_backend.yml`: Manual sync utility (No idle session).
 
-#### Frontend (frontend/)
-- [x] `lib/db.js`: Local-first client (GitHub Raw -> OPFS).
-- [x] `App.jsx`: Premium Replay UI with "Fetch from GitHub" master refresh.
-- [x] `index.css`: Glassmorphism design system.
-- [x] `vercel.json`: Mandatory COOP/COEP headers for WASM.
+#### Root Directory
+- `src/`: Core React application logic.
+- `database/`: Master sync script and local database logic.
+- `.github/workflows/`: Autonomous backend sync automation.
+- `index.html`, `package.json`, `vite.config.js`: App configuration.
+- `vercel.json`: Vercel security and routing.
+- `gemini.md`: Project status.
 
 ---
 *Last Update: 2026-04-12*
