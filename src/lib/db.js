@@ -100,9 +100,9 @@ export async function fetchMarketData(ticker, dateIso) {
     const results = db.exec(
       `SELECT timestamp, open, high, low, close, volume, session 
        FROM market_data 
-       WHERE symbol = ? AND timestamp LIKE ? 
+       WHERE symbol = ? AND timestamp <= ? 
        ORDER BY timestamp`,
-      [ticker, `${dateIso}%`]
+      [ticker, `${dateIso} 23:59:59`]
     );
     
     if (!results || results.length === 0) return [];

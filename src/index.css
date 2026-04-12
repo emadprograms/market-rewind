@@ -44,6 +44,16 @@ body {
   padding: 24px 20px;
   gap: 24px;
   z-index: 100;
+  transition: width 0.3s ease, padding 0.3s ease, border 0.3s ease;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sidebar.closed {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-right-color: transparent;
 }
 
 .logo {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink, Menu } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
 import { fetchTickers, fetchMarketData, loadDatabaseFromFile, isDBLoaded, initDB } from './lib/db';
 
@@ -17,6 +17,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('Checking storage...');
   const [isDbLoaded, setIsDbLoaded] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
   const playbackRef = useRef();
 
@@ -91,8 +92,9 @@ export default function App() {
     setMasterData(data);
     
     if (data.length > 0) {
-      const firstBar = data.find(d => d.session === 'REG') || data[0];
-      setCurrentTime(firstBar.time);
+      const todayBars = data.filter(d => d.time.startsWith(selectedDate));
+      const firstBar = todayBars.find(d => d.session === 'REG') || todayBars[0] || data[data.length - 1];
+      setCurrentTime(firstBar ? firstBar.time : null);
     } else {
       setCurrentTime(null);
     }
@@ -121,7 +123,8 @@ export default function App() {
   // --- Handlers ---
   const togglePlay = () => setIsPlaying(!isPlaying);
   const resetToOpen = () => {
-    const firstBar = masterData.find(d => d.session === 'REG') || masterData[0];
+    const todayBars = masterData.filter(d => d.time.startsWith(selectedDate));
+    const firstBar = todayBars.find(d => d.session === 'REG') || todayBars[0] || masterData[masterData.length - 1];
     if (firstBar) setCurrentTime(firstBar.time);
     setIsPlaying(false);
   };
@@ -155,7 +158,7 @@ export default function App() {
     <div className="app-container">
       
       {/* --- SIDEBAR --- */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${isSidebarOpen ? '' : 'closed'}`}>
         <div className="logo">
           <Activity size={24} /> MARKET<span>REWIND</span>
         </div>
@@ -246,6 +249,10 @@ export default function App() {
         </main>
 
         <div className="playback-bar">
+          <button className="btn-icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} title="Toggle Sidebar">
+            <Menu size={24} />
+          </button>
+          
           <div className="time-display">
             {formatDisplayTime(currentTime)}
           </div>
