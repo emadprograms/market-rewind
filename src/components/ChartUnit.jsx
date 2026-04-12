@@ -220,10 +220,10 @@ export default function ChartUnit({
            <button className="btn-icon"><Settings2 size={14} /></button>
         </div>
       </div>
-      <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div ref={chartContainerRef} style={{ flex: 3, position: 'relative' }} />
-        <div style={{ height: '1px', background: 'var(--border-color)', opacity: 0.3 }} />
-        <div ref={volumeContainerRef} style={{ flex: 1, position: 'relative' }} />
+      <div className="chart-panes">
+        <div ref={chartContainerRef} className="pane-price" />
+        <div className="pane-separator" />
+        <div ref={volumeContainerRef} className="pane-volume" />
       </div>
     </div>
   );

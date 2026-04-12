@@ -175,6 +175,30 @@ body {
   border-bottom: 1px solid var(--border-color);
 }
 
+.chart-panes {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.pane-price {
+  flex: 3;
+  position: relative;
+}
+
+.pane-volume {
+  flex: 1;
+  position: relative;
+}
+
+.pane-separator {
+  height: 1px;
+  background: var(--border-color);
+  opacity: 0.2;
+}
+
 .chart-controls {
   display: flex;
   gap: 8px;
