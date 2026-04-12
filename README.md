@@ -21,7 +21,7 @@ Market Rewind is a professional, **Local-First** market replay tool. It uses Tur
 
 ### Using the App
 
-1. **Trigger Data Sync**: Manually trigger the GitHub Action "Market Rewind Backend" in the Repository to update the initial DB.
+1. **Trigger Data Sync**: Manually trigger the GitHub Action "Sync Local Database" in the Repository to update the initial DB.
 2. **Click "Fetch latest from GitHub"**: This will download the remote data to your browser's local storage.
 3. **Select Date & Ticker**: The app will read directly from the local replica.
 4. **Playback**: Use the playback controls to rewind the market.
