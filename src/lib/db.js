@@ -1,5 +1,7 @@
 import initSqlJs from "sql.js";
 
+import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+
 let dbInstance = null;
 let SQL = null;
 
@@ -11,7 +13,7 @@ const REPO_URL = "https://github.com/emadprograms/market-rewind/releases/downloa
 async function getSqlJs() {
   if (SQL) return SQL;
   SQL = await initSqlJs({
-    locateFile: () => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm`
+    locateFile: () => wasmUrl
   });
   return SQL;
 }
