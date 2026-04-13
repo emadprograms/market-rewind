@@ -7,6 +7,7 @@ import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
 import { VolumeProfilePlugin } from '../lib/VolumeProfilePlugin';
 import { HorizontalRayPlugin } from '../lib/HorizontalRayPlugin';
+import { RectanglePlugin } from '../lib/RectanglePlugin';
 
 export default function ChartUnit({ 
   id, 
@@ -16,10 +17,12 @@ export default function ChartUnit({
   tickers, 
   initialTicker, 
   initialTf,
+  initialEth,
   onToggleMaximize,
   isMaximized,
-  drawings = [],
-  onUpdateRays
+  drawings = { rays: [], rects: [] },
+  onUpdateDrawings,
+  onTimeframeChange
 }) {
   const chartContainerRef = useRef();
   
@@ -30,6 +33,7 @@ export default function ChartUnit({
   const shadingPluginRef = useRef(null);
   const vpPluginRef = useRef(null);
   const rayPluginRef = useRef(null);
+  const rectPluginRef = useRef(null);
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [localMasterData, setLocalMasterData] = useState([]);
@@ -37,6 +41,9 @@ export default function ChartUnit({
   const [showEth, setShowEth] = useState(initialEth || false);
   const [showVP, setShowVP] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [drawType, setDrawType] = useState('ray'); // 'ray' | 'rect'
+  const [rectAnchor, setRectAnchor] = useState(null); // {price, time}
+  const [ghostPoint, setGhostPoint] = useState(null); // {price, time} for rect preview
 
   // Custom UI State
   const [isTickerOpen, setIsTickerOpen] = useState(false);
@@ -56,6 +63,11 @@ export default function ChartUnit({
     window.addEventListener('mousedown', handleClick);
     return () => window.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // Report timeframe to parent for unified replay step calculation
+  useEffect(() => {
+    if (onTimeframeChange) onTimeframeChange(id, timeframe);
+  }, [timeframe]);
 
   // 0. Fetch local master data
   useEffect(() => {
@@ -129,11 +141,17 @@ export default function ChartUnit({
     vpPluginRef.current = new VolumeProfilePlugin();
     priceSeriesRef.current.attachPrimitive(vpPluginRef.current);
 
+    // Attach Horizontal Ray Plugin
     rayPluginRef.current = new HorizontalRayPlugin();
     priceSeriesRef.current.attachPrimitive(rayPluginRef.current);
     
+    // Attach Rectangle Plugin
+    rectPluginRef.current = new RectanglePlugin();
+    priceSeriesRef.current.attachPrimitive(rectPluginRef.current);
+    
     // Initial sync
-    rayPluginRef.current.setRays(drawings);
+    rayPluginRef.current.setRays(drawings.rays);
+    rectPluginRef.current.setRects(drawings.rects);
     
     // Ensure Candlesticks don't overlap the bottom volume
     chartRef.current.priceScale('right').applyOptions({
@@ -189,17 +207,27 @@ export default function ChartUnit({
       if (e.key === 'h' || e.key === 'H') {
         if (isHovered) {
           e.preventDefault();
-          setIsDrawingMode(prev => !prev);
+          setDrawType('ray');
+          setIsDrawingMode(prev => !prev || drawType !== 'ray');
+          setRectAnchor(null);
+        }
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        if (isHovered) {
+          e.preventDefault();
+          setDrawType('rect');
+          setIsDrawingMode(prev => !prev || drawType !== 'rect');
+          setRectAnchor(null);
         }
       }
       if (e.key === 'Escape') {
         setIsDrawingMode(false);
+        setRectAnchor(null);
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && isHovered) {
-        // Clear all rays on this chart
-        if (drawings.length > 0) {
-          onUpdateRays([]);
-        }
+        // Clear all drawings on this ticker
+        onUpdateDrawings('rays', []);
+        onUpdateDrawings('rects', []);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -219,7 +247,27 @@ export default function ChartUnit({
       const price = series.coordinateToPrice(param.point.y);
       if (price === null || price === undefined) return;
 
-      onUpdateRays([...drawings, { price, time: param.time }]);
+      if (drawType === 'ray') {
+        onUpdateDrawings('rays', [...(drawings.rays || []), { price, time: param.time }]);
+      } else if (drawType === 'rect') {
+        if (!rectAnchor) {
+          setRectAnchor({ price, time: param.time });
+        } else {
+          onUpdateDrawings('rects', [...(drawings.rects || []), { p1: rectAnchor, p2: { price, time: param.time } }]);
+          setRectAnchor(null);
+        }
+      }
+    };
+
+    const handleMouseMove = (param) => {
+      if (!isDrawingModeRef.current || !rectAnchor || !param.point || !param.time) {
+        if (ghostPoint) setGhostPoint(null);
+        return;
+      }
+      const price = series.coordinateToPrice(param.point.y);
+      if (price !== null) {
+        setGhostPoint({ price, time: param.time });
+      }
     };
 
     const handleDblClick = (param) => {
@@ -227,10 +275,10 @@ export default function ChartUnit({
       const clickPrice = series.coordinateToPrice(param.point.y);
       if (clickPrice === null || clickPrice === undefined) return;
 
-      // Find nearest ray within a tolerance
+      // 1. Check Rays
       let nearestIdx = -1;
       let nearestDist = Infinity;
-      drawings.forEach((entry, idx) => {
+      (drawings.rays || []).forEach((entry, idx) => {
         const dist = Math.abs(entry.price - clickPrice);
         if (dist < nearestDist) {
           nearestDist = dist;
@@ -239,31 +287,59 @@ export default function ChartUnit({
       });
 
       if (nearestIdx !== -1) {
-        const ray = drawings[nearestIdx];
+        const ray = drawings.rays[nearestIdx];
         const rayY = series.priceToCoordinate(ray.price);
         const rayX = chart.timeScale().timeToCoordinate(ray.time);
-        
-        // Deletion criteria: 
-        // 1. Within 10 pixels vertically
-        // 2. To the right of the anchor point (X coord)
         if (rayY !== null && Math.abs(rayY - param.point.y) < 10 && (param.point.x >= (rayX || 0) - 5)) { 
-          const newRays = [...drawings];
+          const newRays = [...drawings.rays];
           newRays.splice(nearestIdx, 1);
-          onUpdateRays(newRays);
+          onUpdateDrawings('rays', newRays);
+          return; // Deleted ray, skip rect check
         }
+      }
+
+      // 2. Check Rects
+      let rectToDelete = -1;
+      (drawings.rects || []).forEach((rect, idx) => {
+          const y1 = series.priceToCoordinate(rect.p1.price);
+          const y2 = series.priceToCoordinate(rect.p2.price);
+          const x1 = chart.timeScale().timeToCoordinate(rect.p1.time);
+          const x2 = chart.timeScale().timeToCoordinate(rect.p2.time);
+          
+          if (y1 === null || y2 === null) return;
+          
+          const top = Math.min(y1, y2);
+          const bottom = Math.max(y1, y2);
+          const xStart = x1 === null ? -100 : x1;
+          const xEnd = x2 === null ? chart.timeScale().width() + 100 : x2;
+          const left = Math.min(xStart, xEnd);
+          const right = Math.max(xStart, xEnd);
+
+          if (param.point.y >= top - 5 && param.point.y <= bottom + 5 &&
+              param.point.x >= left - 5 && param.point.x <= right + 5) {
+              rectToDelete = idx;
+          }
+      });
+
+      if (rectToDelete !== -1) {
+          const newRects = [...drawings.rects];
+          newRects.splice(rectToDelete, 1);
+          onUpdateDrawings('rects', newRects);
       }
     };
 
     chart.subscribeClick(handleClick);
+    chart.subscribeCrosshairMove(handleMouseMove);
     chart.subscribeDblClick(handleDblClick);
 
     return () => {
       try {
         chart.unsubscribeClick(handleClick);
+        chart.unsubscribeCrosshairMove(handleMouseMove);
         chart.unsubscribeDblClick(handleDblClick);
       } catch(_) {}
     };
-  }, []);
+  }, [drawings, drawType, rectAnchor]);
 
   // Update chart timezone options when ticker changes
   useEffect(() => {
@@ -286,12 +362,22 @@ export default function ChartUnit({
     });
   }, [ticker]);
 
-  // Update Ray Plugin when synced drawings change
+  // Update Ray/Rect Plugins when synced drawings change
   useEffect(() => {
-    if (rayPluginRef.current) {
-        rayPluginRef.current.setRays(drawings);
+    if (rayPluginRef.current && rectPluginRef.current) {
+        rayPluginRef.current.setRays(drawings.rays || []);
+        rectPluginRef.current.setRects(drawings.rects || []);
     }
   }, [drawings]);
+
+  // Update effect for ghost rectangle
+  useEffect(() => {
+    if (rectPluginRef.current && rectAnchor && ghostPoint) {
+      rectPluginRef.current.setRects([...(drawings.rects || []), { p1: rectAnchor, p2: ghostPoint }]);
+    } else if (rectPluginRef.current) {
+        rectPluginRef.current.setRects(drawings.rects || []);
+    }
+  }, [rectAnchor, ghostPoint, drawings.rects]);
 
   // Update VP Enabled State
   useEffect(() => {
@@ -540,11 +626,13 @@ export default function ChartUnit({
         {isDrawingMode && (
           <div style={{
             position: 'absolute', bottom: 4, left: '50%', transform: 'translateX(-50%)',
-            background: 'rgba(255, 152, 0, 0.9)', color: '#000', padding: '2px 10px',
-            borderRadius: '4px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em',
-            pointerEvents: 'none', zIndex: 10
+            background: 'rgba(255, 152, 0, 0.9)', color: '#000', padding: '2px 12px',
+            borderRadius: '4px', fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em',
+            pointerEvents: 'none', zIndex: 10, display: 'flex', gap: '15px'
           }}>
-            DRAW MODE — Click to place · Dbl-click to delete · ESC to exit
+            <span>MODE: {drawType.toUpperCase()}</span>
+            <span>{drawType === 'ray' ? 'Click to place ray' : (rectAnchor ? 'Click to finish rectangle' : 'Click to start rectangle')}</span>
+            <span>H: Ray · R: Rect · ESC/DEL</span>
           </div>
         )}
       </div>

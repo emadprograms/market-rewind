@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v6.9 - Synced Anchored Rays)
+## Project State: COMPLETED (v7.0 - Synced Rays & Rectangles)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -17,13 +17,13 @@ Market Rewind is a zero-read, local-first market replay tool.
 - [x] `src/components/ChartUnit.jsx`:
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift' when switching extreme timeframes.
-    - **Horizontal Ray Drawing**:
-        - `H` key toggles draw mode.
-        - Click to place a **Horizontal Ray** (anchored to the click point and extends right).
-        - **Syncing**: Drawings are automatically synced across all charts for the same symbol.
-        - **Persistence**: Fixed rays disappearing when their anchor panned off-screen.
-        - Double-click neat a ray's path to delete it.
-        - `Delete`/`Backspace` clears all rays. `Escape` exits draw mode.
+    - **Drawing Tools (Synced & Persistent)**:
+        - `H` key: Toggle **Horizontal Ray** mode (anchored start, extends right).
+        - `R` key: Toggle **Rectangle** mode (2-click placement).
+        - **Syncing**: All drawings are synced across charts of the same ticker.
+        - **Visuals**: Dynamic "ghost" previews during placement; premium semi-transparent fills for rectangles.
+        - **Deletion**: Double-click any drawing path to remove; `Delete` to clear all for the active symbol.
+        - `Escape` exits draw mode.
 - [x] `src/index.css`:
     - **Deterministic Layout Engine**: 
         - Root workspace height set to `calc(100vh - 40px)`.
@@ -48,10 +48,12 @@ Market Rewind is a zero-read, local-first market replay tool.
         - Cache-aware: skips recomputation when logical range hasn't changed.
         - Toggled via `VP` switch in chart header (next to ETH toggle).
 - [x] `src/lib/HorizontalRayPlugin.js`:
-    - **Anchored Horizontal Rays**:
-        - Renders orange rays anchored to specific price/time points.
-        - Extends from the anchor point to the right edge of the chart area.
-        - Integrated with keyboard shortcuts for placing and deleting.
+    - **Anchored Horizontal Rays**: Syncs orange rays anchored at price/time.
+- [x] `src/lib/RectanglePlugin.js`:
+    - **Synced Rectangles**: 
+        - Renders orange-bordered, semi-transparent rectangles (`rgba(255, 152, 0, 0.15)`).
+        - Supports 2-point placement logic with live canvas previews.
+        - Robust off-screen clipping for persistent chart analysis.
 
 ### 📦 Key Dependencies
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.

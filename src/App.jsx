@@ -23,7 +23,7 @@ export default function App() {
   const [entryTime, setEntryTime] = useState('13:29');
   const [sessionTicker, setSessionTicker] = useState('SPY');
   const [maximizedId, setMaximizedId] = useState(null);
-  const [drawings, setDrawings] = useState({}); // Keyed by ticker: { ticker: [{price, time}, ...] }
+  const [drawings, setDrawings] = useState({}); // { ticker: { rays: [], rects: [] } }
   
   const playbackRef = useRef();
 
@@ -109,24 +109,52 @@ export default function App() {
     setIsLoading(false);
   }
 
-  // 4. Replay Engine Loop
+  // 4. Unified Replay Engine — step size driven by minimum timeframe across all charts
+  const advanceTime = (prev, stepMinutes) => {
+    if (!prev || masterData.length === 0) return prev;
+    const prevMs = new Date(prev.replace(' ', 'T') + 'Z').getTime();
+    const targetMs = prevMs + stepMinutes * 60000;
+    // Find the nearest bar at or after the target time
+    const targetStr = new Date(targetMs).toISOString().replace('T', ' ').slice(0, 19);
+    const nextBar = masterData.find(d => d.time >= targetStr);
+    if (nextBar && nextBar.time !== prev) return nextBar.time;
+    // If no bar found ahead, we've reached the end
+    return null;
+  };
+
+  const rewindTime = (prev, stepMinutes) => {
+    if (!prev || masterData.length === 0) return prev;
+    const prevMs = new Date(prev.replace(' ', 'T') + 'Z').getTime();
+    const targetMs = prevMs - stepMinutes * 60000;
+    const targetStr = new Date(targetMs).toISOString().replace('T', ' ').slice(0, 19);
+    // Find the nearest bar at or before the target time
+    let best = null;
+    for (let i = masterData.length - 1; i >= 0; i--) {
+      if (masterData[i].time <= targetStr) {
+        best = masterData[i].time;
+        break;
+      }
+    }
+    return best || masterData[0].time;
+  };
+
   useEffect(() => {
     if (isPlaying && masterData.length > 0) {
       playbackRef.current = setInterval(() => {
         setCurrentTime((prev) => {
-          const currentIndex = masterData.findIndex(d => d.time === prev);
-          if (currentIndex !== -1 && currentIndex < masterData.length - 1) {
-            return masterData[currentIndex + 1].time;
+          const next = advanceTime(prev, minStepMinutes);
+          if (next === null) {
+            setIsPlaying(false);
+            return prev;
           }
-          setIsPlaying(false);
-          return prev;
+          return next;
         });
       }, 1000 / playbackSpeed);
     } else {
       clearInterval(playbackRef.current);
     }
     return () => clearInterval(playbackRef.current);
-  }, [isPlaying, playbackSpeed, masterData]);
+  }, [isPlaying, playbackSpeed, masterData, minStepMinutes]);
 
   // --- Handlers ---
   const togglePlay = () => setIsPlaying(!isPlaying);
@@ -138,13 +166,13 @@ export default function App() {
   };
 
   const stepForward = () => {
-    const currentIndex = masterData.findIndex(d => d.time === currentTime);
-    if (currentIndex < masterData.length - 1) setCurrentTime(masterData[currentIndex + 1].time);
+    const next = advanceTime(currentTime, minStepMinutes);
+    if (next) setCurrentTime(next);
   };
 
   const stepBackward = () => {
-    const currentIndex = masterData.findIndex(d => d.time === currentTime);
-    if (currentIndex > 0) setCurrentTime(masterData[currentIndex - 1].time);
+    const prev = rewindTime(currentTime, minStepMinutes);
+    if (prev) setCurrentTime(prev);
   };
 
   const formatDisplayTime = (isoStr) => {
@@ -162,10 +190,13 @@ export default function App() {
     }) + ` ${label}`;
   };
   
-  const handleUpdateRays = (ticker, rays) => {
+  const handleUpdateDrawings = (ticker, type, items) => {
     setDrawings(prev => ({
       ...prev,
-      [ticker]: rays
+      [ticker]: {
+        ...(prev[ticker] || { rays: [], rects: [] }),
+        [type]: items
+      }
     }));
   };
 
@@ -322,8 +353,8 @@ export default function App() {
                     isMaximized={maximizedId === i}
                     onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
                     gridCount={gridCount}
-                    drawings={drawings[leftTicker] || []}
-                    onUpdateRays={(rays) => handleUpdateRays(leftTicker, rays)}
+                    drawings={drawings[leftTicker] || { rays: [], rects: [] }}
+                    onUpdateDrawings={(type, items) => handleUpdateDrawings(leftTicker, type, items)}
                   />
                 );
               });
@@ -349,6 +380,13 @@ export default function App() {
             </button>
             <button className="btn-icon" onClick={stepForward}><SkipForward size={20} /></button>
             <button className="btn-icon" onClick={resetToOpen} title="Reset to Market Open"><RotateCcw size={20} /></button>
+          </div>
+
+          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+            <span style={{fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em'}}>STEP</span>
+            <span style={{fontSize: '0.8rem', color: 'var(--accent-green)', fontWeight: 700}}>
+              {minStepMinutes >= 1440 ? '1D' : minStepMinutes >= 60 ? `${minStepMinutes / 60}H` : `${minStepMinutes}m`}
+            </span>
           </div>
 
           <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
