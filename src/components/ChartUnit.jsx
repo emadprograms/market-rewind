@@ -12,7 +12,8 @@ export default function ChartUnit({
   isReplayMode, 
   tickers, 
   initialTicker, 
-  initialTf 
+  initialTf,
+  initialEth
 }) {
   const chartContainerRef = useRef();
   
@@ -24,7 +25,7 @@ export default function ChartUnit({
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [localMasterData, setLocalMasterData] = useState([]);
   const [timeframe, setTimeframe] = useState(initialTf || '1D');
-  const [showEth, setShowEth] = useState(false);
+  const [showEth, setShowEth] = useState(initialEth || false);
 
   // Custom UI State
   const [isTickerOpen, setIsTickerOpen] = useState(false);

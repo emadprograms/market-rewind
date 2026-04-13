@@ -14,13 +14,14 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [gridSize, setGridSize] = useState(1);
+  const [gridSize, setGridSize] = useState(2);
   const [isLoading, setIsLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('Checking storage...');
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [entryTime, setEntryTime] = useState('13:29');
+  const [sessionTicker, setSessionTicker] = useState('SPY');
   
   const playbackRef = useRef();
 
@@ -52,6 +53,8 @@ export default function App() {
       const t = await fetchTickers();
       if (t.length > 0) {
         setTickers(t);
+        // Default session ticker to SPY if available, else first ticker
+        setSessionTicker(t.includes('SPY') ? 'SPY' : t[0]);
         setIsDbLoaded(true);
         setDbStatus(`${t.length} Tickers active`);
       } else {
@@ -257,11 +260,17 @@ export default function App() {
                    <h2 style={{color: 'var(--accent-green)', marginBottom: '8px'}}>Configure Session</h2>
                    <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)'}}>Set your starting parameters to prevent look-ahead bias.</p>
                  </div>
-                 <div style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
-                   <div>
-                     <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>Target Date</label>
-                     <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{fontSize: '1rem', padding: '10px'}} />
-                   </div>
+                  <div style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                    <div>
+                      <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>Trade Ticker</label>
+                      <select value={sessionTicker} onChange={(e) => setSessionTicker(e.target.value)} style={{fontSize: '1rem', padding: '10px'}}>
+                        {tickers.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>Target Date</label>
+                      <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{fontSize: '1rem', padding: '10px'}} />
+                    </div>
                    <div>
                      <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>
                        Start Time ({getTzLabel(getTzForTicker(tickers[0]))})
@@ -279,18 +288,24 @@ export default function App() {
               No trading data found for {selectedDate}.
             </div>
           ) : (
-            Array.from({ length: gridSize }).map((_, i) => (
-              <ChartUnit 
-                key={i} 
-                id={i} 
-                globalTime={currentTime} 
-                selectedDate={selectedDate}
-                isReplayMode={true} 
-                tickers={tickers}
-                initialTicker={i === 3 ? 'SPY' : tickers[0]}
-                initialTf="1D"
-              />
-            ))
+            Array.from({ length: gridSize }).map((_, i) => {
+              const hasSPY = tickers.includes('SPY');
+              const leftTicker = i === 0 ? (hasSPY ? 'SPY' : sessionTicker) : sessionTicker;
+              
+              return (
+                <ChartUnit 
+                  key={i} 
+                  id={i} 
+                  globalTime={currentTime} 
+                  selectedDate={selectedDate}
+                  isReplayMode={true} 
+                  tickers={tickers}
+                  initialTicker={leftTicker}
+                  initialTf={i === 0 ? '1D' : '5min'}
+                  initialEth={i !== 0}
+                />
+              );
+            })
           )}
         </main>
 

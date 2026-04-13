@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v4.5 - Manual Upload Architecture)
+## Project State: COMPLETED (v5.5 - Enhanced Launch & UI Recovery)
 
 Market Rewind is a zero-read, local-first market replay tool. It operates entirely within the user's browser, eliminating Turso "Rows Read" costs, avoiding network fetching errors, and bypassing Vercel compute costs.
 
@@ -24,29 +24,20 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
 - [x] `src/lib/db.js`:
     - Provides Manual Upload parser that writes `.db` ArrayBuffer into OPFS.
     - Extracts `tickers` via guaranteed dynamic `SELECT DISTINCT symbol` query.
-    - Fetches historical chart data inclusive of all previous available days `timestamp <= [selectedDate] 23:59:59` to render broader context.
 - [x] `src/App.jsx`:
-    - **Anti-Bias Session Entry**: A full-screen glassmorphism landing overlay explicitly demands a Target Date and Start Time (defaults to 13:29 UTC) before rendering any charts. The app's global clock and entry labels now dynamically switch between UTC and ET based on the primary ticker.
-    - **Toggleable Sidebar UI**: Contains File UI, Grid Selection, Reset Session logic, and explicit GitHub external URL.
-    - **Intuitive Toggles**: Features a 'Collapse' button inside the sidebar and a floating 'Expand' button in the workspace for 100% full-screen chart focus.
+    - **Trade Ticker Selection**: Added a focus ticker selector to the landing page.
+    - **Default Dual-Chart Layout**: Set `gridSize` to 2 by default.
+    - **Smart Initialization**: Configures a dual-perspective setup upon launch:
+        - **Left Chart**: SPY (or selected ticker) in **1D** mode.
+        - **Right Chart**: Selected ticker in **5min** mode with **ETH active**.
+    - **Anti-Bias Session Entry**: High-fidelity landing screen for date and time configuration.
 - [x] `src/components/ChartUnit.jsx`:
-    - **Premium UI (Option B)**: Completely custom, div-based glassmorphism header UI.
-    - **Dynamic Symbol Search**: Interactive ticker dropdown that includes a search input for filtering and selecting securities instantly.
-    - **Bespoke Dropdowns**: Custom-built timeframe selectors with high-contrast hover effects and clean typography.
-    - **Custom Session Switch**: Replaced native checkbox toggles with a professional animated switch for the ETH session state.
-    - **Single-Pane Volume Separation**: Reverted to a high-performance single-chart architecture but mathematically scaled volume to perfectly occupy the bottom 25% of the chart without overlapping price candles.
-    - **Per-Chart Dynamic TZ**: Each chart unit independently localized its X-axis and price-line crosshair labels to the specific timezone of its ticker (ET for Stocks, UTC for ETFs/Crypto).
-    - **Default Timeframe (1D)**: All new charts now initialize to the Daily timeframe by default to provide immediate high-level market context.
-    - **Forced RTH for Daily**: Implemented a strict logic where the **1D** timeframe ignores the ETH toggle and always calculates OHLCV data using Regular Trading Hours (RTH) records only.
-    - **Responsive Canvas Sizing**: Implemented a localized `ResizeObserver` on the chart container for instant responsiveness.
-    - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes.
-- [x] `src/lib/resampling.js`:
-    - **Timeframe Aggregation**: Implemented robust logic to compile 5m, 15m, 30m, 1H, and 1D OHLCV bars from raw 1-minute records.
+    - **Premium UI (Option B)**: Custom glassmorphism dropdowns with symbol search and refined aesthetics.
+    - **initialEth Prop**: Supports pre-configuring chart sessions with Extended Trading Hours visible.
+    - **Forced RTH for Daily**: Daily bars ignore ETH toggle to ensure official session data accuracy.
 - [x] `src/index.css`:
-    - **Custom Dropdown Palette**: Added specialized styling for floating glassmorphism menus, including z-index management, animated entry transitions, and custom scrollbars.
-    - **Vertical Grid Stretching**: Explicitly defined `grid-template-rows: 1fr` across all multi-chart layout variants (1, 2, 3, and 4 charts).
-- [x] `package.json`: `postinstall` script securely caches standard WASM binary.
-- [x] `vite.config.js`: Excludes `sql.js` from pre-bundling.
+    - **UI Recovery**: Restored baseline input/select styles to fix broken sidebars.
+    - **Custom Aesthetic Refinement**: Weightier typography and smoother transitions for premium chart controls.
 
 ### 📦 Key Dependencies
 - **Frontend**: `sql.js` (SQLite WASM), `lightweight-charts`, `lucide-react`, `react`.
