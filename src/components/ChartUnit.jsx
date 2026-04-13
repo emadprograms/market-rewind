@@ -6,6 +6,7 @@ import { fetchMarketData } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
 import { VolumeProfilePlugin } from '../lib/VolumeProfilePlugin';
+import { HorizontalRayPlugin } from '../lib/HorizontalRayPlugin';
 
 export default function ChartUnit({ 
   id, 
@@ -27,6 +28,7 @@ export default function ChartUnit({
   const lastDataCountRef = useRef(0);
   const shadingPluginRef = useRef(null);
   const vpPluginRef = useRef(null);
+  const rayPluginRef = useRef(null);
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [localMasterData, setLocalMasterData] = useState([]);
@@ -34,7 +36,7 @@ export default function ChartUnit({
   const [showEth, setShowEth] = useState(initialEth || false);
   const [showVP, setShowVP] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const priceLinesRef = useRef([]); // Array of { price, lineObj }
+  const raysRef = useRef([]); // Array of { price, time }
 
   // Custom UI State
   const [isTickerOpen, setIsTickerOpen] = useState(false);
@@ -126,6 +128,10 @@ export default function ChartUnit({
     // Attach Volume Profile Plugin
     vpPluginRef.current = new VolumeProfilePlugin();
     priceSeriesRef.current.attachPrimitive(vpPluginRef.current);
+
+    // Attach Horizontal Ray Plugin
+    rayPluginRef.current = new HorizontalRayPlugin();
+    priceSeriesRef.current.attachPrimitive(rayPluginRef.current);
     
     // Ensure Candlesticks don't overlap the bottom volume
     chartRef.current.priceScale('right').applyOptions({
@@ -189,11 +195,9 @@ export default function ChartUnit({
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && isHovered) {
         // Clear all rays on this chart
-        if (priceSeriesRef.current && priceLinesRef.current.length > 0) {
-          priceLinesRef.current.forEach(entry => {
-            try { priceSeriesRef.current.removePriceLine(entry.lineObj); } catch(_) {}
-          });
-          priceLinesRef.current = [];
+        if (raysRef.current.length > 0) {
+          raysRef.current = [];
+          if (rayPluginRef.current) rayPluginRef.current.setRays([]);
         }
       }
     };
@@ -210,30 +214,23 @@ export default function ChartUnit({
     const series = priceSeriesRef.current;
 
     const handleClick = (param) => {
-      if (!isDrawingModeRef.current || !param.point) return;
+      if (!isDrawingModeRef.current || !param.point || !param.time) return;
       const price = series.coordinateToPrice(param.point.y);
       if (price === null || price === undefined) return;
 
-      const lineObj = series.createPriceLine({
-        price: price,
-        color: '#ff9800',
-        lineWidth: 1,
-        lineStyle: 0, // Solid
-        axisLabelVisible: true,
-        title: '',
-      });
-      priceLinesRef.current.push({ price, lineObj });
+      raysRef.current.push({ price: price, time: param.time });
+      if (rayPluginRef.current) rayPluginRef.current.setRays([...raysRef.current]);
     };
 
     const handleDblClick = (param) => {
-      if (!param.point) return;
+      if (!param.point || !param.time) return;
       const clickPrice = series.coordinateToPrice(param.point.y);
       if (clickPrice === null || clickPrice === undefined) return;
 
       // Find nearest ray within a tolerance
       let nearestIdx = -1;
       let nearestDist = Infinity;
-      priceLinesRef.current.forEach((entry, idx) => {
+      raysRef.current.forEach((entry, idx) => {
         const dist = Math.abs(entry.price - clickPrice);
         if (dist < nearestDist) {
           nearestDist = dist;
@@ -242,11 +239,16 @@ export default function ChartUnit({
       });
 
       if (nearestIdx !== -1) {
-        // Check pixel distance — only delete if within ~10px
-        const nearestY = series.priceToCoordinate(priceLinesRef.current[nearestIdx].price);
-        if (nearestY !== null && Math.abs(nearestY - param.point.y) < 10) {
-          try { series.removePriceLine(priceLinesRef.current[nearestIdx].lineObj); } catch(_) {}
-          priceLinesRef.current.splice(nearestIdx, 1);
+        const ray = raysRef.current[nearestIdx];
+        const rayY = series.priceToCoordinate(ray.price);
+        const rayX = chart.timeScale().timeToCoordinate(ray.time);
+        
+        // Deletion criteria: 
+        // 1. Within 10 pixels vertically
+        // 2. To the right of the anchor point (X coord)
+        if (rayY !== null && Math.abs(rayY - param.point.y) < 10 && (param.point.x >= rayX - 5)) { 
+          raysRef.current.splice(nearestIdx, 1);
+          if (rayPluginRef.current) rayPluginRef.current.setRays([...raysRef.current]);
         }
       }
     };

@@ -18,9 +18,9 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift' when switching extreme timeframes.
     - **Horizontal Ray Drawing**:
-        - `H` key toggles draw mode (crosshair cursor + orange status bar).
-        - Click to place a solid orange price line with axis label.
-        - Double-click near a ray to delete it (10px tolerance).
+        - `H` key toggles draw mode.
+        - Click to place a **Horizontal Ray** (anchored to the click point and extends right).
+        - Double-click neat a ray's path to delete it.
         - `Delete`/`Backspace` clears all rays. `Escape` exits draw mode.
 - [x] `src/index.css`:
     - **Deterministic Layout Engine**: 
@@ -45,6 +45,11 @@ Market Rewind is a zero-read, local-first market replay tool.
         - **Point of Control (POC)** highlighted in yellow (`rgba(255, 210, 0, 0.8)`).
         - Cache-aware: skips recomputation when logical range hasn't changed.
         - Toggled via `VP` switch in chart header (next to ETH toggle).
+- [x] `src/lib/HorizontalRayPlugin.js`:
+    - **Anchored Horizontal Rays**:
+        - Renders orange rays anchored to specific price/time points.
+        - Extends from the anchor point to the right edge of the chart area.
+        - Integrated with keyboard shortcuts for placing and deleting.
 
 ### 📦 Key Dependencies
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
