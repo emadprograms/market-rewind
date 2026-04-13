@@ -96,8 +96,9 @@ export default function ChartUnit({
     volumeChartRef.current = createChart(volumeContainerRef.current, {
       ...chartOptions,
       timeScale: {
-        visible: true, // Show it but it will be synced
+        visible: true,
         borderColor: 'rgba(255, 255, 255, 0.1)',
+        shiftVisibleRangeOnNewBar: false,
       },
     });
 
