@@ -112,7 +112,7 @@ export class HorizontalRayPlugin {
         if (!data || data.length === 0) return null;
         
         if (targetTime <= data[0].time) return -10000;
-        if (targetTime >= data[data.length - 1].time) return null; // Let the renderer extend to the right edge
+        if (targetTime >= data[data.length - 1].time) return timeScale.timeToCoordinate(data[data.length - 1].time);
 
         let left = 0;
         let right = data.length - 1;
