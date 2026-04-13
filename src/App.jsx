@@ -24,8 +24,17 @@ export default function App() {
   const [sessionTicker, setSessionTicker] = useState('SPY');
   const [maximizedId, setMaximizedId] = useState(null);
   const [drawings, setDrawings] = useState({}); // { ticker: { rays: [], rects: [] } }
+  const [chartTimeframes, setChartTimeframes] = useState({}); // { chartId: timeframe }
   
   const playbackRef = useRef();
+
+  // Timeframe → minutes mapping
+  const TF_MINUTES = { '1min': 1, '5min': 5, '15min': 15, '30min': 30, '1H': 60, '1D': 1440 };
+
+  // Compute the minimum step size from all active chart timeframes
+  const minStepMinutes = Object.values(chartTimeframes).length > 0
+    ? Object.values(chartTimeframes).reduce((min, tf) => Math.min(min, TF_MINUTES[tf] || 1), 1440)
+    : 1; // default to 1 minute if no charts yet
 
   // 1. Check OPFS on load
   useEffect(() => {
@@ -200,6 +209,13 @@ export default function App() {
     }));
   };
 
+  const handleTimeframeChange = (chartId, tf) => {
+    setChartTimeframes(prev => ({
+      ...prev,
+      [chartId]: tf
+    }));
+  };
+
   return (
     <div className="app-container">
       
@@ -355,6 +371,7 @@ export default function App() {
                     gridCount={gridCount}
                     drawings={drawings[leftTicker] || { rays: [], rects: [] }}
                     onUpdateDrawings={(type, items) => handleUpdateDrawings(leftTicker, type, items)}
+                    onTimeframeChange={handleTimeframeChange}
                   />
                 );
               });
