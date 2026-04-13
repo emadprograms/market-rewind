@@ -2,9 +2,11 @@ import { getTzForTicker } from './timezones';
 
 /**
  * DETERMINISTIC SESSION CHECK: Using Intl.DateTimeFormat for robust DST handling.
- * RTH (US): 09:30 - 16:00 ET
+ * - PRE: 04:00 - 09:30 ET
+ * - RTH: 09:30 - 16:00 ET
+ * - POST: 16:00 - 20:00 ET
  */
-export function isRTH(timestamp) {
+export function getSessionType(timestamp) {
   const date = new Date(timestamp * 1000);
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
@@ -18,9 +20,10 @@ export function isRTH(timestamp) {
   const minute = parseInt(parts.find(p => p.type === 'minute').value);
   const totalMinutes = hour * 60 + minute;
   
-  // Market Open: 9:30 (570 mins)
-  // Market Close: 16:00 (960 mins)
-  return totalMinutes >= 570 && totalMinutes < 960;
+  if (totalMinutes >= 240 && totalMinutes < 570) return 'PRE';
+  if (totalMinutes >= 570 && totalMinutes < 960) return 'RTH';
+  if (totalMinutes >= 960 && totalMinutes < 1200) return 'POST';
+  return 'OTHER';
 }
 
 /**
@@ -38,18 +41,25 @@ class SessionShadingRenderer {
     if (timeframe === '1D') return; // Don't shade daily charts
 
     ctx.save();
-    ctx.fillStyle = 'rgba(41, 128, 255, 0.04)'; // Subtle TV-style Blue/Gray
     
     for (let i = visibleRange.from; i < visibleRange.to; i++) {
         const bar = bars[i];
         if (!bar) continue;
         
-        // If it's NOT RTH, shade it
-        if (!isRTH(bar.time)) {
-            const x = bar.x;
-            const width = bar.width;
-            ctx.fillRect(x - width/2, 0, width, ctx.canvas.height);
+        const type = getSessionType(bar.time);
+        if (type === 'PRE') {
+            ctx.fillStyle = 'rgba(255, 210, 0, 0.07)'; // Warm Yellow
+        } else if (type === 'POST') {
+            ctx.fillStyle = 'rgba(0, 130, 255, 0.07)'; // Cool Blue
+        } else if (type === 'OTHER') {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'; // Very subtle for late night
+        } else {
+            continue; // RTH
         }
+
+        const x = bar.x;
+        const width = bar.width;
+        ctx.fillRect(x - width/2, 0, width, ctx.canvas.height);
     }
     
     ctx.restore();
@@ -88,9 +98,6 @@ export class SessionShadingPlugin {
     const visibleRange = timeScale.getVisibleLogicalRange();
     if (!visibleRange) return null;
 
-    // We need to map logical range to active bars
-    // This is a simplified version for now
-    const bars = [];
     const data = this._series.data();
     
     return new SessionShadingRenderer({
