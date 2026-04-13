@@ -20,7 +20,7 @@ export default function ChartUnit({
   initialEth,
   onToggleMaximize,
   isMaximized,
-  drawings = { rays: [], rects: [] },
+  allDrawings = {},
   onUpdateDrawings,
   onTimeframeChange
 }) {
@@ -45,6 +45,8 @@ export default function ChartUnit({
   const [rectAnchor, setRectAnchor] = useState(null); // {price, time}
   const [ghostPoint, setGhostPoint] = useState(null); // {price, time} for rect preview
 
+  const drawings = allDrawings[ticker] || { rays: [], rects: [] };
+
   // Custom UI State
   const [isTickerOpen, setIsTickerOpen] = useState(false);
   const [isTfOpen, setIsTfOpen] = useState(false);
@@ -53,6 +55,11 @@ export default function ChartUnit({
   const tickerRef = useRef();
   const tfRef = useRef();
   const isDrawingModeRef = useRef(false);
+  const currentTickerRef = useRef(ticker);
+
+  useEffect(() => {
+    currentTickerRef.current = ticker;
+  }, [ticker]);
 
   // Click outside detection
   useEffect(() => {
@@ -229,8 +236,8 @@ export default function ChartUnit({
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && isHovered) {
         // Clear all drawings on this ticker
-        onUpdateDrawings('rays', []);
-        onUpdateDrawings('rects', []);
+        onUpdateDrawings(currentTickerRef.current, 'rays', []);
+        onUpdateDrawings(currentTickerRef.current, 'rects', []);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -251,12 +258,12 @@ export default function ChartUnit({
       if (price === null || price === undefined) return;
 
       if (drawType === 'ray') {
-        onUpdateDrawings('rays', [...(drawings.rays || []), { price, time: param.time }]);
+        onUpdateDrawings(currentTickerRef.current, 'rays', [...(drawings.rays || []), { price, time: param.time }]);
       } else if (drawType === 'rect') {
         if (!rectAnchor) {
           setRectAnchor({ price, time: param.time });
         } else {
-          onUpdateDrawings('rects', [...(drawings.rects || []), { p1: rectAnchor, p2: { price, time: param.time } }]);
+          onUpdateDrawings(currentTickerRef.current, 'rects', [...(drawings.rects || []), { p1: rectAnchor, p2: { price, time: param.time } }]);
           setRectAnchor(null);
         }
       }
@@ -296,7 +303,7 @@ export default function ChartUnit({
         if (rayY !== null && Math.abs(rayY - param.point.y) < 10 && (param.point.x >= (rayX || 0) - 5)) { 
           const newRays = [...drawings.rays];
           newRays.splice(nearestIdx, 1);
-          onUpdateDrawings('rays', newRays);
+          onUpdateDrawings(currentTickerRef.current, 'rays', newRays);
           return; // Deleted ray, skip rect check
         }
       }
@@ -327,7 +334,7 @@ export default function ChartUnit({
       if (rectToDelete !== -1) {
           const newRects = [...drawings.rects];
           newRects.splice(rectToDelete, 1);
-          onUpdateDrawings('rects', newRects);
+          onUpdateDrawings(currentTickerRef.current, 'rects', newRects);
       }
     };
 

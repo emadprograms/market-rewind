@@ -369,8 +369,8 @@ export default function App() {
                     isMaximized={maximizedId === i}
                     onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
                     gridCount={gridCount}
-                    drawings={drawings[leftTicker] || { rays: [], rects: [] }}
-                    onUpdateDrawings={(type, items) => handleUpdateDrawings(leftTicker, type, items)}
+                    allDrawings={drawings}
+                    onUpdateDrawings={handleUpdateDrawings}
                     onTimeframeChange={handleTimeframeChange}
                   />
                 );
