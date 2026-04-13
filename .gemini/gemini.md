@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v6.4 - Absolute Density)
+## Project State: COMPLETED (v6.5 - Grid Force-Alignment)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -11,11 +11,16 @@ Market Rewind is a zero-read, local-first market replay tool.
 ### 🚥 Component Breakdown
 
 #### Core Application (`src/`)
+- [x] `src/App.jsx`:
+    - **Ultra-Slim Logic**: Integrated with 40px playback system.
 - [x] `src/components/ChartUnit.jsx`:
-    - **Grid-4 Resilience**: Fixed row-height overflow.
-    - **True Full Screen Mode**: 40px playback bar remains visible.
+    - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS.
 - [x] `src/index.css`:
-    - **Absolute Density Workspace**: Gaps and padding reduced to the absolute limit of **2px**.
+    - **Deterministic Layout Engine**: 
+        - Root workspace height set to `calc(100vh - 40px)`.
+        - Grid rows use `minmax(0, 1fr)` to force a perfect 50/50 vertical split.
+        - `min-height: 0` applied to all cards to eliminate content-stiffness.
+    - **Absolute Density Workspace**: 2px gaps.
     - **Ultra-Slim Aesthetics**:
         - **Chart Header**: 2px vertical padding.
         - **Playback Bar**: 40px total height.
