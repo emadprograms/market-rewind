@@ -22,7 +22,7 @@ export default function ChartUnit({
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [localMasterData, setLocalMasterData] = useState([]);
-  const [timeframe, setTimeframe] = useState(initialTf || '1min');
+  const [timeframe, setTimeframe] = useState(initialTf || '1D');
   const [showEth, setShowEth] = useState(false);
 
   // 0. Fetch local master data

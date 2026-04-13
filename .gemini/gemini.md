@@ -29,6 +29,7 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - **Intuitive Toggles**: Features a 'Collapse' button inside the sidebar and a floating 'Expand' button in the workspace for 100% full-screen chart focus.
 - [x] `src/components/ChartUnit.jsx`:
     - **Single-Pane Volume Separation**: Reverted to a high-performance single-chart architecture but mathematically scaled volume to perfectly occupy the bottom 25% of the chart without overlapping price candles. This preserves 100% fluid, kinetic panning and zooming physics natively.
+    - **Default Timeframe (1D)**: All new charts now initialize to the Daily timeframe by default to provide immediate high-level market context.
     - **Responsive Canvas Sizing**: Implemented a localized `ResizeObserver` on the chart container. Whenever the sidebar is expanded or minimized, the chart dynamically re-calculates its own dimensions to instantly fill 100% of the newly available real estate without waiting for a global window resize event.
     - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes, ensuring that switching between stocks always auto-centers the data.
     - Applies a **Strict UTC Parsing Strategy** across data handling and LightweightCharts localization formats so UTC timestamps from the DB display correctly regardless of the user's physical timezone.
