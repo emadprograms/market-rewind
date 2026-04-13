@@ -14,7 +14,7 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [gridSize, setGridSize] = useState(2);
+  const [layoutMode, setLayoutMode] = useState('2v');
   const [isLoading, setIsLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('Checking storage...');
   const [isDbLoaded, setIsDbLoaded] = useState(false);
@@ -99,7 +99,6 @@ export default function App() {
     setMasterData(data);
     
     if (data.length > 0) {
-      // Find the first bar exactly at or closely following the chosen start time
       const targetTimeStr = `${selectedDate} ${entryTime}:00`;
       const startBar = data.find(d => d.time >= targetTimeStr) || data[data.length - 1];
       setCurrentTime(startBar ? startBar.time : null);
@@ -152,7 +151,6 @@ export default function App() {
     const tz = getTzForTicker(tickers[0]);
     const label = getTzLabel(tz);
 
-    // isoStr is "2026-04-09 09:30:00". Append Z to parse identically without local shift.
     const date = new Date(isoStr.replace(' ', 'T') + 'Z');
     return date.toLocaleString('en-US', { 
       timeZone: tz,
@@ -169,70 +167,80 @@ export default function App() {
       {/* --- SIDEBAR --- */}
       <aside className={`sidebar ${isSidebarOpen ? '' : 'closed'}`} style={{ flexShrink: 0 }}>
         <div className="logo" style={{ justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Activity size={24} /> MARKET<span>REWIND</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Activity size={20} /> MARKET<span>REWIND</span>
           </div>
           <button className="btn-icon" onClick={() => setIsSidebarOpen(false)} title="Close Sidebar">
-            <Menu size={20} />
+            <Menu size={16} />
           </button>
         </div>
 
-        <div className={`status-badge ${isDbLoaded ? 'status-online' : ''}`}>
-          <Database size={16} />
+        <div className={`status-badge ${isDbLoaded ? 'status-online' : ''}`} style={{ fontSize: '0.7rem', padding: '6px 10px' }}>
+          <Database size={14} />
           <span>{dbStatus}</span>
         </div>
 
         <div className="sidebar-section">
-          <h3>Release Data</h3>
-          <a 
-            href="https://github.com/emadprograms/market-rewind/releases/tag/latest-data" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="upload-zone"
-            style={{ textDecoration: 'none', color: 'inherit', borderStyle: 'solid', borderColor: 'rgba(38, 166, 154, 0.3)' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-green)', fontWeight: '600', fontSize: '0.85rem' }}>
-              <ExternalLink size={16} /> Open GitHub 
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-              Download <b>market_data.db</b>
-            </div>
-          </a>
-        </div>
-
-        <div className="sidebar-section">
           <h3>Load Data</h3>
-          <label className="upload-zone">
-            <UploadCloud size={24} className="file-icon" />
-            <div style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>
-              Click to select <b>market_data.db</b>
+          <label className="upload-zone" style={{ padding: '12px' }}>
+            <UploadCloud size={20} className="file-icon" />
+            <div style={{fontSize: '0.65rem', color: 'var(--text-secondary)'}}>
+              <b>market_data.db</b>
             </div>
             <input type="file" accept=".db,.sqlite" onChange={handleFileUpload} />
           </label>
         </div>
 
-        <div className="sidebar-section" style={{marginTop: '16px'}}>
+        <div className="sidebar-section">
            <h3>Replay Settings</h3>
            <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
              <div>
-               <label style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Date</label>
-               <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} disabled={!isSessionStarted} />
+               <label style={{fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px', display: 'block'}}>Date</label>
+               <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} disabled={!isSessionStarted} style={{ fontSize: '0.85rem' }} />
              </div>
              <div>
-               <label style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>Layout Grid</label>
-               <select value={gridSize} onChange={(e) => setGridSize(parseInt(e.target.value))}>
-                 <option value={1}>1 Chart</option>
-                 <option value={2}>2 Charts</option>
-                 <option value={3}>3 Charts</option>
-                 <option value={4}>4 Charts</option>
-               </select>
+                <label style={{fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em'}}>Layout Grid</label>
+                <div className="layout-selector">
+                  {[
+                    { id: '1', class: 'l1' },
+                    { id: '2v', class: 'l2v' },
+                    { id: '2h', class: 'l2h' },
+                    { id: '3', class: 'l3' },
+                    { id: '4', class: 'l4' }
+                  ].map(l => (
+                    <div 
+                      key={l.id} 
+                      className={`layout-icon ${l.class} ${layoutMode === l.id ? 'active' : ''}`}
+                      onClick={() => setLayoutMode(l.id)}
+                      title={`Layout ${l.id}`}
+                    >
+                      {l.id === '1' && <div />}
+                      {l.id === '2v' && <><div/><div/></>}
+                      {l.id === '2h' && <><div/><div/></>}
+                      {l.id === '3' && <><div/><div/><div/></>}
+                      {l.id === '4' && <><div/><div/><div/><div/></>}
+                    </div>
+                  ))}
+                </div>
              </div>
              {isSessionStarted && (
-               <button className="btn-outline" onClick={() => setIsSessionStarted(false)} style={{marginTop: '8px', fontSize: '0.8rem'}}>
-                 <RotateCcw size={14} /> End Session & Reset
+               <button className="btn-outline" onClick={() => setIsSessionStarted(false)} style={{marginTop: '4px', fontSize: '0.75rem', padding: '6px'}}>
+                 <RotateCcw size={12} /> Reset
                </button>
              )}
            </div>
+        </div>
+
+        <div className="sidebar-section" style={{ marginTop: 'auto' }}>
+          <h3>Links</h3>
+          <a 
+            href="https://github.com/emadprograms/market-rewind/releases" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'none', color: 'var(--text-secondary)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <ExternalLink size={12} /> Source Code
+          </a>
         </div>
       </aside>
 
@@ -245,10 +253,10 @@ export default function App() {
             </button>
           </div>
         )}
-        <main className={`workspace grid-${gridSize}`}>
+        <main className={`workspace grid-${layoutMode}`}>
           {isLoading ? (
             <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
-              Processing...
+               <Activity className="animate-pulse" size={48} />
             </div>
           ) : !isDbLoaded ? (
             <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
@@ -278,38 +286,39 @@ export default function App() {
                      </label>
                      <input type="time" value={entryTime} onChange={(e) => setEntryTime(e.target.value)} style={{fontSize: '1rem', padding: '10px'}} />
                    </div>
-                   <button className="btn-primary" onClick={() => setIsSessionStarted(true)} style={{marginTop: '12px', justifyContent: 'center', padding: '12px'}}>
-                     <Activity size={18} /> Launch Simulator
+                   <button className="btn-primary" onClick={() => setIsSessionStarted(true)} style={{padding: '12px', fontSize: '1rem', marginTop: '8px', justifyContent: 'center'}}>
+                     <Play size={20} fill="currentColor" /> Initialize Market Simulator
                    </button>
-                 </div>
+                  </div>
                </div>
             </div>
-          ) : masterData.length === 0 ? (
-            <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
-              No trading data found for {selectedDate}.
-            </div>
           ) : (
-            // If a chart is maximized, only render that specific ID in a full grid
-            (maximizedId !== null ? [maximizedId] : Array.from({ length: gridSize }).map((_, i) => i)).map((i) => {
-              const hasSPY = tickers.includes('SPY');
-              const leftTicker = i === 0 ? (hasSPY ? 'SPY' : sessionTicker) : sessionTicker;
+            // Active Replay Charts
+            (() => {
+              const gridCount = layoutMode === '1' ? 1 : (layoutMode.startsWith('2') ? 2 : (layoutMode === '3' ? 3 : 4));
               
-              return (
-                <ChartUnit 
-                  key={i} 
-                  id={i} 
-                  globalTime={currentTime} 
-                  selectedDate={selectedDate}
-                  isReplayMode={true} 
-                  tickers={tickers}
-                  initialTicker={leftTicker}
-                  initialTf={i === 0 ? '1D' : '5min'}
-                  initialEth={i !== 0}
-                  onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
-                  isMaximized={maximizedId === i}
-                />
-              );
-            })
+              return (maximizedId !== null ? [maximizedId] : Array.from({ length: gridCount }).map((_, i) => i)).map((i) => {
+                const hasSPY = tickers.includes('SPY');
+                const leftTicker = i === 0 ? (hasSPY ? 'SPY' : sessionTicker) : sessionTicker;
+
+                return (
+                  <ChartUnit 
+                    key={i} 
+                    id={i} 
+                    tickers={tickers} 
+                    initialTicker={leftTicker}
+                    initialTf={i === 0 ? '1D' : '5min'}
+                    initialEth={i !== 0}
+                    selectedDate={selectedDate} 
+                    isReplayMode={isSessionStarted}
+                    globalTime={currentTime}
+                    isMaximized={maximizedId === i}
+                    onMaximizeToggle={() => setMaximizedId(maximizedId === i ? null : i)}
+                    gridCount={gridCount}
+                  />
+                );
+              });
+            })()
           )}
         </main>
 
