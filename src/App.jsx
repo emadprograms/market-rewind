@@ -288,7 +288,7 @@ export default function App() {
                 isReplayMode={true} 
                 tickers={tickers}
                 initialTicker={i === 3 ? 'SPY' : tickers[0]}
-                initialTf={i === 1 ? '5min' : i === 2 ? '1H' : '1min'}
+                initialTf="1D"
               />
             ))
           )}

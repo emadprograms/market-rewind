@@ -37,6 +37,7 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - **Single-Pane Volume Separation**: Reverted to a high-performance single-chart architecture but mathematically scaled volume to perfectly occupy the bottom 25% of the chart without overlapping price candles.
     - **Per-Chart Dynamic TZ**: Each chart unit independently localized its X-axis and price-line crosshair labels to the specific timezone of its ticker (ET for Stocks, UTC for ETFs/Crypto).
     - **Default Timeframe (1D)**: All new charts now initialize to the Daily timeframe by default to provide immediate high-level market context.
+    - **Forced RTH for Daily**: Implemented a strict logic where the **1D** timeframe ignores the ETH toggle and always calculates OHLCV data using Regular Trading Hours (RTH) records only.
     - **Responsive Canvas Sizing**: Implemented a localized `ResizeObserver` on the chart container for instant responsiveness.
     - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes.
 - [x] `src/lib/resampling.js`:

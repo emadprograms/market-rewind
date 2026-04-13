@@ -56,7 +56,7 @@ export default function ChartUnit({
   // 1. Prepare data
   const chartData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
-    const filteredRaw = showEth ? localMasterData : localMasterData.filter(d => d.session === 'REG');
+    const filteredRaw = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
     const resampled = resampleData(filteredRaw, timeframe);
     if (isReplayMode && globalTime) {
       const gt = new Date(globalTime).getTime();
