@@ -78,7 +78,6 @@ export class VolumeProfilePlugin {
         // Cache invalidation keys
         this._lastLogicalRange = { from: -1, to: -1 };
         this._lastWidth = 0;
-        this._lastHeight = 0;
         this._enabled = false;
     }
 
@@ -126,108 +125,110 @@ export class VolumeProfilePlugin {
     _getViewData() {
         if (!this._enabled || !this._chart || !this._series || this._masterData.length === 0) return null;
 
-        const timeScale = this._chart.timeScale();
-        const visibleRange = timeScale.getVisibleLogicalRange();
-        if (!visibleRange) return null;
+        try {
+            const timeScale = this._chart.timeScale();
+            const visibleRange = timeScale.getVisibleLogicalRange();
+            if (!visibleRange) return null;
 
-        const viewportWidth = timeScale.width();
-        const viewportHeight = this._chart.priceScale('right').height();
+            const viewportWidth = timeScale.width();
 
-        // Check cache
-        if (this._vpDataCache && 
-            Math.abs(this._lastLogicalRange.from - visibleRange.from) < 0.5 && 
-            Math.abs(this._lastLogicalRange.to - visibleRange.to) < 0.5 &&
-            this._lastWidth === viewportWidth && 
-            this._lastHeight === viewportHeight
-        ) {
+            // Check cache (skip height — it's derived from price coords each frame)
+            if (this._vpDataCache && 
+                Math.abs(this._lastLogicalRange.from - visibleRange.from) < 0.5 && 
+                Math.abs(this._lastLogicalRange.to - visibleRange.to) < 0.5 &&
+                this._lastWidth === viewportWidth
+            ) {
+                return this._vpDataCache;
+            }
+
+            const data = this._masterData;
+            const fromIndex = Math.max(0, Math.floor(visibleRange.from));
+            const toIndex = Math.min(data.length - 1, Math.ceil(visibleRange.to));
+            
+            if (toIndex <= fromIndex) return null;
+
+            // 1. Find Min/Max price in visible range
+            let minPrice = Infinity;
+            let maxPrice = -Infinity;
+            for (let i = fromIndex; i <= toIndex; i++) {
+                const bar = data[i];
+                if (bar.low < minPrice) minPrice = bar.low;
+                if (bar.high > maxPrice) maxPrice = bar.high;
+            }
+            
+            if (minPrice === Infinity || minPrice === maxPrice) return null;
+
+            // 2. Generate Bins
+            const numBins = 70;
+            const binSize = (maxPrice - minPrice) / numBins;
+            const bins = new Array(numBins).fill(0);
+
+            // 3. Populate Bins — distribute volume proportionally across price range
+            for (let i = fromIndex; i <= toIndex; i++) {
+                const bar = data[i];
+                const topBin = Math.min(numBins - 1, Math.floor((bar.high - minPrice) / binSize));
+                const bottomBin = Math.max(0, Math.floor((bar.low - minPrice) / binSize));
+                
+                const binsCovered = topBin - bottomBin + 1;
+                const volPerBin = bar.volume / binsCovered;
+                
+                for (let j = bottomBin; j <= topBin; j++) {
+                    bins[j] += volPerBin;
+                }
+            }
+
+            // 4. Find Max Volume (POC)
+            let maxVol = 0;
+            let pocIndex = -1;
+            for (let i = 0; i < numBins; i++) {
+                if (bins[i] > maxVol) {
+                    maxVol = bins[i];
+                    pocIndex = i;
+                }
+            }
+
+            if (maxVol === 0) return null;
+
+            // 5. Convert to Coordinates
+            const maxBarWidthPixels = viewportWidth * 0.25;
+            const renderBins = [];
+
+            // Derive box height from price-to-coordinate mapping (no priceScale.height() needed)
+            const yTop = this._series.priceToCoordinate(maxPrice);
+            const yBottom = this._series.priceToCoordinate(minPrice);
+            if (yTop === null || yBottom === null) return null;
+            
+            const totalPixels = Math.abs(yBottom - yTop);
+            const boxHeight = totalPixels / numBins;
+
+            for (let i = 0; i < numBins; i++) {
+                if (bins[i] === 0) continue;
+                
+                const binPriceCenter = minPrice + i * binSize + (binSize / 2);
+                const y = this._series.priceToCoordinate(binPriceCenter);
+                
+                if (y === null) continue;
+
+                renderBins.push({
+                    y: y,
+                    width: (bins[i] / maxVol) * maxBarWidthPixels,
+                    isPOC: i === pocIndex
+                });
+            }
+
+            this._vpDataCache = {
+                bins: renderBins,
+                viewportWidth,
+                boxHeight
+            };
+            
+            this._lastLogicalRange = { from: visibleRange.from, to: visibleRange.to };
+            this._lastWidth = viewportWidth;
+
             return this._vpDataCache;
+        } catch (e) {
+            // Gracefully fail — don't crash the chart renderer
+            return null;
         }
-
-        const data = this._masterData;
-        const fromIndex = Math.max(0, Math.floor(visibleRange.from));
-        const toIndex = Math.min(data.length - 1, Math.ceil(visibleRange.to));
-        
-        if (toIndex <= fromIndex) return null;
-
-        // 1. Find Min/Max price in visible range
-        let minPrice = Infinity;
-        let maxPrice = -Infinity;
-        for (let i = fromIndex; i <= toIndex; i++) {
-            const bar = data[i];
-            if (bar.low < minPrice) minPrice = bar.low;
-            if (bar.high > maxPrice) maxPrice = bar.high;
-        }
-        
-        if (minPrice === Infinity || minPrice === maxPrice) return null;
-
-        // 2. Generate Bins
-        const numBins = 70; // Hardcoded bin count for performance & density
-        const binSize = (maxPrice - minPrice) / numBins;
-        const bins = new Array(numBins).fill(0);
-
-        // 3. Populate Bins
-        for (let i = fromIndex; i <= toIndex; i++) {
-            const bar = data[i];
-            // Distribute volume proportionally across overlapping bins
-            const topBin = Math.min(numBins - 1, Math.floor((bar.high - minPrice) / binSize));
-            const bottomBin = Math.max(0, Math.floor((bar.low - minPrice) / binSize));
-            
-            const binsCovered = topBin - bottomBin + 1;
-            const volPerBin = bar.volume / binsCovered;
-            
-            for (let j = bottomBin; j <= topBin; j++) {
-                bins[j] += volPerBin;
-            }
-        }
-
-        // 4. Find Max Volume (POC)
-        let maxVol = 0;
-        let pocIndex = -1;
-        for (let i = 0; i < numBins; i++) {
-            if (bins[i] > maxVol) {
-                maxVol = bins[i];
-                pocIndex = i;
-            }
-        }
-
-        if (maxVol === 0) return null;
-
-        // 5. Convert to Coordinates
-        const maxBarWidthPixels = viewportWidth * 0.25; // VP max width is 25% of screen
-        const renderBins = [];
-
-        // Box height is approximately the distance between bins in coordinate space
-        // Using top and bottom to ensure responsive heights
-        const yTop = this._series.priceToCoordinate(maxPrice) || 0;
-        const yBottom = this._series.priceToCoordinate(minPrice) || viewportHeight;
-        const totalPixels = Math.abs(yBottom - yTop);
-        const boxHeight = totalPixels / numBins;
-
-        for (let i = 0; i < numBins; i++) {
-            if (bins[i] === 0) continue;
-            
-            const binPriceCenter = minPrice + i * binSize + (binSize / 2);
-            const y = this._series.priceToCoordinate(binPriceCenter);
-            
-            if (y === null) continue;
-
-            renderBins.push({
-                y: y,
-                width: (bins[i] / maxVol) * maxBarWidthPixels,
-                isPOC: i === pocIndex
-            });
-        }
-
-        this._vpDataCache = {
-            bins: renderBins,
-            viewportWidth,
-            boxHeight
-        };
-        
-        this._lastLogicalRange = { from: visibleRange.from, to: visibleRange.to };
-        this._lastWidth = viewportWidth;
-        this._lastHeight = viewportHeight;
-
-        return this._vpDataCache;
     }
 }
