@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v6.6 - TradingView Session Shading)
+## Project State: COMPLETED (v6.7 - Stability & Context Anchoring)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -13,8 +13,10 @@ Market Rewind is a zero-read, local-first market replay tool.
 #### Core Application (`src/`)
 - [x] `src/App.jsx`:
     - **Ultra-Slim Logic**: Integrated with 40px playback system.
+    - **Persistent Sidebar Access**: Sidebar toggle heavily integrated into the playback bar to prevent chart obfuscation.
 - [x] `src/components/ChartUnit.jsx`:
-    - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS.
+    - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
+    - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift' when switching extreme timeframes.
 - [x] `src/index.css`:
     - **Deterministic Layout Engine**: 
         - Root workspace height set to `calc(100vh - 40px)`.
