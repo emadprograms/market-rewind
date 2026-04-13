@@ -37,6 +37,8 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes.
 - [x] `src/lib/resampling.js`:
     - **Timeframe Aggregation**: Implemented robust logic to compile 5m, 15m, 30m, 1H, and 1D OHLCV bars from raw 1-minute records.
+- [x] `src/index.css`:
+    - **Vertical Grid Stretching**: Explicitly defined `grid-template-rows: 1fr` across all multi-chart layout variants (1, 2, 3, and 4 charts). This forces charts to mathematically expand to fill 100% of the available vertical workspace instead of collapsing to content height.
 - [x] `package.json`: `postinstall` script securely caches standard WASM binary.
 - [x] `vite.config.js`: Excludes `sql.js` from pre-bundling.
 

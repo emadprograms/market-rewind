@@ -150,10 +150,28 @@ body {
 }
 
 /* Grid Layouts */
-.workspace.grid-1 { grid-template-columns: 1fr; }
-.workspace.grid-2 { grid-template-columns: 1fr 1fr; }
-.workspace.grid-3 { grid-template-areas: "a b" "c c"; grid-template-columns: 1fr 1fr; }
-.workspace.grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.workspace.grid-1 { 
+  grid-template-columns: 1fr; 
+  grid-template-rows: 1fr; 
+}
+.workspace.grid-2 { 
+  grid-template-columns: 1fr 1fr; 
+  grid-template-rows: 1fr; 
+}
+.workspace.grid-3 { 
+  grid-template-areas: "a b" "c c"; 
+  grid-template-columns: 1fr 1fr; 
+  grid-template-rows: 1fr 1fr; 
+}
+.workspace.grid-4 { 
+  grid-template-columns: 1fr 1fr; 
+  grid-template-rows: 1fr 1fr; 
+}
+
+/* Assign areas for Grid-3 */
+.grid-3 > div:nth-child(1) { grid-area: a; }
+.grid-3 > div:nth-child(2) { grid-area: b; }
+.grid-3 > div:nth-child(3) { grid-area: c; }
 
 .chart-card {
   background: var(--bg-card);
