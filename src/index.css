@@ -143,9 +143,9 @@ body {
 
 .workspace {
   flex: 1;
-  padding: 4px;
+  padding: 3px;
   display: grid;
-  gap: 4px;
+  gap: 3px;
   overflow: hidden;
 }
 
@@ -186,7 +186,10 @@ body {
 
 .chart-card.is-maximized {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: calc(100vh - 48px);
   z-index: 9999;
   border: none;
   border-radius: 0;
@@ -433,8 +436,8 @@ select:focus, input:focus {
 }
 
 .playback-bar {
-  height: 56px;
-  background: rgba(10, 11, 16, 0.9);
+  height: 48px;
+  background: rgba(10, 11, 16, 0.95);
   backdrop-filter: var(--glass-blur);
   border-top: 1px solid var(--border-color);
   display: flex;
@@ -442,6 +445,8 @@ select:focus, input:focus {
   justify-content: center;
   padding: 0 16px;
   gap: 16px;
+  position: relative;
+  z-index: 10000;
 }
 
 .playback-controls {
