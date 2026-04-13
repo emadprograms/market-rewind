@@ -17,10 +17,15 @@ class RectangleRenderer {
                 const { x1, y1, x2, y2 } = rect;
                 
                 // Allow drawing even if one point is off-screen
-                const xStart = x1 === null ? -100 : x1;
-                const xEnd = x2 === null ? scope.mediaSize.width + 100 : x2;
+                let xStart = x1 === null ? -100 : x1;
+                let xEnd = x2 === null ? scope.mediaSize.width + 100 : x2;
                 
                 if (y1 === null || y2 === null) continue;
+
+                if (Math.abs(xStart - xEnd) < 1) {
+                    xStart -= 3;
+                    xEnd += 3;
+                }
 
                 const left = Math.min(xStart, xEnd);
                 const top = Math.min(y1, y2);

@@ -10,7 +10,8 @@ class HorizontalRayRenderer {
 
             ctx.save();
             ctx.strokeStyle = '#ff9800';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 2; // Made thicker per request
+            ctx.setLineDash([6, 4]); // Made dashed per request
             ctx.globalAlpha = 0.9;
 
             const rightEdge = scope.mediaSize.width;
@@ -110,13 +111,8 @@ export class HorizontalRayPlugin {
         const data = this._series.data();
         if (!data || data.length === 0) return null;
         
-        if (targetTime <= data[0].time) {
-            return -10000;
-        }
-        
-        if (targetTime >= data[data.length - 1].time) {
-            return timeScale.timeToCoordinate(data[data.length - 1].time);
-        }
+        if (targetTime <= data[0].time) return -10000;
+        if (targetTime >= data[data.length - 1].time) return null; // Let the renderer extend to the right edge
 
         let left = 0;
         let right = data.length - 1;
