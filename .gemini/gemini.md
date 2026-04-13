@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v5.5 - Enhanced Launch & UI Recovery)
+## Project State: COMPLETED (v5.6 - UI Fixes & Dropdown Stability)
 
 Market Rewind is a zero-read, local-first market replay tool. It operates entirely within the user's browser, eliminating Turso "Rows Read" costs, avoiding network fetching errors, and bypassing Vercel compute costs.
 
@@ -27,17 +27,15 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
 - [x] `src/App.jsx`:
     - **Trade Ticker Selection**: Added a focus ticker selector to the landing page.
     - **Default Dual-Chart Layout**: Set `gridSize` to 2 by default.
-    - **Smart Initialization**: Configures a dual-perspective setup upon launch:
-        - **Left Chart**: SPY (or selected ticker) in **1D** mode.
-        - **Right Chart**: Selected ticker in **5min** mode with **ETH active**.
-    - **Anti-Bias Session Entry**: High-fidelity landing screen for date and time configuration.
+    - **Smart Initialization**: Configures a dual-perspective setup upon launch.
 - [x] `src/components/ChartUnit.jsx`:
     - **Premium UI (Option B)**: Custom glassmorphism dropdowns with symbol search and refined aesthetics.
+    - **Dropdown Stability Fix**: Implemented `e.stopPropagation()` on toggle buttons to prevent race conditions with the global click-outside listener.
     - **initialEth Prop**: Supports pre-configuring chart sessions with Extended Trading Hours visible.
     - **Forced RTH for Daily**: Daily bars ignore ETH toggle to ensure official session data accuracy.
 - [x] `src/index.css`:
+    - **Dropdown Positioning Fix**: Added `position: relative` to `.custom-dropdown-container` to correctly anchor absolute-positioned menus to their buttons.
     - **UI Recovery**: Restored baseline input/select styles to fix broken sidebars.
-    - **Custom Aesthetic Refinement**: Weightier typography and smoother transitions for premium chart controls.
 
 ### 📦 Key Dependencies
 - **Frontend**: `sql.js` (SQLite WASM), `lightweight-charts`, `lucide-react`, `react`.

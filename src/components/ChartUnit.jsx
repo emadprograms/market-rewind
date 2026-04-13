@@ -231,7 +231,10 @@ export default function ChartUnit({
           <div className="custom-dropdown-container" ref={tickerRef}>
             <div 
               className={`custom-select ${isTickerOpen ? 'active' : ''}`} 
-              onClick={() => setIsTickerOpen(!isTickerOpen)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsTickerOpen(!isTickerOpen);
+              }}
             >
               <Search size={14} className="text-secondary" />
               <span style={{fontWeight: '700'}}>{ticker}</span>
@@ -272,7 +275,10 @@ export default function ChartUnit({
           <div className="custom-dropdown-container" ref={tfRef}>
             <div 
               className={`custom-select ${isTfOpen ? 'active' : ''}`} 
-              onClick={() => setIsTfOpen(!isTfOpen)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsTfOpen(!isTfOpen);
+              }}
             >
               <Clock size={14} className="text-secondary" />
               <span>{timeframe.replace('min', 'm')}</span>

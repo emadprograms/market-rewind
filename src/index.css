@@ -238,6 +238,10 @@ select:focus, input:focus {
   border-color: var(--accent-green);
 }
 
+.custom-dropdown-container {
+  position: relative;
+}
+
 /* Custom Select Buttons */
 .custom-select {
   position: relative;
