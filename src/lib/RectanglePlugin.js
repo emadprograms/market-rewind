@@ -100,14 +100,43 @@ export class RectanglePlugin {
             let x1 = timeScale.timeToCoordinate(rect.p1.time);
             let x2 = timeScale.timeToCoordinate(rect.p2.time);
 
-            // Handle off-screen clipping
-            const firstData = this._series.data()[0];
-            if (x1 === null && firstData && rect.p1.time < firstData.time) x1 = -1000;
-            if (x2 === null && firstData && rect.p2.time < firstData.time) x2 = -1000;
+            // Handle missing timestamps by finding the nearest data point
+            if (x1 === null) x1 = this._getClosestX(rect.p1.time, timeScale);
+            if (x2 === null) x2 = this._getClosestX(rect.p2.time, timeScale);
 
             return { x1, y1, x2, y2 };
         }).filter(r => r !== null);
 
         return { rects: renderRects };
+    _getClosestX(targetTime, timeScale) {
+        const data = this._series.data();
+        if (!data || data.length === 0) return null;
+        
+        if (targetTime <= data[0].time) return -10000;
+        if (targetTime >= data[data.length - 1].time) return timeScale.timeToCoordinate(data[data.length - 1].time);
+
+        let left = 0;
+        let right = data.length - 1;
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            if (data[mid].time === targetTime) {
+                return timeScale.timeToCoordinate(data[mid].time);
+            } else if (data[mid].time < targetTime) {
+                left = mid + 1;
+            } else {
+                right = mid - 1;
+            }
+        }
+        
+        let closestIdx = right;
+        if (left < data.length && right >= 0) {
+            const diffLeft = Math.abs(data[left].time - targetTime);
+            const diffRight = Math.abs(data[right].time - targetTime);
+            closestIdx = diffLeft < diffRight ? left : right;
+        } else if (left < data.length) {
+            closestIdx = left;
+        }
+        
+        return timeScale.timeToCoordinate(data[closestIdx].time);
     }
 }

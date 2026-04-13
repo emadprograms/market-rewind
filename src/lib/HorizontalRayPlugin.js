@@ -94,33 +94,8 @@ export class HorizontalRayPlugin {
             if (y === null) return null;
 
             let x = timeScale.timeToCoordinate(ray.time);
-            
-            // If timeToCoordinate returns null, it's off-screen.
-            // We need to determine if it's off-screen to the left or right.
             if (x === null) {
-                // Approximate logical index to check position
-                // A better way is to compare with the first/last visible data points
-                const data = this._series.data();
-                if (data.length > 0) {
-                    const firstVisibleLogical = visibleRange.from;
-                    // Find the logical index of the ray time
-                    // For simplicity, we can assume if it's not on screen and time is early, it's to the left
-                    if (ray.time < data[0].time) {
-                        x = -100; // Well off-screen to the left
-                    } else {
-                        // It might be between data points or in the future
-                        // But if it's a ray, we only care if it's to the left
-                        // Let's just check if it's before the visible data
-                        const firstDataOnScreen = data.find(d => timeScale.timeToCoordinate(d.time) !== null);
-                        if (firstDataOnScreen && ray.time < firstDataOnScreen.time) {
-                            x = -100;
-                        } else {
-                            return null; // Likely to the right or invalid
-                        }
-                    }
-                } else {
-                    return null;
-                }
+                x = this._getClosestX(ray.time, timeScale);
             }
 
             return { x, y };
@@ -129,5 +104,40 @@ export class HorizontalRayPlugin {
         return {
             rays: renderRays
         };
+    _getClosestX(targetTime, timeScale) {
+        const data = this._series.data();
+        if (!data || data.length === 0) return null;
+        
+        if (targetTime <= data[0].time) {
+            return -10000;
+        }
+        
+        if (targetTime >= data[data.length - 1].time) {
+            return timeScale.timeToCoordinate(data[data.length - 1].time);
+        }
+
+        let left = 0;
+        let right = data.length - 1;
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            if (data[mid].time === targetTime) {
+                return timeScale.timeToCoordinate(data[mid].time);
+            } else if (data[mid].time < targetTime) {
+                left = mid + 1;
+            } else {
+                right = mid - 1;
+            }
+        }
+        
+        let closestIdx = right;
+        if (left < data.length && right >= 0) {
+            const diffLeft = Math.abs(data[left].time - targetTime);
+            const diffRight = Math.abs(data[right].time - targetTime);
+            closestIdx = diffLeft < diffRight ? left : right;
+        } else if (left < data.length) {
+            closestIdx = left;
+        }
+        
+        return timeScale.timeToCoordinate(data[closestIdx].time);
     }
 }
