@@ -1,3 +1,4 @@
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
 import { Maximize2, Settings2, Search, ChevronDown, Clock } from 'lucide-react';
