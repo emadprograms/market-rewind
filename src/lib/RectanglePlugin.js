@@ -108,6 +108,8 @@ export class RectanglePlugin {
         }).filter(r => r !== null);
 
         return { rects: renderRects };
+    }
+
     _getClosestX(targetTime, timeScale) {
         const data = this._series.data();
         if (!data || data.length === 0) return null;
