@@ -408,8 +408,9 @@ export default function ChartUnit({
           vpPluginRef.current.setData(formatted);
       }
 
-      // If we are just adding one bar, use .update()
-      if (formatted.length === lastDataCountRef.current + 1) {
+      // Incremental update: new bar added OR existing bar updated in-place
+      if (formatted.length === lastDataCountRef.current + 1 || 
+          (formatted.length === lastDataCountRef.current && formatted.length > 0)) {
         const lastBar = formatted[formatted.length - 1];
         priceSeriesRef.current.update({
           time: lastBar.time,
