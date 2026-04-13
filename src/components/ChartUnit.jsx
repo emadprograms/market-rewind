@@ -19,6 +19,9 @@ export default function ChartUnit({
   const priceSeriesRef = useRef();
   const volumeSeriesRef = useRef();
   const lastDataCountRef = useRef(0);
+  const crosshairRef = useRef({ time: null, price: null });
+  const raysRef = useRef([]);
+  const chartDataRef = useRef([]);
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [localMasterData, setLocalMasterData] = useState([]);
@@ -106,6 +109,44 @@ export default function ChartUnit({
       },
     });
 
+    chartRef.current.subscribeCrosshairMove((param) => {
+      if (param.time) crosshairRef.current.time = param.time;
+      if (param.point && priceSeriesRef.current) {
+        const price = priceSeriesRef.current.coordinateToPrice(param.point.y);
+        crosshairRef.current.price = price;
+      }
+    });
+
+    const handleKeyDown = (e) => {
+      if (e.altKey && e.key.toLowerCase() === 'r') {
+        const { time, price } = crosshairRef.current;
+        const currentData = chartDataRef.current;
+        if (!time || price === null || currentData.length === 0) return;
+
+        const startIndex = currentData.findIndex(d => d.time === time);
+        if (startIndex !== -1) {
+          const raySeries = chartRef.current.addLineSeries({
+            color: '#eab308', // gold/yellow
+            lineWidth: 2,
+            lineStyle: 0, // Solid
+            lastValueVisible: false,
+            priceLineVisible: false,
+            crosshairMarkerVisible: false,
+          });
+
+          const rayData = [];
+          for (let i = startIndex; i < currentData.length; i++) {
+            rayData.push({ time: currentData[i].time, value: price });
+          }
+          raySeries.setData(rayData);
+          
+          raysRef.current.push({ series: raySeries, price });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
     const handleResize = () => {
       if (chartContainerRef.current) {
         chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight });
@@ -116,6 +157,7 @@ export default function ChartUnit({
     handleResize();
 
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
       chartRef.current.remove();
     };
@@ -136,6 +178,8 @@ export default function ChartUnit({
         };
       });
 
+      chartDataRef.current = formatted;
+
       // If we are just adding one bar, use .update()
       if (formatted.length === lastDataCountRef.current + 1) {
         const lastBar = formatted[formatted.length - 1];
@@ -151,8 +195,19 @@ export default function ChartUnit({
           value: lastBar.volume,
           color: lastBar.close >= lastBar.open ? '#26a69a' : '#ef5350'
         });
+        
+        // Extend all existing rays to the new bar
+        raysRef.current.forEach(ray => {
+          ray.series.update({ time: lastBar.time, value: ray.price });
+        });
+        
       } else {
         // Full reset (e.g. timeframe change or symbol change)
+        
+        // Clear old custom rays
+        raysRef.current.forEach(ray => chartRef.current.removeSeries(ray.series));
+        raysRef.current = [];
+
         priceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
           time, open, high, low, close
         })));
