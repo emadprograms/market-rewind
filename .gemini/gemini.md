@@ -30,6 +30,10 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - **Toggleable Sidebar UI**: Contains File UI, Grid Selection, Reset Session logic, and explicit GitHub external URL.
     - **Intuitive Toggles**: Features a 'Collapse' button inside the sidebar and a floating 'Expand' button in the workspace for 100% full-screen chart focus.
 - [x] `src/components/ChartUnit.jsx`:
+    - **Premium UI (Option B)**: Completely custom, div-based glassmorphism header UI.
+    - **Dynamic Symbol Search**: Interactive ticker dropdown that includes a search input for filtering and selecting securities instantly.
+    - **Bespoke Dropdowns**: Custom-built timeframe selectors with high-contrast hover effects and clean typography.
+    - **Custom Session Switch**: Replaced native checkbox toggles with a professional animated switch for the ETH session state.
     - **Single-Pane Volume Separation**: Reverted to a high-performance single-chart architecture but mathematically scaled volume to perfectly occupy the bottom 25% of the chart without overlapping price candles.
     - **Per-Chart Dynamic TZ**: Each chart unit independently localized its X-axis and price-line crosshair labels to the specific timezone of its ticker (ET for Stocks, UTC for ETFs/Crypto).
     - **Default Timeframe (1D)**: All new charts now initialize to the Daily timeframe by default to provide immediate high-level market context.
@@ -38,7 +42,8 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
 - [x] `src/lib/resampling.js`:
     - **Timeframe Aggregation**: Implemented robust logic to compile 5m, 15m, 30m, 1H, and 1D OHLCV bars from raw 1-minute records.
 - [x] `src/index.css`:
-    - **Vertical Grid Stretching**: Explicitly defined `grid-template-rows: 1fr` across all multi-chart layout variants (1, 2, 3, and 4 charts). This forces charts to mathematically expand to fill 100% of the available vertical workspace instead of collapsing to content height.
+    - **Custom Dropdown Palette**: Added specialized styling for floating glassmorphism menus, including z-index management, animated entry transitions, and custom scrollbars.
+    - **Vertical Grid Stretching**: Explicitly defined `grid-template-rows: 1fr` across all multi-chart layout variants (1, 2, 3, and 4 charts).
 - [x] `package.json`: `postinstall` script securely caches standard WASM binary.
 - [x] `vite.config.js`: Excludes `sql.js` from pre-bundling.
 

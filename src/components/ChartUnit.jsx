@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
-import { Maximize2, Settings2, Share2 } from 'lucide-react';
+import { Maximize2, Settings2, Search, ChevronDown, Clock } from 'lucide-react';
 import { fetchMarketData } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
 
@@ -25,6 +24,24 @@ export default function ChartUnit({
   const [localMasterData, setLocalMasterData] = useState([]);
   const [timeframe, setTimeframe] = useState(initialTf || '1D');
   const [showEth, setShowEth] = useState(false);
+
+  // Custom UI State
+  const [isTickerOpen, setIsTickerOpen] = useState(false);
+  const [isTfOpen, setIsTfOpen] = useState(false);
+  const [tickerSearch, setTickerSearch] = useState('');
+  
+  const tickerRef = useRef();
+  const tfRef = useRef();
+
+  // Click outside detection
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (tickerRef.current && !tickerRef.current.contains(e.target)) setIsTickerOpen(false);
+      if (tfRef.current && !tfRef.current.contains(e.target)) setIsTfOpen(false);
+    };
+    window.addEventListener('mousedown', handleClick);
+    return () => window.removeEventListener('mousedown', handleClick);
+  }, []);
 
   // 0. Fetch local master data
   useEffect(() => {
@@ -201,29 +218,97 @@ export default function ChartUnit({
     }
   }, [chartData, isReplayMode]);
 
+  const filteredTickers = tickers.filter(t => t.toLowerCase().includes(tickerSearch.toLowerCase()));
+
   return (
     <div className="chart-card">
       <div className="chart-header">
         <div className="chart-controls">
-          <select value={ticker} onChange={(e) => setTicker(e.target.value)}>
-            {tickers.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
-            <option value="1min">1m</option>
-            <option value="5min">5m</option>
-            <option value="15min">15m</option>
-            <option value="30min">30m</option>
-            <option value="1H">1h</option>
-            <option value="1D">1d</option>
-          </select>
-          <div style={{display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: 'var(--text-secondary)'}}>
-            <input type="checkbox" checked={showEth} onChange={(e) => setShowEth(e.target.checked)} id={`eth-${id}`} />
-            <label htmlFor={`eth-${id}`}>ETH</label>
+          
+          {/* CUSTOM TICKER SELECT */}
+          <div className="custom-dropdown-container" ref={tickerRef}>
+            <div 
+              className={`custom-select ${isTickerOpen ? 'active' : ''}`} 
+              onClick={() => setIsTickerOpen(!isTickerOpen)}
+            >
+              <Search size={14} className="text-secondary" />
+              <span style={{fontWeight: '700'}}>{ticker}</span>
+              <ChevronDown size={14} className="text-secondary" />
+            </div>
+            
+            {isTickerOpen && (
+              <div className="dropdown-menu">
+                <div className="dropdown-search">
+                  <input 
+                    autoFocus 
+                    placeholder="Search symbols..." 
+                    value={tickerSearch} 
+                    onChange={(e) => setTickerSearch(e.target.value)}
+                  />
+                </div>
+                <div className="dropdown-items">
+                  {filteredTickers.map(t => (
+                    <div 
+                      key={t} 
+                      className={`dropdown-item ${t === ticker ? 'selected' : ''}`}
+                      onClick={() => {
+                        setTicker(t);
+                        setIsTickerOpen(false);
+                        setTickerSearch('');
+                      }}
+                    >
+                      {t}
+                    </div>
+                  ))}
+                  {filteredTickers.length === 0 && <div className="dropdown-item" style={{opacity: 0.5}}>No results</div>}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* CUSTOM TIMEFRAME SELECT */}
+          <div className="custom-dropdown-container" ref={tfRef}>
+            <div 
+              className={`custom-select ${isTfOpen ? 'active' : ''}`} 
+              onClick={() => setIsTfOpen(!isTfOpen)}
+            >
+              <Clock size={14} className="text-secondary" />
+              <span>{timeframe.replace('min', 'm')}</span>
+              <ChevronDown size={14} className="text-secondary" />
+            </div>
+            
+            {isTfOpen && (
+              <div className="dropdown-menu" style={{minWidth: '100px'}}>
+                <div className="dropdown-items">
+                  {['1min', '5min', '15min', '30min', '1H', '1D'].map(tf => (
+                    <div 
+                      key={tf} 
+                      className={`dropdown-item ${tf === timeframe ? 'selected' : ''}`}
+                      onClick={() => {
+                        setTimeframe(tf);
+                        setIsTfOpen(false);
+                      }}
+                    >
+                      {tf.replace('min', 'm')}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* PREMIUM ETH TOGGLE */}
+          <div className="switch-container" onClick={() => setShowEth(!showEth)}>
+            <div className={`switch-track ${showEth ? 'active' : ''}`}>
+              <div className="switch-thumb" />
+            </div>
+            <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>ETH</span>
           </div>
         </div>
+        
         <div className="chart-actions">
-           <button className="btn-icon"><Maximize2 size={14} /></button>
-           <button className="btn-icon"><Settings2 size={14} /></button>
+           <button className="btn-icon"><Maximize2 size={16} /></button>
+           <button className="btn-icon"><Settings2 size={16} /></button>
         </div>
       </div>
       <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
