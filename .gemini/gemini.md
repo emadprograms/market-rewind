@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v6.1 - Refined Perceptual Zoom)
+## Project State: COMPLETED (v6.2 - Professional Session Shading)
 
 Market Rewind is a zero-read, local-first market replay tool. It operates entirely within the user's browser, eliminating Turso "Rows Read" costs, avoiding network fetching errors, and bypassing Vercel compute costs.
 
@@ -8,23 +8,23 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
 - **Data Sync Utility (GitHub Actions)**: Manual trigger.
 - **Frontend Storage**: Uses Browser **OPFS**.
 - **WASM Engine**: **sql.js**.
-- **Read Strategy**: **Distributed Chart-Level Fetching**.
 
 ### 🚥 Component Breakdown
 
 #### Core Application (`src/`)
+- [x] `src/lib/timezones.js`:
+    - **ETF Reclassification**: SPY, QQQ, and other ETFs now correctly use `America/New_York` (ET) for accurate market hour detection.
+- [x] `src/lib/SessionShading.js`:
+    - **Session Shading Engine**: A custom Lightweight Charts primitive that draws subtle background highlights during Pre/Post market sessions. Features robust DST handling using `Intl.DateTimeFormat`.
 - [x] `src/components/ChartUnit.jsx`:
-    - **Perception-Aware Initial Zoom (Fixed)**: Implemented a 50ms stabilization delay to ensure zoom is applied correctly after data load. Adjusted 1D zoom to **80 bars** for weightier, more readable candles.
-    - **True Full Screen Mode**: Fills window while keeping playback controls accessible at the bottom (48px bar).
-    - **Ergonomic Header**: Compact, functional controls.
-- [x] `src/App.jsx`:
-    - **Maximized Logic**: Supports deep-focus views.
+    - **1D Perceptual Zoom (Fixed)**: Daily charts now load with a standard **50-bar** view, ensuring candles look 'thick' and professional on all screens.
+    - **Shading Integration**: Automatically activates shading for ET-bound assets when ETH is toggled ON.
 - [x] `src/index.css`:
-    - **High-Density Workspace**: Gaps and padding reduced to **3px**.
-    - **Ultra-Slim Playback Bar**: Height reduced to **48px**.
+    - **High-Density Workspace**: 3px gaps.
+    - **Ultra-Slim Playback Bar**: 48px height.
 
 ### 📦 Key Dependencies
-- **Frontend**: `sql.js` (SQLite WASM), `lightweight-charts`, `lucide-react`, `react`.
+- **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
 ---
 *Last Update: 2026-04-13*

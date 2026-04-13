@@ -4,6 +4,7 @@ import { resampleData } from '../lib/resampling';
 import { Maximize2, Minimize2, Search, ChevronDown, Clock } from 'lucide-react';
 import { fetchMarketData } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
+import { SessionShadingPlugin } from '../lib/SessionShading';
 
 export default function ChartUnit({ 
   id, 
@@ -23,6 +24,7 @@ export default function ChartUnit({
   const priceSeriesRef = useRef();
   const volumeSeriesRef = useRef();
   const lastDataCountRef = useRef(0);
+  const shadingPluginRef = useRef(null);
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [localMasterData, setLocalMasterData] = useState([]);
@@ -105,9 +107,16 @@ export default function ChartUnit({
       handleScale: true,
     });
 
+    const tz = getTzForTicker(ticker);
+    const isET = tz === 'America/New_York';
+
     priceSeriesRef.current = chartRef.current.addCandlestickSeries({
       upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
     });
+
+    // Attach Shading Plugin
+    shadingPluginRef.current = new SessionShadingPlugin(timeframe, isET && showEth);
+    priceSeriesRef.current.attachPrimitive(shadingPluginRef.current);
     
     // Ensure Candlesticks don't overlap the bottom volume
     chartRef.current.priceScale('right').applyOptions({
@@ -222,7 +231,7 @@ export default function ChartUnit({
             '15min': 60,   // ~2 days
             '30min': 50,   // ~4 days
             '1H': 60,      // ~2 weeks
-            '1D': 80       // ~4 months (Thicker candles)
+            '1D': 50       // ~2.5 months (Very thick candles)
           };
           const count = zoomMap[timeframe] || 100;
           
@@ -234,7 +243,7 @@ export default function ChartUnit({
                 to: total
               });
             }
-          }, 50);
+          }, 80); // Increased slightly for robustness
         }
       }
 
@@ -244,7 +253,16 @@ export default function ChartUnit({
         volumeSeriesRef.current.setData([]);
         lastDataCountRef.current = 0;
     }
-  }, [chartData, isReplayMode]);
+
+    // Refresh shading plugin settings
+    if (shadingPluginRef.current) {
+        const tz = getTzForTicker(ticker);
+        const isET = tz === 'America/New_York';
+        shadingPluginRef.current._timeframe = timeframe;
+        shadingPluginRef.current._isET = isET && showEth;
+        shadingPluginRef.current.updateAllViews();
+    }
+  }, [chartData, isReplayMode, ticker, timeframe, showEth]);
 
   const filteredTickers = tickers.filter(t => t.toLowerCase().includes(tickerSearch.toLowerCase()));
 
