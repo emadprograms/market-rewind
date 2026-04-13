@@ -14,10 +14,8 @@ export default function ChartUnit({
   initialTf 
 }) {
   const chartContainerRef = useRef();
-  const volumeContainerRef = useRef();
   
-  const priceChartRef = useRef();
-  const volumeChartRef = useRef();
+  const chartRef = useRef();
   const priceSeriesRef = useRef();
   const volumeSeriesRef = useRef();
   const lastDataCountRef = useRef(0);
@@ -48,26 +46,19 @@ export default function ChartUnit({
     return resampled;
   }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
 
-  const chartOptions = {
-    layout: {
-      background: { color: 'transparent' },
-      textColor: '#94a3b8',
-      attributionLogo: false,
-    },
-    grid: {
-      vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
-      horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
-    },
-    crosshair: { mode: 0 },
-    handleScroll: true,
-    handleScale: true,
-  };
-
   // 2. Initialize Charts
   useEffect(() => {
-    // --- Price Chart ---
-    priceChartRef.current = createChart(chartContainerRef.current, {
-      ...chartOptions,
+    chartRef.current = createChart(chartContainerRef.current, {
+      layout: {
+        background: { color: 'transparent' },
+        textColor: '#94a3b8',
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+      },
+      crosshair: { mode: 0 },
       localization: {
         timeFormatter: (time) => {
           const date = new Date(time * 1000);
@@ -86,57 +77,38 @@ export default function ChartUnit({
           return date.toLocaleString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false });
         }
       },
+      handleScroll: true,
+      handleScale: true,
     });
 
-    priceSeriesRef.current = priceChartRef.current.addCandlestickSeries({
+    priceSeriesRef.current = chartRef.current.addCandlestickSeries({
       upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
     });
-
-    // --- Volume Chart ---
-    volumeChartRef.current = createChart(volumeContainerRef.current, {
-      ...chartOptions,
-      timeScale: {
-        visible: true,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        shiftVisibleRangeOnNewBar: false,
+    
+    // Ensure Candlesticks don't overlap the bottom volume
+    chartRef.current.priceScale('right').applyOptions({
+      scaleMargins: {
+        top: 0.1,
+        bottom: 0.25, // Leaves the bottom 25% empty
       },
     });
 
-    volumeSeriesRef.current = volumeChartRef.current.addHistogramSeries({
+    volumeSeriesRef.current = chartRef.current.addHistogramSeries({
       priceFormat: { type: 'volume' },
+      priceScaleId: '', // Overlay on the same chart, different axis
     });
-
-    // --- Synchronization ---
-    const priceTimeScale = priceChartRef.current.timeScale();
-    const volumeTimeScale = volumeChartRef.current.timeScale();
-
-    let isSyncing = false;
-    priceTimeScale.subscribeVisibleTimeRangeChange(range => {
-       if (isSyncing || !range || !volumeChartRef.current) return;
-       isSyncing = true;
-       try {
-         volumeChartRef.current.timeScale().setVisibleRange(range);
-       } catch (e) {
-         console.warn("Sync failed: Volume scale not ready");
-       }
-       isSyncing = false;
-    });
-
-    volumeTimeScale.subscribeVisibleTimeRangeChange(range => {
-       if (isSyncing || !range || !priceChartRef.current) return;
-       isSyncing = true;
-       try {
-         priceChartRef.current.timeScale().setVisibleRange(range);
-       } catch (e) {
-         console.warn("Sync failed: Price scale not ready");
-       }
-       isSyncing = false;
+    
+    // Lock volume to the bottom 20% of the chart
+    volumeSeriesRef.current.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.8, // Start at 80% down
+        bottom: 0,
+      },
     });
 
     const handleResize = () => {
-      if (chartContainerRef.current && volumeContainerRef.current) {
-        priceChartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight });
-        volumeChartRef.current.applyOptions({ width: volumeContainerRef.current.clientWidth, height: volumeContainerRef.current.clientHeight });
+      if (chartContainerRef.current) {
+        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight });
       }
     };
 
@@ -145,8 +117,7 @@ export default function ChartUnit({
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      priceChartRef.current.remove();
-      volumeChartRef.current.remove();
+      chartRef.current.remove();
     };
   }, []);
 
@@ -192,8 +163,7 @@ export default function ChartUnit({
           color: close >= open ? '#26a69a' : '#ef5350'
         })));
 
-        // FIX: Force price scale to reset to auto-range when a new symbol is loaded
-        priceChartRef.current.priceScale('right').applyOptions({ autoScale: true });
+        chartRef.current.priceScale('right').applyOptions({ autoScale: true });
       }
 
       lastDataCountRef.current = formatted.length;
@@ -229,10 +199,8 @@ export default function ChartUnit({
            <button className="btn-icon"><Settings2 size={14} /></button>
         </div>
       </div>
-      <div className="chart-panes">
-        <div ref={chartContainerRef} className="pane-price" />
-        <div className="pane-separator" />
-        <div ref={volumeContainerRef} className="pane-volume" />
+      <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div ref={chartContainerRef} style={{ flex: 1, position: 'relative' }} />
       </div>
     </div>
   );
