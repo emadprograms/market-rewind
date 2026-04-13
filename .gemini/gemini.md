@@ -24,7 +24,7 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - Extracts `tickers` via guaranteed dynamic `SELECT DISTINCT symbol` query.
     - Fetches historical chart data inclusive of all previous available days `timestamp <= [selectedDate] 23:59:59` to render broader context.
 - [x] `src/App.jsx`:
-    - **Anti-Bias Session Entry**: A full-screen glassmorphism landing overlay explicitly demands a Target Date and Start Time (defaults to 13:30 UTC) before rendering any charts, comprehensively preventing look-ahead bias.
+    - **Anti-Bias Session Entry**: A full-screen glassmorphism landing overlay explicitly demands a Target Date and Start Time (defaults to 13:29 UTC) before rendering any charts, comprehensively preventing look-ahead bias. The app uses a 24-hour clock throughout.
     - **Toggleable Sidebar UI**: Contains File UI, Grid Selection, Reset Session logic, and explicit GitHub external URL.
     - **Intuitive Toggles**: Features a 'Collapse' button inside the sidebar and a floating 'Expand' button in the workspace for 100% full-screen chart focus.
 - [x] `src/components/ChartUnit.jsx`:

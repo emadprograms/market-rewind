@@ -19,7 +19,7 @@ export default function App() {
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSessionStarted, setIsSessionStarted] = useState(false);
-  const [entryTime, setEntryTime] = useState('13:30');
+  const [entryTime, setEntryTime] = useState('13:29');
   
   const playbackRef = useRef();
 
@@ -154,7 +154,7 @@ export default function App() {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: true
+      hour12: false
     }) + ' UTC';
   };
 
