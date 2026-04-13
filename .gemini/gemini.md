@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v6.7 - Stability & Context Anchoring)
+## Project State: COMPLETED (v6.7 - Visible Range Volume Profile)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -26,13 +26,20 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Ultra-Slim Aesthetics**:
         - **Chart Header**: 2px vertical padding.
         - **Playback Bar**: 40px total height.
-27: - [x] `src/lib/SessionShading.js`:
-28:     - **TradingView Session Shading**: 
-29:         - Pre-Market: Warm Yellow (`rgba(255, 210, 0, 0.07)`).
-30:         - Post-Market: Cool Blue (`rgba(0, 130, 255, 0.07)`).
-31:         - RTH: Transparent (unshaded).
-32:         - Night/Extended: Subtle neutral (`rgba(255, 255, 255, 0.03)`).
-33:     - **DST Aware**: Uses `Intl.DateTimeFormat` for robust NY timezone handling.
+- [x] `src/lib/SessionShading.js`:
+    - **TradingView Session Shading**: 
+        - Pre-Market: Warm Yellow (`rgba(255, 210, 0, 0.07)`).
+        - Post-Market: Cool Blue (`rgba(0, 130, 255, 0.07)`).
+        - RTH: Transparent (unshaded).
+        - Night/Extended: Subtle neutral (`rgba(255, 255, 255, 0.03)`).
+    - **DST Aware**: Uses `Intl.DateTimeFormat` for robust NY timezone handling.
+- [x] `src/lib/VolumeProfilePlugin.js`:
+    - **Visible Range Volume Profile (VRVP)**:
+        - Dynamically computes volume-at-price distribution for the visible chart range.
+        - 70-bin histogram anchored to right edge, max 25% chart width.
+        - **Point of Control (POC)** highlighted in yellow (`rgba(255, 210, 0, 0.8)`).
+        - Cache-aware: skips recomputation when logical range hasn't changed.
+        - Toggled via `VP` switch in chart header (next to ETH toggle).
 
 ### 📦 Key Dependencies
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
