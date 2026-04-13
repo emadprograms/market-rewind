@@ -29,7 +29,7 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - **Intuitive Toggles**: Features a 'Collapse' button inside the sidebar and a floating 'Expand' button in the workspace for 100% full-screen chart focus.
 - [x] `src/components/ChartUnit.jsx`:
     - **Single-Pane Volume Separation**: Reverted to a high-performance single-chart architecture but mathematically scaled volume to perfectly occupy the bottom 25% of the chart without overlapping price candles. This preserves 100% fluid, kinetic panning and zooming physics natively.
-    - **Native Ray Drawing (Alt+R)**: Re-engineered TradingView's Horizontal Ray feature identically natively. Users hover over a candlestick, press `Alt+R`, and a solid golden line projects infinitely to the right, perfectly tracking new candles during playback setups.
+    - **Responsive Canvas Sizing**: Implemented a localized `ResizeObserver` on the chart container. Whenever the sidebar is expanded or minimized, the chart dynamically re-calculates its own dimensions to instantly fill 100% of the newly available real estate without waiting for a global window resize event.
     - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes, ensuring that switching between stocks always auto-centers the data.
     - Applies a **Strict UTC Parsing Strategy** across data handling and LightweightCharts localization formats so UTC timestamps from the DB display correctly regardless of the user's physical timezone.
     - **Smooth Replay Engine**: Implemented an incremental `.update()` logic and explicitly disabled `shiftVisibleRangeOnNewBar` while adding a 15-bar `rightOffset`. This prevents the viewport from snapping to the right edge during replay, preserving the user's custom zoom/scroll position and giving price action breathing room.
@@ -41,6 +41,10 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
 ### 📦 Key Dependencies
 - **Frontend**: `sql.js` (SQLite WASM), `lightweight-charts`, `lucide-react`, `react`.
 - **Backend**: `libsql` (Python).
+
+---
+> **🚨 MANDATORY SYSTEM DIRECTIVE**
+> **Whenever ANY code change, feature addition, bug fix, or architectural modification is made to this project, this `gemini.md` file MUST be updated to reflect the new state, regardless of whether the user explicitly asks for it or not.**
 
 ---
 *Last Update: 2026-04-13*
