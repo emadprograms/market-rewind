@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
-import { Maximize2, Settings2, Search, ChevronDown, Clock } from 'lucide-react';
+import { Maximize2, Minimize2, Search, ChevronDown, Clock } from 'lucide-react';
 import { fetchMarketData } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
 
@@ -12,8 +12,9 @@ export default function ChartUnit({
   isReplayMode, 
   tickers, 
   initialTicker, 
-  initialTf,
-  initialEth
+  initialEth,
+  onToggleMaximize,
+  isMaximized
 }) {
   const chartContainerRef = useRef();
   
@@ -315,8 +316,9 @@ export default function ChartUnit({
         </div>
         
         <div className="chart-actions">
-           <button className="btn-icon"><Maximize2 size={16} /></button>
-           <button className="btn-icon"><Settings2 size={16} /></button>
+           <button className="btn-icon" onClick={onToggleMaximize} title={isMaximized ? "Minimize" : "Maximize"}>
+             {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+           </button>
         </div>
       </div>
       <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>

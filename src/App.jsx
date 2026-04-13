@@ -22,6 +22,7 @@ export default function App() {
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [entryTime, setEntryTime] = useState('13:29');
   const [sessionTicker, setSessionTicker] = useState('SPY');
+  const [maximizedId, setMaximizedId] = useState(null);
   
   const playbackRef = useRef();
 
@@ -288,7 +289,8 @@ export default function App() {
               No trading data found for {selectedDate}.
             </div>
           ) : (
-            Array.from({ length: gridSize }).map((_, i) => {
+            // If a chart is maximized, only render that specific ID in a full grid
+            (maximizedId !== null ? [maximizedId] : Array.from({ length: gridSize }).map((_, i) => i)).map((i) => {
               const hasSPY = tickers.includes('SPY');
               const leftTicker = i === 0 ? (hasSPY ? 'SPY' : sessionTicker) : sessionTicker;
               
@@ -303,6 +305,8 @@ export default function App() {
                   initialTicker={leftTicker}
                   initialTf={i === 0 ? '1D' : '5min'}
                   initialEth={i !== 0}
+                  onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
+                  isMaximized={maximizedId === i}
                 />
               );
             })
