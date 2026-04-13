@@ -12,6 +12,7 @@ export default function ChartUnit({
   isReplayMode, 
   tickers, 
   initialTicker, 
+  initialTf,
   initialEth,
   onToggleMaximize,
   isMaximized
