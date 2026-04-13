@@ -212,6 +212,24 @@ export default function ChartUnit({
         })));
 
         chartRef.current.priceScale('right').applyOptions({ autoScale: true });
+
+        // Perception-aware initial zoom
+        const total = formatted.length;
+        if (total > 0) {
+          const zoomMap = {
+            '1min': 120,   // ~2 hours
+            '5min': 78,    // 1 full RTH session
+            '15min': 60,   // ~2 days
+            '30min': 50,   // ~4 days
+            '1H': 60,      // ~2 weeks
+            '1D': 120      // ~6 months
+          };
+          const count = zoomMap[timeframe] || 100;
+          chartRef.current.timeScale().setVisibleLogicalRange({
+            from: total - count,
+            to: total
+          });
+        }
       }
 
       lastDataCountRef.current = formatted.length;
