@@ -223,7 +223,7 @@ export default function App() {
       <aside className={`sidebar ${isSidebarOpen ? '' : 'closed'}`} style={{ flexShrink: 0 }}>
         <div className="logo" style={{ justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Activity size={20} /> MARKET<span>REWIND</span>
+            <Activity size={18} /> MARKET<span>REWIND</span>
           </div>
           <button className="btn-icon" onClick={() => setIsSidebarOpen(false)} title="Close Sidebar">
             <Menu size={16} />
