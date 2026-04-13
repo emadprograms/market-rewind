@@ -208,6 +208,12 @@ export default function ChartUnit({
         });
       } else {
         // Full reset (e.g. timeframe change or symbol change)
+        const isUpdate = lastDataCountRef.current > 0;
+        let timeRangeToRestore = null;
+        
+        if (isUpdate && chartRef.current) {
+            timeRangeToRestore = chartRef.current.timeScale().getVisibleRange();
+        }
 
         priceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
           time, open, high, low, close
@@ -221,26 +227,29 @@ export default function ChartUnit({
 
         chartRef.current.priceScale('right').applyOptions({ autoScale: true });
         
-        // Perception-aware initial zoom
+        // Perception-aware initial zoom OR restore previous view
         const total = formatted.length;
         if (total > 0) {
-          const zoomMap = {
-            '1min': 120,   // ~2 hours
-            '5min': 78,    // 1 full RTH session
-            '15min': 60,   // ~2 days
-            '30min': 50,   // ~4 days
-            '1H': 60,      // ~2 weeks
-            '1D': 50       // ~2.5 months (Very thick candles)
-          };
-          const count = zoomMap[timeframe] || 100;
-          
-          // Small delay to ensure coordinate system is ready after setData
           setTimeout(() => {
-            if (chartRef.current) {
-              chartRef.current.timeScale().setVisibleLogicalRange({
-                from: total - count,
-                to: total
-              });
+            if (!chartRef.current) return;
+            
+            if (timeRangeToRestore && timeRangeToRestore.from !== null) {
+                chartRef.current.timeScale().setVisibleRange(timeRangeToRestore);
+            } else {
+                const zoomMap = {
+                  '1min': 120,   // ~2 hours
+                  '5min': 78,    // 1 full RTH session
+                  '15min': 60,   // ~2 days
+                  '30min': 50,   // ~4 days
+                  '1H': 60,      // ~2 weeks
+                  '1D': 50       // ~2.5 months (Very thick candles)
+                };
+                const count = zoomMap[timeframe] || 100;
+                
+                chartRef.current.timeScale().setVisibleLogicalRange({
+                  from: total - count,
+                  to: total
+                });
             }
           }, 80); // Increased slightly for robustness
         }
