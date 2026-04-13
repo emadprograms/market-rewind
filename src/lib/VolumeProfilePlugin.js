@@ -13,9 +13,8 @@ class VolumeProfileRenderer {
             ctx.save();
             ctx.globalAlpha = 0.85;
 
-            // Anchor to the right edge
-            // In lw-charts, right edge of the chart (before scale axis) is scope.mediaSize.width
-            const rightEdge = scope.mediaSize.width;
+            // Anchor to the left edge
+            const leftEdge = 0;
 
             for (const bin of bins) {
                 // Determine colors based on POC
@@ -26,9 +25,9 @@ class VolumeProfileRenderer {
                 }
 
                 const width = bin.width;
-                // Draw rectangle originating from rightEdge going left
+                // Draw rectangle originating from leftEdge going right
                 ctx.fillRect(
-                    rightEdge - width, 
+                    leftEdge, 
                     bin.y - boxHeight / 2, 
                     width, 
                     Math.max(1, boxHeight - 1) // Leave a 1px gap for clarity
@@ -38,7 +37,7 @@ class VolumeProfileRenderer {
                 if (bin.isPOC) {
                     ctx.fillStyle = 'rgba(255, 210, 0, 0.8)';
                     ctx.fillRect(
-                        rightEdge - width, 
+                        leftEdge, 
                         bin.y - 1, 
                         width, 
                         2

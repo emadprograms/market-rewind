@@ -36,7 +36,7 @@ Market Rewind is a zero-read, local-first market replay tool.
 - [x] `src/lib/VolumeProfilePlugin.js`:
     - **Visible Range Volume Profile (VRVP)**:
         - Dynamically computes volume-at-price distribution for the visible chart range.
-        - 70-bin histogram anchored to right edge, max 25% chart width.
+        - 70-bin histogram anchored to left edge, max 25% chart width.
         - **Point of Control (POC)** highlighted in yellow (`rgba(255, 210, 0, 0.8)`).
         - Cache-aware: skips recomputation when logical range hasn't changed.
         - Toggled via `VP` switch in chart header (next to ETH toggle).
