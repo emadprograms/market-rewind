@@ -225,7 +225,7 @@ export default function ChartUnit({
   const filteredTickers = tickers.filter(t => t.toLowerCase().includes(tickerSearch.toLowerCase()));
 
   return (
-    <div className="chart-card">
+    <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`}>
       <div className="chart-header">
         <div className="chart-controls">
           

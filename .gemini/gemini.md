@@ -1,31 +1,27 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v5.7 - Ergonomic Workspace & Maximize)
+## Project State: COMPLETED (v5.8 - Ultra-Compact & True Full Screen)
 
 Market Rewind is a zero-read, local-first market replay tool. It operates entirely within the user's browser, eliminating Turso "Rows Read" costs, avoiding network fetching errors, and bypassing Vercel compute costs.
 
 ### 🏗️ Architecture Map
-- **Data Sync Utility (GitHub Actions)**: Manual trigger. Pulls from Turso once using libSQL, then uploads `market_data.db` as a **GitHub Release** asset.
-- **Frontend Storage**: Uses Browser **OPFS** (Origin Private File System) for lightning-fast database access.
-- **Manual Upload Workflow**: Instead of automatic fetching (which caused massive CORS/Vite/CDN/Vercel failures), the user downloads the latest release and manually uploads the `.db` file into the sidebar UI once. OPFS persists it across sessions.
+- **Data Sync Utility (GitHub Actions)**: Manual trigger.
+- **Frontend Storage**: Uses Browser **OPFS** (Origin Private File System).
 - **WASM Engine**: **sql.js** (Self-hosted).
-- **Read Strategy**: **Distributed Chart-Level Fetching**. Each `ChartUnit` is responsible for fetching its own raw data based on its locally selected symbol.
-- **Data Storage**: **0 Turso Reads** for end-users. Turso is only touched during your manual sync.
+- **Read Strategy**: **Distributed Chart-Level Fetching**.
 
 ### 🚥 Component Breakdown
 
 #### Core Application (`src/`)
 - [x] `src/App.jsx`:
-    - **Functional Maximize**: Implemented `maximizedId` state to toggle between Grid View and single-chart Focus View.
-    - **Trade Ticker Selection**: Focus ticker selector on landing page.
-    - **Default Dual-Chart Layout**: Standardized 2-chart start.
+    - **Maximized Logic**: Toggles `maximizedId` to switch between multi-chart and focus views.
 - [x] `src/components/ChartUnit.jsx`:
-    - **Ergonomic Header**: Removed the settings button and implemented the Maximize/Minimize toggle.
-    - **Premium UI (Option B)**: Custom glassmorphism dropdowns with symbol search.
-    - **Dropdown Stability Fix**: Implemented `e.stopPropagation()` for reliable interaction.
+    - **True Full Screen Mode**: Applies the `is-maximized` class to fill the entire window viewport.
+    - **Ergonomic Header**: Compact controls with functional maximize/minimize state.
 - [x] `src/index.css`:
-    - **Razor-Thin Header**: Reduced padding to `4px 10px` and shrunk switches/icons for a professional trading terminal feel.
-    - **Dropdown Positioning Fix**: Correctly anchored menus using `position: relative`.
+    - **Ultra-Compact Workspace**: Padding and gaps reduced to **4px** to maximize chart visibility.
+    - **Slim Playback Bar**: Height reduced to **56px** to save vertical space.
+    - **Full Screen Layer**: `.chart-card.is-maximized` uses `fixed` positioning with `z-index: 9999` to cover all other UI elements (sidebar/playback).
 
 ### 📦 Key Dependencies
 - **Frontend**: `sql.js` (SQLite WASM), `lightweight-charts`, `lucide-react`, `react`.
