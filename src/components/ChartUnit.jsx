@@ -107,7 +107,6 @@ export default function ChartUnit({
       handleScale: true,
     });
 
-    const tz = getTzForTicker(ticker);
     const isET = tz === 'America/New_York';
 
     priceSeriesRef.current = chartRef.current.addCandlestickSeries({
