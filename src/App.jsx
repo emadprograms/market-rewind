@@ -206,18 +206,23 @@ export default function App() {
                     { id: '2v', class: 'l2v' },
                     { id: '2h', class: 'l2h' },
                     { id: '3', class: 'l3' },
+                    { id: '3b', class: 'l3b' },
+                    { id: '3l', class: 'l3l' },
+                    { id: '3r', class: 'l3r' },
+                    { id: '3h', class: 'l3h' },
+                    { id: '3v', class: 'l3v' },
                     { id: '4', class: 'l4' }
                   ].map(l => (
                     <div 
                       key={l.id} 
                       className={`layout-icon ${l.class} ${layoutMode === l.id ? 'active' : ''}`}
                       onClick={() => setLayoutMode(l.id)}
-                      title={`Layout ${l.id}`}
+                      title={`Layout ${l.id.toUpperCase()}`}
                     >
                       {l.id === '1' && <div />}
                       {l.id === '2v' && <><div/><div/></>}
                       {l.id === '2h' && <><div/><div/></>}
-                      {l.id === '3' && <><div/><div/><div/></>}
+                      {l.id.startsWith('3') && <><div/><div/><div/></>}
                       {l.id === '4' && <><div/><div/><div/><div/></>}
                     </div>
                   ))}
@@ -289,7 +294,7 @@ export default function App() {
           ) : (
             // Active Replay Charts
             (() => {
-              const gridCount = layoutMode === '1' ? 1 : (layoutMode.startsWith('2') ? 2 : (layoutMode === '3' ? 3 : 4));
+              const gridCount = layoutMode === '1' ? 1 : (layoutMode.startsWith('2') ? 2 : (layoutMode.startsWith('3') ? 3 : 4));
               
               return (maximizedId !== null ? [maximizedId] : Array.from({ length: gridCount }).map((_, i) => i)).map((i) => {
                 const hasSPY = tickers.includes('SPY');
