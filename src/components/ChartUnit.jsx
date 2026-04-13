@@ -3,6 +3,7 @@ import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
 import { Maximize2, Settings2, Share2 } from 'lucide-react';
 import { fetchMarketData } from '../lib/db';
+import { getTzForTicker } from '../lib/timezones';
 
 export default function ChartUnit({ 
   id, 
@@ -48,6 +49,8 @@ export default function ChartUnit({
 
   // 2. Initialize Charts
   useEffect(() => {
+    const tz = getTzForTicker(ticker);
+
     chartRef.current = createChart(chartContainerRef.current, {
       layout: {
         background: { color: 'transparent' },
@@ -62,7 +65,7 @@ export default function ChartUnit({
       localization: {
         timeFormatter: (time) => {
           const date = new Date(time * 1000);
-          return date.toLocaleString('en-US', { timeZone: 'UTC', hour12: false, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          return date.toLocaleString('en-US', { timeZone: tz, hour12: false, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
       },
       timeScale: {
@@ -73,8 +76,8 @@ export default function ChartUnit({
         rightOffset: 15,
         tickMarkFormatter: (time, tickMarkType) => {
           const date = new Date(time * 1000);
-          if (tickMarkType <= 2) return date.toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
-          return date.toLocaleString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false });
+          if (tickMarkType <= 2) return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric' });
+          return date.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
         }
       },
       handleScroll: true,
@@ -122,6 +125,27 @@ export default function ChartUnit({
       chartRef.current.remove();
     };
   }, []);
+
+  // Update chart timezone options when ticker changes
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const tz = getTzForTicker(ticker);
+    chartRef.current.applyOptions({
+      localization: {
+        timeFormatter: (time) => {
+          const date = new Date(time * 1000);
+          return date.toLocaleString('en-US', { timeZone: tz, hour12: false, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+      },
+      timeScale: {
+        tickMarkFormatter: (time, tickMarkType) => {
+          const date = new Date(time * 1000);
+          if (tickMarkType <= 2) return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric' });
+          return date.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+      }
+    });
+  }, [ticker]);
 
   // 3. Update Chart Data
   useEffect(() => {

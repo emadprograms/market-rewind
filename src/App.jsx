@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink, Menu } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
 import { fetchTickers, fetchMarketData, loadDatabaseFromFile, isDBLoaded, initDB } from './lib/db';
+import { getTzForTicker, getTzLabel } from './lib/timezones';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -144,18 +145,18 @@ export default function App() {
 
   const formatDisplayTime = (isoStr) => {
     if (!isoStr) return '--:--:--';
+    const tz = getTzForTicker(tickers[0]);
+    const label = getTzLabel(tz);
+
     // isoStr is "2026-04-09 09:30:00". Append Z to parse identically without local shift.
     const date = new Date(isoStr.replace(' ', 'T') + 'Z');
     return date.toLocaleString('en-US', { 
-      timeZone: 'UTC',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+      timeZone: tz,
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
       hour12: false
-    }) + ' UTC';
+    }) + ` ${label}`;
   };
 
   return (
@@ -262,7 +263,9 @@ export default function App() {
                      <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{fontSize: '1rem', padding: '10px'}} />
                    </div>
                    <div>
-                     <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>Start Time (UTC)</label>
+                     <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>
+                       Start Time ({getTzLabel(getTzForTicker(tickers[0]))})
+                     </label>
                      <input type="time" value={entryTime} onChange={(e) => setEntryTime(e.target.value)} style={{fontSize: '1rem', padding: '10px'}} />
                    </div>
                    <button className="btn-primary" onClick={() => setIsSessionStarted(true)} style={{marginTop: '12px', justifyContent: 'center', padding: '12px'}}>

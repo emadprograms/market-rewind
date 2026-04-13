@@ -19,23 +19,24 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
 - [x] `.github/workflows/market_backend.yml`: Manual sync utility with GitHub CLI release management.
 
 #### Core Application (`src/`)
+- [x] `src/lib/timezones.js`:
+    - **Dynamic Ticker-Based Detection**: New classification utility that heuristically distinguishes between US Stocks (mapped to `America/New_York`) and Global Assets like ETFs or Crypto (mapped to `UTC`).
 - [x] `src/lib/db.js`:
     - Provides Manual Upload parser that writes `.db` ArrayBuffer into OPFS.
     - Extracts `tickers` via guaranteed dynamic `SELECT DISTINCT symbol` query.
     - Fetches historical chart data inclusive of all previous available days `timestamp <= [selectedDate] 23:59:59` to render broader context.
 - [x] `src/App.jsx`:
-    - **Anti-Bias Session Entry**: A full-screen glassmorphism landing overlay explicitly demands a Target Date and Start Time (defaults to 13:29 UTC) before rendering any charts, comprehensively preventing look-ahead bias. The app uses a 24-hour clock throughout.
+    - **Anti-Bias Session Entry**: A full-screen glassmorphism landing overlay explicitly demands a Target Date and Start Time (defaults to 13:29 UTC) before rendering any charts. The app's global clock and entry labels now dynamically switch between UTC and ET based on the primary ticker.
     - **Toggleable Sidebar UI**: Contains File UI, Grid Selection, Reset Session logic, and explicit GitHub external URL.
     - **Intuitive Toggles**: Features a 'Collapse' button inside the sidebar and a floating 'Expand' button in the workspace for 100% full-screen chart focus.
 - [x] `src/components/ChartUnit.jsx`:
-    - **Single-Pane Volume Separation**: Reverted to a high-performance single-chart architecture but mathematically scaled volume to perfectly occupy the bottom 25% of the chart without overlapping price candles. This preserves 100% fluid, kinetic panning and zooming physics natively.
+    - **Single-Pane Volume Separation**: Reverted to a high-performance single-chart architecture but mathematically scaled volume to perfectly occupy the bottom 25% of the chart without overlapping price candles.
+    - **Per-Chart Dynamic TZ**: Each chart unit independently localized its X-axis and price-line crosshair labels to the specific timezone of its ticker (ET for Stocks, UTC for ETFs/Crypto).
     - **Default Timeframe (1D)**: All new charts now initialize to the Daily timeframe by default to provide immediate high-level market context.
-    - **Responsive Canvas Sizing**: Implemented a localized `ResizeObserver` on the chart container. Whenever the sidebar is expanded or minimized, the chart dynamically re-calculates its own dimensions to instantly fill 100% of the newly available real estate without waiting for a global window resize event.
-    - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes, ensuring that switching between stocks always auto-centers the data.
-    - Applies a **Strict UTC Parsing Strategy** across data handling and LightweightCharts localization formats so UTC timestamps from the DB display correctly regardless of the user's physical timezone.
-    - **Smooth Replay Engine**: Implemented an incremental `.update()` logic and explicitly disabled `shiftVisibleRangeOnNewBar` while adding a 15-bar `rightOffset`. This prevents the viewport from snapping to the right edge during replay, preserving the user's custom zoom/scroll position and giving price action breathing room.
+    - **Responsive Canvas Sizing**: Implemented a localized `ResizeObserver` on the chart container for instant responsiveness.
+    - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes.
 - [x] `src/lib/resampling.js`:
-    - **Timeframe Aggregation**: Implemented robust logic to compile 5m, 15m, 30m, 1H, and 1D OHLCV bars from raw 1-minute records while maintaining format compatibility with the replay engine.
+    - **Timeframe Aggregation**: Implemented robust logic to compile 5m, 15m, 30m, 1H, and 1D OHLCV bars from raw 1-minute records.
 - [x] `package.json`: `postinstall` script securely caches standard WASM binary.
 - [x] `vite.config.js`: Excludes `sql.js` from pre-bundling.
 
