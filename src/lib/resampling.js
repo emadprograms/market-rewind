@@ -23,17 +23,28 @@ export function resampleData(data, timeframe) {
     const date = new Date(bar.time.replace(' ', 'T') + 'Z');
     const timestamp = date.getTime();
     
-    // Group into duration-sized buckets
-    const bucketStartMs = Math.floor(timestamp / (durationMin * 60000)) * (durationMin * 60000);
-    const bucketDate = new Date(bucketStartMs);
+    let bucketTimeStr;
     
-    // Format back to DB style "YYYY-MM-DD HH:MM:00" to keep replay engine happy
-    const yyyy = bucketDate.getUTCFullYear();
-    const mm = String(bucketDate.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(bucketDate.getUTCDate()).padStart(2, '0');
-    const hh = String(bucketDate.getUTCHours()).padStart(2, '0');
-    const min = String(bucketDate.getUTCMinutes()).padStart(2, '0');
-    const bucketTimeStr = `${yyyy}-${mm}-${dd} ${hh}:${min}:00`;
+    if (timeframe === '1D') {
+      // For daily candles, bucket by calendar date and use noon UTC.
+      // Using midnight UTC causes the chart to display the previous day
+      // when rendering in ET (UTC-4/5). Noon UTC stays on the same date in all US timezones.
+      const yyyy = date.getUTCFullYear();
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      bucketTimeStr = `${yyyy}-${mm}-${dd} 12:00:00`;
+    } else {
+      // For intraday, group into duration-sized buckets
+      const bucketStartMs = Math.floor(timestamp / (durationMin * 60000)) * (durationMin * 60000);
+      const bucketDate = new Date(bucketStartMs);
+      
+      const yyyy = bucketDate.getUTCFullYear();
+      const mm = String(bucketDate.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(bucketDate.getUTCDate()).padStart(2, '0');
+      const hh = String(bucketDate.getUTCHours()).padStart(2, '0');
+      const min = String(bucketDate.getUTCMinutes()).padStart(2, '0');
+      bucketTimeStr = `${yyyy}-${mm}-${dd} ${hh}:${min}:00`;
+    }
 
     if (!currentBucket || currentBucket.time !== bucketTimeStr) {
       if (currentBucket) resampled.push(currentBucket);
