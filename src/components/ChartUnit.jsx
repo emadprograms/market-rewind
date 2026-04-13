@@ -16,9 +16,10 @@ export default function ChartUnit({
   tickers, 
   initialTicker, 
   initialTf,
-  initialEth,
   onToggleMaximize,
-  isMaximized
+  isMaximized,
+  drawings = [],
+  onUpdateRays
 }) {
   const chartContainerRef = useRef();
   
@@ -36,7 +37,6 @@ export default function ChartUnit({
   const [showEth, setShowEth] = useState(initialEth || false);
   const [showVP, setShowVP] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const raysRef = useRef([]); // Array of { price, time }
 
   // Custom UI State
   const [isTickerOpen, setIsTickerOpen] = useState(false);
@@ -129,9 +129,11 @@ export default function ChartUnit({
     vpPluginRef.current = new VolumeProfilePlugin();
     priceSeriesRef.current.attachPrimitive(vpPluginRef.current);
 
-    // Attach Horizontal Ray Plugin
     rayPluginRef.current = new HorizontalRayPlugin();
     priceSeriesRef.current.attachPrimitive(rayPluginRef.current);
+    
+    // Initial sync
+    rayPluginRef.current.setRays(drawings);
     
     // Ensure Candlesticks don't overlap the bottom volume
     chartRef.current.priceScale('right').applyOptions({
@@ -195,9 +197,8 @@ export default function ChartUnit({
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && isHovered) {
         // Clear all rays on this chart
-        if (raysRef.current.length > 0) {
-          raysRef.current = [];
-          if (rayPluginRef.current) rayPluginRef.current.setRays([]);
+        if (drawings.length > 0) {
+          onUpdateRays([]);
         }
       }
     };
@@ -218,8 +219,7 @@ export default function ChartUnit({
       const price = series.coordinateToPrice(param.point.y);
       if (price === null || price === undefined) return;
 
-      raysRef.current.push({ price: price, time: param.time });
-      if (rayPluginRef.current) rayPluginRef.current.setRays([...raysRef.current]);
+      onUpdateRays([...drawings, { price, time: param.time }]);
     };
 
     const handleDblClick = (param) => {
@@ -230,7 +230,7 @@ export default function ChartUnit({
       // Find nearest ray within a tolerance
       let nearestIdx = -1;
       let nearestDist = Infinity;
-      raysRef.current.forEach((entry, idx) => {
+      drawings.forEach((entry, idx) => {
         const dist = Math.abs(entry.price - clickPrice);
         if (dist < nearestDist) {
           nearestDist = dist;
@@ -239,16 +239,17 @@ export default function ChartUnit({
       });
 
       if (nearestIdx !== -1) {
-        const ray = raysRef.current[nearestIdx];
+        const ray = drawings[nearestIdx];
         const rayY = series.priceToCoordinate(ray.price);
         const rayX = chart.timeScale().timeToCoordinate(ray.time);
         
         // Deletion criteria: 
         // 1. Within 10 pixels vertically
         // 2. To the right of the anchor point (X coord)
-        if (rayY !== null && Math.abs(rayY - param.point.y) < 10 && (param.point.x >= rayX - 5)) { 
-          raysRef.current.splice(nearestIdx, 1);
-          if (rayPluginRef.current) rayPluginRef.current.setRays([...raysRef.current]);
+        if (rayY !== null && Math.abs(rayY - param.point.y) < 10 && (param.point.x >= (rayX || 0) - 5)) { 
+          const newRays = [...drawings];
+          newRays.splice(nearestIdx, 1);
+          onUpdateRays(newRays);
         }
       }
     };
@@ -284,6 +285,13 @@ export default function ChartUnit({
       }
     });
   }, [ticker]);
+
+  // Update Ray Plugin when synced drawings change
+  useEffect(() => {
+    if (rayPluginRef.current) {
+        rayPluginRef.current.setRays(drawings);
+    }
+  }, [drawings]);
 
   // Update VP Enabled State
   useEffect(() => {

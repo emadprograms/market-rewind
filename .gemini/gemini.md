@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v6.8 - Horizontal Ray Drawing)
+## Project State: COMPLETED (v6.9 - Synced Anchored Rays)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -20,6 +20,8 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Horizontal Ray Drawing**:
         - `H` key toggles draw mode.
         - Click to place a **Horizontal Ray** (anchored to the click point and extends right).
+        - **Syncing**: Drawings are automatically synced across all charts for the same symbol.
+        - **Persistence**: Fixed rays disappearing when their anchor panned off-screen.
         - Double-click neat a ray's path to delete it.
         - `Delete`/`Backspace` clears all rays. `Escape` exits draw mode.
 - [x] `src/index.css`:

@@ -23,6 +23,7 @@ export default function App() {
   const [entryTime, setEntryTime] = useState('13:29');
   const [sessionTicker, setSessionTicker] = useState('SPY');
   const [maximizedId, setMaximizedId] = useState(null);
+  const [drawings, setDrawings] = useState({}); // Keyed by ticker: { ticker: [{price, time}, ...] }
   
   const playbackRef = useRef();
 
@@ -159,6 +160,13 @@ export default function App() {
       second: '2-digit',
       hour12: false
     }) + ` ${label}`;
+  };
+  
+  const handleUpdateRays = (ticker, rays) => {
+    setDrawings(prev => ({
+      ...prev,
+      [ticker]: rays
+    }));
   };
 
   return (
@@ -314,6 +322,8 @@ export default function App() {
                     isMaximized={maximizedId === i}
                     onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
                     gridCount={gridCount}
+                    drawings={drawings[leftTicker] || []}
+                    onUpdateRays={(rays) => handleUpdateRays(leftTicker, rays)}
                   />
                 );
               });

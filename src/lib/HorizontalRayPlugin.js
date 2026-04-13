@@ -86,13 +86,45 @@ export class HorizontalRayPlugin {
         if (!this._chart || !this._series || this._rays.length === 0) return null;
 
         const timeScale = this._chart.timeScale();
-        
+        const visibleRange = timeScale.getVisibleLogicalRange();
+        if (!visibleRange) return null;
+
         const renderRays = this._rays.map(ray => {
-            return {
-                x: timeScale.timeToCoordinate(ray.time),
-                y: this._series.priceToCoordinate(ray.price)
-            };
-        }).filter(r => r.y !== null);
+            const y = this._series.priceToCoordinate(ray.price);
+            if (y === null) return null;
+
+            let x = timeScale.timeToCoordinate(ray.time);
+            
+            // If timeToCoordinate returns null, it's off-screen.
+            // We need to determine if it's off-screen to the left or right.
+            if (x === null) {
+                // Approximate logical index to check position
+                // A better way is to compare with the first/last visible data points
+                const data = this._series.data();
+                if (data.length > 0) {
+                    const firstVisibleLogical = visibleRange.from;
+                    // Find the logical index of the ray time
+                    // For simplicity, we can assume if it's not on screen and time is early, it's to the left
+                    if (ray.time < data[0].time) {
+                        x = -100; // Well off-screen to the left
+                    } else {
+                        // It might be between data points or in the future
+                        // But if it's a ray, we only care if it's to the left
+                        // Let's just check if it's before the visible data
+                        const firstDataOnScreen = data.find(d => timeScale.timeToCoordinate(d.time) !== null);
+                        if (firstDataOnScreen && ray.time < firstDataOnScreen.time) {
+                            x = -100;
+                        } else {
+                            return null; // Likely to the right or invalid
+                        }
+                    }
+                } else {
+                    return null;
+                }
+            }
+
+            return { x, y };
+        }).filter(r => r !== null);
 
         return {
             rays: renderRays
