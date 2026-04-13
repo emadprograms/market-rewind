@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
-import { Maximize2, Minimize2, Search, ChevronDown, Clock, BarChart2 } from 'lucide-react';
+import { Maximize2, Minimize2, Search, ChevronDown, Clock } from 'lucide-react';
 import { fetchMarketData } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
@@ -409,19 +409,24 @@ export default function ChartUnit({
             </div>
             <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>ETH</span>
           </div>
+
+          {/* VOLUME PROFILE TOGGLE */}
+          <div className="switch-container" onClick={() => setShowVP(!showVP)}>
+            <div className={`switch-track ${showVP ? 'active' : ''}`}>
+              <div className="switch-thumb" />
+            </div>
+            <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>VP</span>
+          </div>
         </div>
         
         <div className="chart-actions">
-           <button className="btn-icon" onClick={() => setShowVP(!showVP)} title="Toggle Volume Profile">
-             <BarChart2 size={16} style={{ color: showVP ? '#2196f3' : 'inherit', opacity: showVP ? 1 : 0.7 }} />
-           </button>
            <button className="btn-icon" onClick={onToggleMaximize} title={isMaximized ? "Minimize" : "Maximize"}>
              {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
            </button>
         </div>
       </div>
-      <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div ref={chartContainerRef} style={{ flex: 1, position: 'relative' }} />
+      <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div ref={chartContainerRef} style={{ flex: 1, position: 'relative', minHeight: 0, minWidth: 0, overflow: 'hidden' }} />
       </div>
     </div>
   );
