@@ -1,28 +1,24 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v6.3 - Ultra-Slim Grid Resilience)
+## Project State: COMPLETED (v6.4 - Absolute Density)
 
-Market Rewind is a zero-read, local-first market replay tool. It operates entirely within the user's browser, eliminating Turso "Rows Read" costs, avoiding network fetching errors, and bypassing Vercel compute costs.
+Market Rewind is a zero-read, local-first market replay tool.
 
 ### 🏗️ Architecture Map
 - **Data Sync Utility (GitHub Actions)**: Manual trigger.
 - **Frontend Storage**: Uses Browser **OPFS**.
-- **WASM Engine**: **sql.js**.
 
 ### 🚥 Component Breakdown
 
 #### Core Application (`src/`)
-- [x] `src/App.jsx`:
-    - **Maximized Logic**: Deep-focus view.
 - [x] `src/components/ChartUnit.jsx`:
-    - **True Full Screen Mode**: Fills window while keeping 40px playback bar visible.
-    - **Perception-Aware Initial Zoom**: 50-bar Daily view.
+    - **Grid-4 Resilience**: Fixed row-height overflow.
+    - **True Full Screen Mode**: 40px playback bar remains visible.
 - [x] `src/index.css`:
-    - **Grid-4 Resilience**: Implemented `min-height: 0` and `height: 0; flex: 1;` logic to ensure multi-chart layouts strictly respect their assigned row heights.
+    - **Absolute Density Workspace**: Gaps and padding reduced to the absolute limit of **2px**.
     - **Ultra-Slim Aesthetics**:
         - **Chart Header**: 2px vertical padding.
         - **Playback Bar**: 40px total height.
-    - **Gutters**: 3px gaps.
 
 ### 📦 Key Dependencies
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.

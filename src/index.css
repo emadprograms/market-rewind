@@ -143,9 +143,9 @@ body {
 
 .workspace {
   flex: 1;
-  padding: 3px;
+  padding: 2px;
   display: grid;
-  gap: 3px;
+  gap: 2px;
   overflow: hidden;
 }
 
