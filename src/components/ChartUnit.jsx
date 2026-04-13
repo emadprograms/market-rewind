@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
-import { Maximize2, Minimize2, Search, ChevronDown, Clock } from 'lucide-react';
+import { Maximize2, Minimize2, Search, ChevronDown, Clock, BarChart2 } from 'lucide-react';
 import { fetchMarketData } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
+import { VolumeProfilePlugin } from '../lib/VolumeProfilePlugin';
 
 export default function ChartUnit({ 
   id, 
@@ -25,11 +26,13 @@ export default function ChartUnit({
   const volumeSeriesRef = useRef();
   const lastDataCountRef = useRef(0);
   const shadingPluginRef = useRef(null);
+  const vpPluginRef = useRef(null);
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [localMasterData, setLocalMasterData] = useState([]);
   const [timeframe, setTimeframe] = useState(initialTf || '1D');
   const [showEth, setShowEth] = useState(initialEth || false);
+  const [showVP, setShowVP] = useState(false);
 
   // Custom UI State
   const [isTickerOpen, setIsTickerOpen] = useState(false);
@@ -116,6 +119,10 @@ export default function ChartUnit({
     // Attach Shading Plugin
     shadingPluginRef.current = new SessionShadingPlugin(timeframe, isET && showEth);
     priceSeriesRef.current.attachPrimitive(shadingPluginRef.current);
+
+    // Attach Volume Profile Plugin
+    vpPluginRef.current = new VolumeProfilePlugin();
+    priceSeriesRef.current.attachPrimitive(vpPluginRef.current);
     
     // Ensure Candlesticks don't overlap the bottom volume
     chartRef.current.priceScale('right').applyOptions({
@@ -176,6 +183,13 @@ export default function ChartUnit({
     });
   }, [ticker]);
 
+  // Update VP Enabled State
+  useEffect(() => {
+      if (vpPluginRef.current) {
+          vpPluginRef.current.setEnabled(showVP);
+      }
+  }, [showVP]);
+
   // 3. Update Chart Data
   useEffect(() => {
     if (priceSeriesRef.current && volumeSeriesRef.current && chartData.length > 0) {
@@ -190,6 +204,10 @@ export default function ChartUnit({
           volume: d.volume,
         };
       });
+
+      if (vpPluginRef.current) {
+          vpPluginRef.current.setData(formatted);
+      }
 
       // If we are just adding one bar, use .update()
       if (formatted.length === lastDataCountRef.current + 1) {
@@ -209,10 +227,21 @@ export default function ChartUnit({
       } else {
         // Full reset (e.g. timeframe change or symbol change)
         const isUpdate = lastDataCountRef.current > 0;
-        let timeRangeToRestore = null;
+        let targetTimeToRestore = null;
         
-        if (isUpdate && chartRef.current) {
-            timeRangeToRestore = chartRef.current.timeScale().getVisibleRange();
+        if (isUpdate && chartRef.current && priceSeriesRef.current) {
+            const oldLogicalRange = chartRef.current.timeScale().getVisibleLogicalRange();
+            if (oldLogicalRange && oldLogicalRange.from !== null && oldLogicalRange.to !== null) {
+                const oldData = priceSeriesRef.current.data();
+                if (oldData && oldData.length > 0) {
+                    const midIndex = Math.floor((oldLogicalRange.from + oldLogicalRange.to) / 2);
+                    // clamp safely
+                    const safeIndex = Math.max(0, Math.min(oldData.length - 1, midIndex));
+                    if (oldData[safeIndex]) {
+                        targetTimeToRestore = oldData[safeIndex].time;
+                    }
+                }
+            }
         }
 
         priceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
@@ -227,39 +256,34 @@ export default function ChartUnit({
 
         chartRef.current.priceScale('right').applyOptions({ autoScale: true });
         
-        // Perception-aware initial zoom OR restore previous view
         const total = formatted.length;
         if (total > 0) {
           setTimeout(() => {
             if (!chartRef.current) return;
             
             const zoomMap = {
-              '1min': 120,   // ~2 hours
-              '5min': 78,    // 1 full RTH session
-              '15min': 60,   // ~2 days
-              '30min': 50,   // ~4 days
-              '1H': 60,      // ~2 weeks
-              '1D': 50       // ~2.5 months (Very thick candles)
+              '1min': 120,
+              '5min': 78,
+              '15min': 60,
+              '30min': 50,
+              '1H': 60,
+              '1D': 50
             };
             const count = zoomMap[timeframe] || 100;
             
-            if (timeRangeToRestore && timeRangeToRestore.from !== null && timeRangeToRestore.to !== null) {
-                // Focus on the center timestamp instead of forcing the exact TimeRange
-                // Forcing TimeRange across vastly different timeframes breaks candle limits
-                const midTime = (timeRangeToRestore.from + timeRangeToRestore.to) / 2;
-                
-                let midIdx = formatted.findIndex(d => d.time >= midTime);
+            if (targetTimeToRestore !== null) {
+                let midIdx = formatted.findIndex(d => d.time >= targetTimeToRestore);
                 if (midIdx === -1) midIdx = total - 1;
                 
                 let fromIndex = midIdx - Math.floor(count / 2);
                 let toIndex = fromIndex + count;
                 
                 if (toIndex >= total) {
-                    toIndex = total - 1;
+                    toIndex = total; // can go slightly past the edge for padding
                     fromIndex = Math.max(0, toIndex - count);
                 } else if (fromIndex < 0) {
                     fromIndex = 0;
-                    toIndex = Math.min(total - 1, count);
+                    toIndex = Math.min(total, count);
                 }
 
                 chartRef.current.timeScale().setVisibleLogicalRange({
@@ -272,7 +296,7 @@ export default function ChartUnit({
                   to: total
                 });
             }
-          }, 80); // Increased slightly for robustness
+          }, 80);
         }
       }
 
@@ -388,6 +412,9 @@ export default function ChartUnit({
         </div>
         
         <div className="chart-actions">
+           <button className="btn-icon" onClick={() => setShowVP(!showVP)} title="Toggle Volume Profile">
+             <BarChart2 size={16} style={{ color: showVP ? '#2196f3' : 'inherit', opacity: showVP ? 1 : 0.7 }} />
+           </button>
            <button className="btn-icon" onClick={onToggleMaximize} title={isMaximized ? "Minimize" : "Maximize"}>
              {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
            </button>
