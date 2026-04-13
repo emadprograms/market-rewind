@@ -24,14 +24,14 @@ Market Rewind is a zero-read, local-first market replay tool. It operates entire
     - Extracts `tickers` via guaranteed dynamic `SELECT DISTINCT symbol` query.
     - Fetches historical chart data inclusive of all previous available days `timestamp <= [selectedDate] 23:59:59` to render broader context.
 - [x] `src/App.jsx`:
-    - **Toggleable Sidebar UI**: Contains File UI, Grid Selection, and explicit GitHub external URL.
+    - **Anti-Bias Session Entry**: A full-screen glassmorphism landing overlay explicitly demands a Target Date and Start Time (defaults to 13:30 UTC) before rendering any charts, comprehensively preventing look-ahead bias.
+    - **Toggleable Sidebar UI**: Contains File UI, Grid Selection, Reset Session logic, and explicit GitHub external URL.
     - **Intuitive Toggles**: Features a 'Collapse' button inside the sidebar and a floating 'Expand' button in the workspace for 100% full-screen chart focus.
-    - **Playhead Safety**: Initializes Replay `currentTime` to exactly 09:30 AM on the explicitly selected date, despite the larger payload of historical data.
 - [x] `src/components/ChartUnit.jsx`:
-    - **Multi-Pane Architecture**: Refactored to a dual-chart system where Price and Volume reside in separate, synchronized panes (75/25 split). X-axes are locked together.
-    - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes, ensuring that switching between stocks with different price levels (e.g. AAPL vs AMD) always auto-centers the data.
+    - **Single-Pane Volume Separation**: Reverted to a high-performance single-chart architecture but mathematically scaled volume to perfectly occupy the bottom 25% of the chart without overlapping price candles. This preserves 100% fluid, kinetic panning and zooming physics natively.
+    - **Native Ray Drawing (Alt+R)**: Re-engineered TradingView's Horizontal Ray feature identically natively. Users hover over a candlestick, press `Alt+R`, and a solid golden line projects infinitely to the right, perfectly tracking new candles during playback setups.
+    - **Automatic Price Scaling**: Implemented a forced re-scaling logic that resets the vertical price axis whenever a symbol changes, ensuring that switching between stocks always auto-centers the data.
     - Applies a **Strict UTC Parsing Strategy** across data handling and LightweightCharts localization formats so UTC timestamps from the DB display correctly regardless of the user's physical timezone.
-    - **Volume Visualization**: Moved to a dedicated pane with its own scaling to prevent price action overlap.
     - **Smooth Replay Engine**: Implemented an incremental `.update()` logic and explicitly disabled `shiftVisibleRangeOnNewBar` while adding a 15-bar `rightOffset`. This prevents the viewport from snapping to the right edge during replay, preserving the user's custom zoom/scroll position and giving price action breathing room.
 - [x] `src/lib/resampling.js`:
     - **Timeframe Aggregation**: Implemented robust logic to compile 5m, 15m, 30m, 1H, and 1D OHLCV bars from raw 1-minute records while maintaining format compatibility with the replay engine.
