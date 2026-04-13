@@ -118,12 +118,15 @@ export default function ChartUnit({
       localization: {
         timeFormatter: (time) => {
           const date = new Date(time * 1000);
+          if (timeframe === '1D') {
+            return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' });
+          }
           return date.toLocaleString('en-US', { timeZone: tz, hour12: false, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
       },
       timeScale: {
         borderColor: 'rgba(255, 255, 255, 0.1)',
-        timeVisible: true,
+        timeVisible: timeframe !== '1D',
         secondsVisible: false,
         shiftVisibleRangeOnNewBar: false,
         rightOffset: 15,
@@ -351,7 +354,7 @@ export default function ChartUnit({
     };
   }, [drawings, drawType, rectAnchor]);
 
-  // Update chart timezone options when ticker changes
+  // Update chart timezone and timeframe-aware formatters
   useEffect(() => {
     if (!chartRef.current) return;
     const tz = getTzForTicker(ticker);
@@ -359,10 +362,14 @@ export default function ChartUnit({
       localization: {
         timeFormatter: (time) => {
           const date = new Date(time * 1000);
+          if (timeframe === '1D') {
+            return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' });
+          }
           return date.toLocaleString('en-US', { timeZone: tz, hour12: false, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
       },
       timeScale: {
+        timeVisible: timeframe !== '1D',
         tickMarkFormatter: (time, tickMarkType) => {
           const date = new Date(time * 1000);
           if (tickMarkType <= 2) return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric' });
@@ -370,7 +377,7 @@ export default function ChartUnit({
         }
       }
     });
-  }, [ticker]);
+  }, [ticker, timeframe]);
 
   // Update Ray/Rect Plugins when synced drawings change
   useEffect(() => {
