@@ -233,19 +233,40 @@ export default function ChartUnit({
           setTimeout(() => {
             if (!chartRef.current) return;
             
-            if (timeRangeToRestore && timeRangeToRestore.from !== null) {
-                chartRef.current.timeScale().setVisibleRange(timeRangeToRestore);
-            } else {
-                const zoomMap = {
-                  '1min': 120,   // ~2 hours
-                  '5min': 78,    // 1 full RTH session
-                  '15min': 60,   // ~2 days
-                  '30min': 50,   // ~4 days
-                  '1H': 60,      // ~2 weeks
-                  '1D': 50       // ~2.5 months (Very thick candles)
-                };
-                const count = zoomMap[timeframe] || 100;
+            const zoomMap = {
+              '1min': 120,   // ~2 hours
+              '5min': 78,    // 1 full RTH session
+              '15min': 60,   // ~2 days
+              '30min': 50,   // ~4 days
+              '1H': 60,      // ~2 weeks
+              '1D': 50       // ~2.5 months (Very thick candles)
+            };
+            const count = zoomMap[timeframe] || 100;
+            
+            if (timeRangeToRestore && timeRangeToRestore.from !== null && timeRangeToRestore.to !== null) {
+                // Focus on the center timestamp instead of forcing the exact TimeRange
+                // Forcing TimeRange across vastly different timeframes breaks candle limits
+                const midTime = (timeRangeToRestore.from + timeRangeToRestore.to) / 2;
                 
+                let midIdx = formatted.findIndex(d => d.time >= midTime);
+                if (midIdx === -1) midIdx = total - 1;
+                
+                let fromIndex = midIdx - Math.floor(count / 2);
+                let toIndex = fromIndex + count;
+                
+                if (toIndex >= total) {
+                    toIndex = total - 1;
+                    fromIndex = Math.max(0, toIndex - count);
+                } else if (fromIndex < 0) {
+                    fromIndex = 0;
+                    toIndex = Math.min(total - 1, count);
+                }
+
+                chartRef.current.timeScale().setVisibleLogicalRange({
+                    from: fromIndex,
+                    to: toIndex
+                });
+            } else {
                 chartRef.current.timeScale().setVisibleLogicalRange({
                   from: total - count,
                   to: total
