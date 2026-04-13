@@ -212,7 +212,7 @@ export default function ChartUnit({
         })));
 
         chartRef.current.priceScale('right').applyOptions({ autoScale: true });
-
+        
         // Perception-aware initial zoom
         const total = formatted.length;
         if (total > 0) {
@@ -222,13 +222,19 @@ export default function ChartUnit({
             '15min': 60,   // ~2 days
             '30min': 50,   // ~4 days
             '1H': 60,      // ~2 weeks
-            '1D': 120      // ~6 months
+            '1D': 80       // ~4 months (Thicker candles)
           };
           const count = zoomMap[timeframe] || 100;
-          chartRef.current.timeScale().setVisibleLogicalRange({
-            from: total - count,
-            to: total
-          });
+          
+          // Small delay to ensure coordinate system is ready after setData
+          setTimeout(() => {
+            if (chartRef.current) {
+              chartRef.current.timeScale().setVisibleLogicalRange({
+                from: total - count,
+                to: total
+              });
+            }
+          }, 50);
         }
       }
 
