@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v6.7 - Visible Range Volume Profile)
+## Project State: COMPLETED (v6.8 - Horizontal Ray Drawing)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -17,6 +17,11 @@ Market Rewind is a zero-read, local-first market replay tool.
 - [x] `src/components/ChartUnit.jsx`:
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift' when switching extreme timeframes.
+    - **Horizontal Ray Drawing**:
+        - `H` key toggles draw mode (crosshair cursor + orange status bar).
+        - Click to place a solid orange price line with axis label.
+        - Double-click near a ray to delete it (10px tolerance).
+        - `Delete`/`Backspace` clears all rays. `Escape` exits draw mode.
 - [x] `src/index.css`:
     - **Deterministic Layout Engine**: 
         - Root workspace height set to `calc(100vh - 40px)`.

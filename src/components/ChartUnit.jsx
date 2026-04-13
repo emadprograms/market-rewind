@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
 import { Maximize2, Minimize2, Search, ChevronDown, Clock } from 'lucide-react';
@@ -33,6 +33,8 @@ export default function ChartUnit({
   const [timeframe, setTimeframe] = useState(initialTf || '1D');
   const [showEth, setShowEth] = useState(initialEth || false);
   const [showVP, setShowVP] = useState(false);
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const priceLinesRef = useRef([]); // Array of { price, lineObj }
 
   // Custom UI State
   const [isTickerOpen, setIsTickerOpen] = useState(false);
@@ -41,6 +43,7 @@ export default function ChartUnit({
   
   const tickerRef = useRef();
   const tfRef = useRef();
+  const isDrawingModeRef = useRef(false);
 
   // Click outside detection
   useEffect(() => {
@@ -159,6 +162,103 @@ export default function ChartUnit({
     return () => {
       resizeObserver.disconnect();
       chartRef.current.remove();
+    };
+  }, []);
+
+  // Keep ref in sync with state for event handlers
+  useEffect(() => {
+    isDrawingModeRef.current = isDrawingMode;
+  }, [isDrawingMode]);
+
+  // Horizontal Ray Drawing: Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Only respond if this chart's container or its children are focused/hovered
+      const container = chartContainerRef.current;
+      if (!container) return;
+      const isHovered = container.matches(':hover') || container.contains(document.activeElement);
+
+      if (e.key === 'h' || e.key === 'H') {
+        if (isHovered) {
+          e.preventDefault();
+          setIsDrawingMode(prev => !prev);
+        }
+      }
+      if (e.key === 'Escape') {
+        setIsDrawingMode(false);
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && isHovered) {
+        // Clear all rays on this chart
+        if (priceSeriesRef.current && priceLinesRef.current.length > 0) {
+          priceLinesRef.current.forEach(entry => {
+            try { priceSeriesRef.current.removePriceLine(entry.lineObj); } catch(_) {}
+          });
+          priceLinesRef.current = [];
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Horizontal Ray Drawing: Click to place, double-click to delete
+  useEffect(() => {
+    const container = chartContainerRef.current;
+    if (!container || !chartRef.current || !priceSeriesRef.current) return;
+
+    const chart = chartRef.current;
+    const series = priceSeriesRef.current;
+
+    const handleClick = (param) => {
+      if (!isDrawingModeRef.current || !param.point) return;
+      const price = series.coordinateToPrice(param.point.y);
+      if (price === null || price === undefined) return;
+
+      const lineObj = series.createPriceLine({
+        price: price,
+        color: '#ff9800',
+        lineWidth: 1,
+        lineStyle: 0, // Solid
+        axisLabelVisible: true,
+        title: '',
+      });
+      priceLinesRef.current.push({ price, lineObj });
+    };
+
+    const handleDblClick = (param) => {
+      if (!param.point) return;
+      const clickPrice = series.coordinateToPrice(param.point.y);
+      if (clickPrice === null || clickPrice === undefined) return;
+
+      // Find nearest ray within a tolerance
+      let nearestIdx = -1;
+      let nearestDist = Infinity;
+      priceLinesRef.current.forEach((entry, idx) => {
+        const dist = Math.abs(entry.price - clickPrice);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestIdx = idx;
+        }
+      });
+
+      if (nearestIdx !== -1) {
+        // Check pixel distance — only delete if within ~10px
+        const nearestY = series.priceToCoordinate(priceLinesRef.current[nearestIdx].price);
+        if (nearestY !== null && Math.abs(nearestY - param.point.y) < 10) {
+          try { series.removePriceLine(priceLinesRef.current[nearestIdx].lineObj); } catch(_) {}
+          priceLinesRef.current.splice(nearestIdx, 1);
+        }
+      }
+    };
+
+    chart.subscribeClick(handleClick);
+    chart.subscribeDblClick(handleDblClick);
+
+    return () => {
+      try {
+        chart.unsubscribeClick(handleClick);
+        chart.unsubscribeDblClick(handleDblClick);
+      } catch(_) {}
     };
   }, []);
 
@@ -426,7 +526,17 @@ export default function ChartUnit({
         </div>
       </div>
       <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div ref={chartContainerRef} style={{ flex: 1, position: 'relative', minHeight: 0, minWidth: 0, overflow: 'hidden' }} />
+        <div ref={chartContainerRef} style={{ flex: 1, position: 'relative', minHeight: 0, minWidth: 0, overflow: 'hidden', cursor: isDrawingMode ? 'crosshair' : 'default' }} />
+        {isDrawingMode && (
+          <div style={{
+            position: 'absolute', bottom: 4, left: '50%', transform: 'translateX(-50%)',
+            background: 'rgba(255, 152, 0, 0.9)', color: '#000', padding: '2px 10px',
+            borderRadius: '4px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em',
+            pointerEvents: 'none', zIndex: 10
+          }}>
+            DRAW MODE — Click to place · Dbl-click to delete · ESC to exit
+          </div>
+        )}
       </div>
     </div>
   );
