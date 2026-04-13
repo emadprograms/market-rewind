@@ -78,16 +78,19 @@ export default function ChartUnit({
     load();
   }, [ticker, selectedDate]);
 
-  // 1. Prepare data
+  // 1. Prepare data — filter raw bars by globalTime FIRST, then resample.
+  // This ensures higher-timeframe candles (1D, 1H) progressively build during replay.
   const chartData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
-    const filteredRaw = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
-    const resampled = resampleData(filteredRaw, timeframe);
+    let filtered = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
+    
+    // In replay mode, trim raw 1-min bars to only those that have "happened"
     if (isReplayMode && globalTime) {
       const gt = new Date(globalTime).getTime();
-      return resampled.filter(d => new Date(d.time).getTime() <= gt);
+      filtered = filtered.filter(d => new Date(d.time).getTime() <= gt);
     }
-    return resampled;
+    
+    return resampleData(filtered, timeframe);
   }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
 
   // 2. Initialize Charts
