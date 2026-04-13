@@ -246,13 +246,7 @@ export default function App() {
 
       {/* --- MAIN CONTENT --- */}
       <div className="main-content" style={{ position: 'relative' }}>
-        {!isSidebarOpen && (
-          <div style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 110 }}>
-            <button className="btn-icon" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', width: '40px', height: '40px' }} onClick={() => setIsSidebarOpen(true)} title="Open Sidebar">
-              <Menu size={24} />
-            </button>
-          </div>
-        )}
+
         <main className={`workspace grid-${layoutMode}`}>
           {isLoading ? (
             <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
@@ -313,16 +307,21 @@ export default function App() {
                     isReplayMode={isSessionStarted}
                     globalTime={currentTime}
                     isMaximized={maximizedId === i}
-                    onMaximizeToggle={() => setMaximizedId(maximizedId === i ? null : i)}
+                    onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
                     gridCount={gridCount}
                   />
                 );
               });
             })()
+
           )}
         </main>
 
         <div className="playback-bar">
+          <button className="btn-icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} title="Toggle Sidebar" style={{ marginRight: 'auto' }}>
+            <Menu size={20} />
+          </button>
+          
           <div className="time-display">
             {formatDisplayTime(currentTime)}
           </div>
