@@ -47,6 +47,9 @@ export default function ChartUnit({
   const [isAtEnd, setIsAtEnd] = useState(true);
   const lastBarSpacingRef = useRef(null);
   const priceLineRef = useRef(null);
+  const lastTickerRef = useRef(ticker);
+  const lastTfRef = useRef(timeframe);
+
 
 
   const drawings = allDrawings[ticker] || { rays: [], rects: [] };
@@ -446,9 +449,12 @@ export default function ChartUnit({
           vpPluginRef.current.setData(formatted);
       }
 
-      // Incremental update: new bar added OR existing bar updated in-place
-      if (formatted.length === lastDataCountRef.current + 1 || 
-          (formatted.length === lastDataCountRef.current && formatted.length > 0)) {
+      // Incremental update if same ticker/timeframe AND (new bar added OR same bar updated)
+      const isSameContext = lastTickerRef.current === ticker && lastTfRef.current === timeframe;
+      
+      if (isSameContext && (formatted.length === lastDataCountRef.current + 1 || 
+          (formatted.length === lastDataCountRef.current && formatted.length > 0))) {
+
         const lastBar = formatted[formatted.length - 1];
         priceSeriesRef.current.update({
           time: lastBar.time,
@@ -553,6 +559,9 @@ export default function ChartUnit({
       }
 
       lastDataCountRef.current = formatted.length;
+      lastTickerRef.current = ticker;
+      lastTfRef.current = timeframe;
+
     } else if (priceSeriesRef.current) {
         priceSeriesRef.current.setData([]);
         volumeSeriesRef.current.setData([]);
