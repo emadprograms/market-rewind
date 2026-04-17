@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
-import { Maximize2, Minimize2, Search, ChevronDown, Clock } from 'lucide-react';
+import { Maximize2, Minimize2, Search, ChevronDown, Clock, ChevronRight } from 'lucide-react';
 import { fetchMarketData } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
@@ -44,6 +44,8 @@ export default function ChartUnit({
   const [drawType, setDrawType] = useState('ray'); // 'ray' | 'rect'
   const [rectAnchor, setRectAnchor] = useState(null); // {price, time}
   const [ghostPoint, setGhostPoint] = useState(null); // {price, time} for rect preview
+  const [isAtEnd, setIsAtEnd] = useState(true);
+  const lastBarSpacingRef = useRef(null);
 
   const drawings = allDrawings[ticker] || { rays: [], rects: [] };
 
@@ -140,7 +142,27 @@ export default function ChartUnit({
       handleScale: true,
     });
 
+    // Subscribe to zoom/scroll to persist width
+    chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(() => {
+        if (!chartRef.current) return;
+        const ts = chartRef.current.timeScale();
+        lastBarSpacingRef.current = ts.options().barSpacing;
+
+        // Determine if we are at the end (allow 1 bar margin)
+        const logicalRange = ts.getVisibleLogicalRange();
+        if (logicalRange) {
+            const bars = priceSeriesRef.current?.data() || [];
+            if (bars.length > 0) {
+                const lastBarIndex = bars.length - 1;
+                // logicalRange.to is the index of the right edge bar + 0.5 (usually)
+                // If the right edge is near the last bar, we're at the end.
+                setIsAtEnd(logicalRange.to >= lastBarIndex - 0.5);
+            }
+        }
+    });
+
     const isET = tz === 'America/New_York';
+
 
     priceSeriesRef.current = chartRef.current.addCandlestickSeries({
       upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
@@ -483,7 +505,15 @@ export default function ChartUnit({
               '1H': 60,
               '1D': 50
             };
-            const count = zoomMap[timeframe] || 100;
+
+            if (lastBarSpacingRef.current === null) {
+
+              lastBarSpacingRef.current = zoomMap[timeframe] 
+                ? chartContainerRef.current.clientWidth / zoomMap[timeframe] 
+                : 6;
+            }
+
+            const count = chartContainerRef.current.clientWidth / lastBarSpacingRef.current;
             
             if (targetTimeToRestore !== null) {
                 let midIdx = formatted.findIndex(d => d.time >= targetTimeToRestore);
@@ -511,6 +541,7 @@ export default function ChartUnit({
                 });
             }
           }, 80);
+
         }
       }
 
@@ -640,7 +671,21 @@ export default function ChartUnit({
         </div>
       </div>
       <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div ref={chartContainerRef} style={{ flex: 1, position: 'relative', minHeight: 0, minWidth: 0, overflow: 'hidden', cursor: isDrawingMode ? 'crosshair' : 'default' }} />
+        <div ref={chartContainerRef} style={{ flex: 1, position: 'relative', minHeight: 0, minWidth: 0, overflow: 'hidden', cursor: isDrawingMode ? 'crosshair' : 'default' }}>
+          
+          {/* SCROLL TO END BUTTON */}
+          {!isAtEnd && (
+            <button 
+              className="scroll-to-end-btn"
+              onClick={() => chartRef.current?.timeScale().scrollToPosition(0, true)}
+              title="Scroll to latest"
+            >
+              <ChevronRight size={18} />
+            </button>
+          )}
+
+        </div>
+
         {isDrawingMode && (
           <div style={{
             position: 'absolute', bottom: 4, left: '50%', transform: 'translateX(-50%)',

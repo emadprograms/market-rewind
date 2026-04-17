@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v7.1 - Unified Replay System)
+## Project State: COMPLETED (v7.2 - UX Polish & Zoom Persistence)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -24,6 +24,9 @@ Market Rewind is a zero-read, local-first market replay tool.
 - [x] `src/components/ChartUnit.jsx`:
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift' when switching extreme timeframes.
+    - **Persistent Zoom Level**: Tracks manual `barSpacing` changes to maintain consistent candle width across all timeframe switches, preventing visual reset.
+    - **Scroll to End UI**: Floating "return to latest" button that appears on hover when scrolled away from the most recent data point.
+
     - **Drawing Tools (Synced & Persistent)**:
         - `H` key: Toggle **Horizontal Ray** mode (anchored start, extends right).
         - `R` key: Toggle **Rectangle** mode (2-click placement).
@@ -66,4 +69,4 @@ Market Rewind is a zero-read, local-first market replay tool.
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
 ---
-*Last Update: 2026-04-13*
+*Last Update: 2026-04-17*
