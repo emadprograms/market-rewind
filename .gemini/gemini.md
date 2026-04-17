@@ -23,9 +23,11 @@ Market Rewind is a zero-read, local-first market replay tool.
         - All charts are synchronized via a single `globalTime` cursor.
 - [x] `src/components/ChartUnit.jsx`:
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
-    - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift' when switching extreme timeframes.
+    - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift'; prioritized 'latest' edge when switching from 1D to intraday.
     - **Persistent Zoom Level**: Tracks manual `barSpacing` changes to maintain consistent candle width across all timeframe switches, preventing visual reset.
+    - **Live Price Line (1D)**: Dynamic dashed yellow line indicator for extended hours / incomplete daily candles.
     - **Scroll to End UI**: Floating "return to latest" button that appears on hover when scrolled away from the most recent data point.
+
 
     - **Drawing Tools (Synced & Persistent)**:
         - `H` key: Toggle **Horizontal Ray** mode (anchored start, extends right).

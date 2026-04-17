@@ -46,6 +46,8 @@ export default function ChartUnit({
   const [ghostPoint, setGhostPoint] = useState(null); // {price, time} for rect preview
   const [isAtEnd, setIsAtEnd] = useState(true);
   const lastBarSpacingRef = useRef(null);
+  const priceLineRef = useRef(null);
+
 
   const drawings = allDrawings[ticker] || { rays: [], rects: [] };
 
@@ -470,11 +472,16 @@ export default function ChartUnit({
             if (oldLogicalRange && oldLogicalRange.from !== null && oldLogicalRange.to !== null) {
                 const oldData = priceSeriesRef.current.data();
                 if (oldData && oldData.length > 0) {
-                    const midIndex = Math.floor((oldLogicalRange.from + oldLogicalRange.to) / 2);
-                    // clamp safely
-                    const safeIndex = Math.max(0, Math.min(oldData.length - 1, midIndex));
-                    if (oldData[safeIndex]) {
-                        targetTimeToRestore = oldData[safeIndex].time;
+                    const barsToRight = oldData.length - 1 - oldLogicalRange.to;
+                    // If the right edge was visible or very close, stick to the end
+                    if (barsToRight < 2) {
+                        targetTimeToRestore = oldData[oldData.length - 1].time;
+                    } else {
+                        const midIndex = Math.floor((oldLogicalRange.from + oldLogicalRange.to) / 2);
+                        const safeIndex = Math.max(0, Math.min(oldData.length - 1, midIndex));
+                        if (oldData[safeIndex]) {
+                            targetTimeToRestore = oldData[safeIndex].time;
+                        }
                     }
                 }
             }
@@ -562,7 +569,56 @@ export default function ChartUnit({
     }
   }, [chartData, isReplayMode, ticker, timeframe, showEth]);
 
+  // 4. Live Price Line for 1D chart (Extended Hours)
+  useEffect(() => {
+    if (!priceSeriesRef.current) return;
+
+    if (timeframe === '1D' && globalTime && localMasterData.length > 0) {
+      // Find the most recent price in master data at globalTime
+      const gtMs = new Date(globalTime).getTime();
+      let lastPrice = null;
+
+      // Find the exact or nearest prior 1-min bar
+      // Since localMasterData is sorted, we can search
+      for (let i = localMasterData.length - 1; i >= 0; i--) {
+        const barMs = new Date(localMasterData[i].time).getTime();
+        if (barMs <= gtMs) {
+          lastPrice = localMasterData[i].close;
+          break;
+        }
+      }
+
+      if (lastPrice !== null) {
+        if (!priceLineRef.current) {
+          priceLineRef.current = priceSeriesRef.current.createPriceLine({
+            price: lastPrice,
+            color: 'rgba(255, 210, 0, 0.6)',
+            lineWidth: 1,
+            lineStyle: 2, // Dashed
+            axisLabelVisible: true,
+            title: 'Live',
+          });
+        } else {
+          priceLineRef.current.applyOptions({ price: lastPrice });
+        }
+      }
+    } else if (priceLineRef.current && priceSeriesRef.current) {
+      priceSeriesRef.current.removePriceLine(priceLineRef.current);
+      priceLineRef.current = null;
+    }
+    
+    return () => {
+      if (priceLineRef.current && priceSeriesRef.current) {
+        try {
+          priceSeriesRef.current.removePriceLine(priceLineRef.current);
+          priceLineRef.current = null;
+        } catch(_) {}
+      }
+    };
+  }, [globalTime, timeframe, ticker, localMasterData]);
+
   const filteredTickers = tickers.filter(t => t.toLowerCase().includes(tickerSearch.toLowerCase()));
+
 
   return (
     <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`}>
