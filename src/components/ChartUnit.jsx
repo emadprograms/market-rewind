@@ -463,7 +463,9 @@ export default function ChartUnit({
           time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
         })));
 
-        if (isAtEnd) {
+        const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
+
+        if (wasAtEnd) {
           // If we were at the end, shift to keep the edge visible
           const shift = formatted.length - lastDataCountRef.current;
           if (shift > 0) {
@@ -478,6 +480,7 @@ export default function ChartUnit({
           // If scrolled back, stay frozen on the same bars
           ts.setVisibleLogicalRange(oldLogicalRange);
         }
+
       } else {
         // Full reset (e.g. timeframe change or symbol change)
         const isUpdate = lastDataCountRef.current > 0;
