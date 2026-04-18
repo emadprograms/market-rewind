@@ -451,35 +451,45 @@ export default function ChartUnit({
 
       // Incremental update if same ticker/timeframe AND (new bar added OR same bar updated)
       const isSameContext = lastTickerRef.current === ticker && lastTfRef.current === timeframe;
-      
-      if (isSameContext && (formatted.length === lastDataCountRef.current + 1 || 
-          (formatted.length === lastDataCountRef.current && formatted.length > 0))) {
+      const ts = chartRef.current.timeScale();
+      const oldLogicalRange = ts.getVisibleLogicalRange();
 
-        const lastBar = formatted[formatted.length - 1];
-        priceSeriesRef.current.update({
-          time: lastBar.time,
-          open: lastBar.open,
-          high: lastBar.high,
-          low: lastBar.low,
-          close: lastBar.close,
-        });
-        volumeSeriesRef.current.update({
-          time: lastBar.time,
-          value: lastBar.volume,
-          color: lastBar.close >= lastBar.open ? '#26a69a' : '#ef5350'
-        });
+      if (isSameContext && oldLogicalRange) {
+        // Replay step: preserve the view
+        priceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+          time, open, high, low, close
+        })));
+        volumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
+          time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
+        })));
+
+        if (isAtEnd) {
+          // If we were at the end, shift to keep the edge visible
+          const shift = formatted.length - lastDataCountRef.current;
+          if (shift > 0) {
+            ts.setVisibleLogicalRange({
+              from: oldLogicalRange.from + shift,
+              to: oldLogicalRange.to + shift
+            });
+          } else {
+            ts.setVisibleLogicalRange(oldLogicalRange);
+          }
+        } else {
+          // If scrolled back, stay frozen on the same bars
+          ts.setVisibleLogicalRange(oldLogicalRange);
+        }
       } else {
         // Full reset (e.g. timeframe change or symbol change)
         const isUpdate = lastDataCountRef.current > 0;
         let targetTimeToRestore = null;
+
         
-        if (isUpdate && chartRef.current && priceSeriesRef.current) {
-            const oldLogicalRange = chartRef.current.timeScale().getVisibleLogicalRange();
-            if (oldLogicalRange && oldLogicalRange.from !== null && oldLogicalRange.to !== null) {
-                const oldData = priceSeriesRef.current.data();
-                if (oldData && oldData.length > 0) {
-                    const barsToRight = oldData.length - 1 - oldLogicalRange.to;
-                    // If the right edge was visible or very close, stick to the end
+        if (isUpdate && chartRef.current && priceSeriesRef.current && oldLogicalRange) {
+            const oldData = priceSeriesRef.current.data();
+            if (oldData && oldData.length > 0) {
+                const barsToRight = oldData.length - 1 - oldLogicalRange.to;
+                // If the right edge was visible or very close, stick to the end
+
                     if (barsToRight < 2) {
                         targetTimeToRestore = oldData[oldData.length - 1].time;
                     } else {
