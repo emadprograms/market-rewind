@@ -25,6 +25,8 @@ export default function App() {
   const [maximizedId, setMaximizedId] = useState(null);
   const [drawings, setDrawings] = useState({}); // { ticker: { rays: [], rects: [] } }
   const [chartTimeframes, setChartTimeframes] = useState({}); // { chartId: timeframe }
+  const [manualStepMinutes, setManualStepMinutes] = useState(null);
+
   
   const playbackRef = useRef();
 
@@ -35,6 +37,9 @@ export default function App() {
   const minStepMinutes = Object.values(chartTimeframes).length > 0
     ? Object.values(chartTimeframes).reduce((min, tf) => Math.min(min, TF_MINUTES[tf] || 1), 1440)
     : 1; // default to 1 minute if no charts yet
+
+  const activeStepMinutes = manualStepMinutes || minStepMinutes;
+
 
   // 1. Check OPFS on load
   useEffect(() => {
@@ -151,7 +156,7 @@ export default function App() {
     if (isPlaying && masterData.length > 0) {
       playbackRef.current = setInterval(() => {
         setCurrentTime((prev) => {
-          const next = advanceTime(prev, minStepMinutes);
+          const next = advanceTime(prev, activeStepMinutes);
           if (next === null) {
             setIsPlaying(false);
             return prev;
@@ -163,7 +168,8 @@ export default function App() {
       clearInterval(playbackRef.current);
     }
     return () => clearInterval(playbackRef.current);
-  }, [isPlaying, playbackSpeed, masterData, minStepMinutes]);
+  }, [isPlaying, playbackSpeed, masterData, activeStepMinutes]);
+
 
   // --- Handlers ---
   const togglePlay = () => setIsPlaying(!isPlaying);
@@ -174,15 +180,16 @@ export default function App() {
     setIsPlaying(false);
   };
 
-  const stepForward = () => {
-    const next = advanceTime(currentTime, minStepMinutes);
+   const stepForward = () => {
+    const next = advanceTime(currentTime, activeStepMinutes);
     if (next) setCurrentTime(next);
   };
-
+ 
   const stepBackward = () => {
-    const prev = rewindTime(currentTime, minStepMinutes);
+    const prev = rewindTime(currentTime, activeStepMinutes);
     if (prev) setCurrentTime(prev);
   };
+
 
   const formatDisplayTime = (isoStr) => {
     if (!isoStr) return '--:--:--';
@@ -399,12 +406,23 @@ export default function App() {
             <button className="btn-icon" onClick={resetToOpen} title="Reset to Market Open"><RotateCcw size={20} /></button>
           </div>
 
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+           <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
             <span style={{fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em'}}>STEP</span>
-            <span style={{fontSize: '0.8rem', color: 'var(--accent-green)', fontWeight: 700}}>
-              {minStepMinutes >= 1440 ? '1D' : minStepMinutes >= 60 ? `${minStepMinutes / 60}H` : `${minStepMinutes}m`}
-            </span>
+            <select 
+              value={manualStepMinutes === null ? 'auto' : manualStepMinutes.toString()} 
+              onChange={(e) => setManualStepMinutes(e.target.value === 'auto' ? null : parseInt(e.target.value))}
+              style={{width: 'auto', padding: '2px 4px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-green)', background: 'rgba(0,0,0,0.2)'}}
+            >
+              <option value="auto">Auto ({minStepMinutes >= 1440 ? '1D' : minStepMinutes >= 60 ? `${minStepMinutes / 60}H` : `${minStepMinutes}m`})</option>
+              <option value="1">1m</option>
+              <option value="5">5m</option>
+              <option value="15">15m</option>
+              <option value="30">30m</option>
+              <option value="60">1 H</option>
+              <option value="1440">1 D</option>
+            </select>
           </div>
+
 
           <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
             <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>SPEED</span>
