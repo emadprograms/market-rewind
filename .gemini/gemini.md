@@ -19,7 +19,8 @@ Market Rewind is a zero-read, local-first market replay tool.
 - [x] `src/components/ChartUnit.jsx`:
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift'; prioritized 'latest' edge when switching from 1D to intraday.
-    - **Stale Data Fix**: Enforced full chart reset on symbol or timeframe changes to prevent data "bleeding" between symbols.
+    - **Stale Data Fix**: Eliminated race condition where switching symbols displayed old data under the new ticker. Root cause was `ticker` in the effect deps causing premature ref updates before async fetch completed. Fixed by decoupling the data effect from `ticker`/`timeframe` deps.
+
     - **Stable Replay View & Auto-Reveal**: Viewport stays frozen during replay analysis; automatically shifts to reveal new candles if the user is at the right edge.
     - **Persistent Zoom Level**: Tracks manual `barSpacing` changes to maintain consistent candle width across all timeframe switches, preventing visual reset.
 
