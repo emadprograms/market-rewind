@@ -463,6 +463,8 @@ export default function ChartUnit({
           time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
         })));
 
+        chartRef.current.priceScale('right').applyOptions({ autoScale: true });
+
         const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
 
         if (wasAtEnd) {
@@ -581,7 +583,10 @@ export default function ChartUnit({
         lastDataCountRef.current = 0;
     }
 
-    // Refresh shading plugin settings
+  }, [chartData, isReplayMode]);
+
+  // 3b. Refresh shading plugin when ticker/timeframe/ETH changes
+  useEffect(() => {
     if (shadingPluginRef.current) {
         const tz = getTzForTicker(ticker);
         const isET = tz === 'America/New_York';
@@ -589,7 +594,7 @@ export default function ChartUnit({
         shadingPluginRef.current._isET = isET && showEth;
         shadingPluginRef.current.updateAllViews();
     }
-  }, [chartData, isReplayMode, ticker, timeframe, showEth]);
+  }, [ticker, timeframe, showEth]);
 
   // 4. Live Price Line for 1D chart (Extended Hours)
   useEffect(() => {
