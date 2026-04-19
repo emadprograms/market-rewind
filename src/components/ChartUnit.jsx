@@ -468,9 +468,9 @@ export default function ChartUnit({
         const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
 
         if (wasAtEnd) {
-          // If we were at the end, shift to keep the edge visible
+          // If we were at the end, shift to keep the edge visible (both forward and backward)
           const shift = formatted.length - lastDataCountRef.current;
-          if (shift > 0) {
+          if (shift !== 0) {
             ts.setVisibleLogicalRange({
               from: oldLogicalRange.from + shift,
               to: oldLogicalRange.to + shift
