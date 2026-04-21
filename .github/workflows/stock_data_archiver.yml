@@ -19,7 +19,7 @@ on:
         type: string
         default: '60'
       update_release:
-        description: 'Sync Turso → SQLite and update GitHub Release after backfill?'
+        description: 'Sync archive DB and update GitHub Release after backfill?'
         required: false
         type: boolean
         default: false
@@ -30,7 +30,7 @@ jobs:
   # ─────────────────────────────────────────────
   backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 360 # 6 hour max for large date ranges
+    timeout-minutes: 360
 
     steps:
       - name: Checkout code
@@ -57,9 +57,10 @@ jobs:
             --to-date ${{ inputs.to_date }} \
             --cooldown ${{ inputs.cooldown }}
 
-  # ─────────────────────────────────────────────
-  # Job 2: Sync Turso → SQLite and publish release
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────
+  # Job 2: Sync archive DB → SQLite and publish GitHub Release
+  # All credentials come from Infisical (no extra secrets needed)
+  # ─────────────────────────────────────────────────────────
   update-release:
     runs-on: ubuntu-latest
     needs: backfill
@@ -71,35 +72,38 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
-      - name: Install sync dependencies
-        run: pip install libsql
+      - name: Install dependencies
+        run: |
+          pip install -r stock_data_archiver/requirements.txt
+          pip install libsql
 
-      - name: Sync Turso → Local SQLite
+      - name: Sync Archive DB → Local SQLite
         env:
-          TURSO_DB_URL: ${{ secrets.TURSO_DB_URL }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
+          INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          echo "📦 Syncing Turso database to local SQLite..."
-          python database/sync_backend.py
+          echo "📦 Syncing archive database to local SQLite..."
+          python stock_data_archiver/sync_release.py
 
       - name: Upload as GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚀 Uploading database as GitHub Release..."
-          gh release delete latest-data --cleanup-tag -y || true
-          git tag latest-data
-          git push origin latest-data --force
-          gh release create latest-data database/market_data.db \
-            -t "Latest Market Data" \
-            -n "Auto-synced from Turso after backfill (${{ inputs.from_date }} → ${{ inputs.to_date }})"
+          echo "🚀 Uploading archive database as GitHub Release..."
+          gh release delete latest-archive --cleanup-tag -y || true
+          git tag latest-archive
+          git push origin latest-archive --force
+          gh release create latest-archive database/archive_data.db \
+            -t "Latest Archive Data" \
+            -n "Archive database synced after backfill (${{ inputs.from_date }} → ${{ inputs.to_date }})"
 
           echo "✅ Release updated successfully."

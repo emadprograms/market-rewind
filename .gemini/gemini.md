@@ -80,12 +80,13 @@ Market Rewind is a zero-read, local-first market replay tool.
 - [x] `main.py`: Day-queue orchestrator with `--cooldown` flag (default 60s) and real-time ETA tracking.
 
 #### GitHub Actions Workflows (`.github/workflows/`)
-- [x] `market_backend.yml`: Manual trigger to sync Turso → local SQLite and publish as GitHub Release.
+- [x] `market_backend.yml`: Manual trigger to sync main Turso DB → local SQLite and publish as `latest-data` GitHub Release.
 - [x] `stock_data_archiver.yml`: Manual trigger with configurable inputs:
     - `from_date` / `to_date`: Date range for backfill.
     - `cooldown`: Seconds between API calls per worker (default: 60).
-    - `update_release`: Toggle to sync Turso → SQLite and update the GitHub Release after backfill completes.
-    - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`, `TURSO_DB_URL`, `TURSO_AUTH_TOKEN`.
+    - `update_release`: Toggle to sync the **archive** Turso DB → SQLite and publish as `latest-archive` GitHub Release.
+    - All credentials sourced from **Infisical** (no extra GitHub secrets needed beyond the 3 Infisical auth secrets).
+    - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`.
 
 ---
 *Last Update: 2026-04-21*
