@@ -89,10 +89,10 @@ class InfisicalClient:
             return []
 
     def get_source_creds(self) -> dict:
-        """Retrieves Source Turso credentials (where symbol_map lives)."""
+        """Retrieves Source Turso credentials (where aw_ticker_notes lives)."""
         return {
-            "url": self.get_secret("turso_arshademad_stockdataarchive_db_url"),
-            "token": self.get_secret("turso_arshademad_stockdataarchive_auth_token")
+            "url": self.get_secret("turso_emadprograms_analystworkbench_db_url"),
+            "token": self.get_secret("turso_emadprograms_analystworkbench_auth_token")
         }
 
     def get_target_creds(self) -> dict:

@@ -69,16 +69,23 @@ class TursoWriter:
             )
         """)
 
-    def get_massive_tickers(self) -> list[str]:
+    def get_massive_tickers(self) -> list[tuple[str, str]]:
         """
-        Reads the symbol_map table and returns all tickers that have a 
-        massive_ticker mapping (i.e., can be fetched from Polygon.io).
+        Reads the aw_ticker_notes table from the source DB and returns
+        all unique tickers, plus SPY.
         Returns a list of (display_name, massive_ticker) tuples.
         """
-        res = self.client.execute(
-            "SELECT display_name, massive_ticker FROM symbol_map WHERE massive_ticker IS NOT NULL AND massive_ticker != '' ORDER BY display_name"
-        )
-        return [(row[0], row[1]) for row in res.rows]
+        # 1. Fetch unique tickers from notes table
+        res = self.client.execute("SELECT DISTINCT ticker FROM aw_ticker_notes")
+        tickers = {row[0] for row in res.rows if row[0]}
+        
+        # 2. Ensure SPY is included
+        tickers.add("SPY")
+        
+        # 3. Format as (display_name, massive_ticker)
+        # For typical US equities, these are identical
+        sorted_tickers = sorted(list(tickers))
+        return [(t, t) for t in sorted_tickers]
 
     def check_day_exists(self, ticker: str, date_str: str) -> int:
         """
