@@ -72,7 +72,7 @@ class MassiveFetcher:
                 bars = []
                 for agg in aggs:
                     bars.append({
-                        "timestamp": datetime.utcfromtimestamp(agg.timestamp / 1000),
+                        "timestamp": datetime.fromtimestamp(agg.timestamp / 1000, tz=UTC),
                         "open": agg.open,
                         "high": agg.high,
                         "low": agg.low,

@@ -104,27 +104,23 @@ class TursoWriter:
     def upsert_bars(self, bars: list[dict]) -> int:
         """
         Batch upserts bars into market_data with Tier-1 source protection.
-        
-        Args:
-            bars: List of dicts with keys: timestamp, symbol, open, high, low, close, volume
-            
-        Returns:
-            Number of rows upserted.
+        Uses the libSQL batch API to minimize network roundtrips.
         """
         if not bars:
             return 0
 
         total = 0
         for i in range(0, len(bars), BATCH_SIZE):
-            batch = bars[i:i + BATCH_SIZE]
+            chunk = bars[i:i + BATCH_SIZE]
+            statements = []
             
-            for bar in batch:
+            for bar in chunk:
                 ts = bar["timestamp"]
                 session = _classify_session(ts)
                 ts_str = ts.strftime('%Y-%m-%d %H:%M:%S')
                 
-                self.client.execute(
-                    """INSERT INTO market_data 
+                statements.append({
+                    "sql": """INSERT INTO market_data 
                        (timestamp, symbol, open, high, low, close, volume, session, source) 
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                        ON CONFLICT(symbol, timestamp) DO UPDATE SET
@@ -139,11 +135,12 @@ class TursoWriter:
                            (market_data.source NOT IN ('MASSIVE', 'BINANCE')) OR 
                            (excluded.source IN ('MASSIVE', 'BINANCE'))
                     """,
-                    [ts_str, bar["symbol"], bar["open"], bar["high"], bar["low"],
-                     bar["close"], bar["volume"], session, "MASSIVE"]
-                )
+                    "args": [ts_str, bar["symbol"], bar["open"], bar["high"], bar["low"],
+                             bar["close"], bar["volume"], session, "MASSIVE"]
+                })
             
-            total += len(batch)
+            self.client.batch(statements)
+            total += len(chunk)
         
         return total
 

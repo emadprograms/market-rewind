@@ -73,10 +73,11 @@ Market Rewind is a zero-read, local-first market replay tool.
 #### Stock Data Archiver (`stock_data_archiver/`)
 - [x] **Parallel Backfill Engine**: Fixed historical 1-minute OHLCV gap for Oct 2025 – Jan 2026.
 - [x] **9x Throughput**: Implemented `ThreadPoolExecutor` to use all 9 API keys concurrently.
+- [x] **Optimized Writing**: Leverages libSQL `.batch()` API for high-performance upserts (100 bars per request), minimizing network roundtrips.
 - [x] `infisical_client.py`: 
     - **Dual DB Connectivity**: Connects to Source DB (`aw_ticker_notes`) and Target DB (`oldstockdataarchive`).
     - **Keys**: Rotates through 9 rotating Massive (Polygon.io) API keys.
-- [x] `massive_fetcher.py**: Thread-safe round-robin logic for concurrent fetching.
+- [x] `massive_fetcher.py`: Thread-safe round-robin logic for concurrent fetching. Timezone-aware date handling (UTC/ET).
 - [x] `turso_writer.py`: Thread-safe batch upserts with Tier-1 source protection.
 - [x] `main.py`: Parallelized task queue with real-time ETA and status tracking.
 
