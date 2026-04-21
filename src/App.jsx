@@ -301,7 +301,23 @@ export default function App() {
         <div className="sidebar-section" style={{ marginTop: 'auto' }}>
           <h3>Links</h3>
           <a 
-            href="https://github.com/emadprograms/market-rewind/releases" 
+            href="https://github.com/emadprograms/market-rewind/releases/tag/latest-data" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'none', color: 'var(--text-secondary)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}
+          >
+            <ExternalLink size={12} /> Market Data (Latest)
+          </a>
+          <a 
+            href="https://github.com/emadprograms/market-rewind/releases/tag/latest-archive" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'none', color: 'var(--text-secondary)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}
+          >
+            <ExternalLink size={12} /> Archive Data (Historical)
+          </a>
+          <a 
+            href="https://github.com/emadprograms/market-rewind" 
             target="_blank" 
             rel="noopener noreferrer"
             style={{ textDecoration: 'none', color: 'var(--text-secondary)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '6px' }}
