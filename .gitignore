@@ -19,5 +19,9 @@ database/*.db
 .env.test.local
 .env.production.local
 
+# Archiver
+stock_data_archiver/__pycache__/
+scratch.py
+
 # System
 .DS_Store
