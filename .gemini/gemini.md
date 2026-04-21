@@ -71,17 +71,14 @@ Market Rewind is a zero-read, local-first market replay tool.
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
 #### Stock Data Archiver (`stock_data_archiver/`)
-- [x] **Standalone Backfill Utility**: Fixed historical 1-minute OHLCV gap for Oct 2025 – Jan 2026.
+- [x] **Parallel Backfill Engine**: Fixed historical 1-minute OHLCV gap for Oct 2025 – Jan 2026.
+- [x] **9x Throughput**: Implemented `ThreadPoolExecutor` to use all 9 API keys concurrently.
 - [x] `infisical_client.py`: 
-    - **Dual DB Connectivity**: Connects to Source DB (for `symbol_map`) and Target DB (for archival storage).
+    - **Dual DB Connectivity**: Connects to Source DB (`aw_ticker_notes`) and Target DB (`oldstockdataarchive`).
     - **Keys**: Rotates through 9 rotating Massive (Polygon.io) API keys.
-- [x] `massive_fetcher.py`:
-    - **Throughput Ops**: Implements round-robin key rotation to maximize rate limits.
-    - **Retry Logic**: Automatic backoff and key-switching on 429 (Too Many Requests) errors.
-- [x] `turso_writer.py`:
-    - **Tier-1 Source Protection**: UPSERT logic (`ON CONFLICT`) ensures 'MASSIVE' source bars are never overwritten by lower-quality data.
-    - **Resume Tracking**: Automatically skips days already populated in the target database.
-- [x] `main.py`: Interactive CLI with real-time ETA calculation and progress tracking.
+- [x] `massive_fetcher.py**: Thread-safe round-robin logic for concurrent fetching.
+- [x] `turso_writer.py`: Thread-safe batch upserts with Tier-1 source protection.
+- [x] `main.py`: Parallelized task queue with real-time ETA and status tracking.
 
 ---
 *Last Update: 2026-04-21*

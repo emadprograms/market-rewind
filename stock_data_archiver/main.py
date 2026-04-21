@@ -12,6 +12,8 @@ import sys
 import os
 import argparse
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
 # Ensure the package directory is on the path so config, etc. can be imported
@@ -102,53 +104,74 @@ def main():
     total_tasks = total_days * len(ticker_pairs)
     print(f"\n📅 {total_days} trading days × {len(ticker_pairs)} tickers = {total_tasks} fetch tasks")
 
-    # ── Step 7: Main loop — Day by Day, Ticker by Ticker ──
+    # ── Step 7: Main loop — Parallelized Ticker+Date tasks ──
     print("\n" + "=" * 60)
-    print("🏁 STARTING BACKFILL")
+    print("🏁 STARTING PARALLEL BACKFILL")
+    print(f"   Workers: {len(massive_keys)}")
     print("=" * 60)
 
+    # Flatten tasks into a list: (date, display_name, massive_ticker)
+    tasks = []
+    for date_str in dates:
+        for display_name, massive_ticker in ticker_pairs:
+            tasks.append((date_str, display_name, massive_ticker))
+
+    db_lock = threading.Lock()
     completed = 0
     skipped = 0
     failed = 0
     total_bars = 0
     start_time = time.time()
 
-    for day_idx, date_str in enumerate(dates, 1):
-        print(f"\n📅 [{day_idx}/{total_days}] {date_str}")
+    def process_task(task):
+        nonlocal completed, skipped, failed, total_bars
+        date_str, display_name, massive_ticker = task
         
-        for display_name, massive_ticker in ticker_pairs:
-            completed += 1
-            
-            # Resume check: skip if data already exists
-            if not args.skip_resume_check:
+        # 1. Resume check (Thread-safe)
+        if not args.skip_resume_check:
+            with db_lock:
                 existing = target_writer.check_day_exists(display_name, date_str)
-                if existing > 0:
-                    print(f"   ⏭️  {display_name}: {existing} rows already exist. Skipping.")
-                    skipped += 1
-                    continue
-
-            # Fetch from Polygon
-            bars = fetcher.fetch_day(massive_ticker, date_str)
             
-            if not bars:
-                print(f"   ⚠️  {display_name}: No data returned (holiday/no trading?).")
-                continue
+            if existing > 0:
+                with db_lock:
+                    completed += 1
+                    skipped += 1
+                return f"   ⏭️  {display_name} ({date_str}): {existing} rows exist."
 
-            # Override symbol to display_name (e.g. massive might be "SPY" but display is "SPY")
-            for bar in bars:
-                bar["symbol"] = display_name
+        # 2. Fetch bars from Massive
+        bars = fetcher.fetch_day(massive_ticker, date_str)
+        if not bars:
+            with db_lock:
+                completed += 1
+            return f"   ⚠️  {display_name} ({date_str}): No data."
 
-            # Write to Turso
-            try:
+        # 3. Write to Turso (Thread-safe)
+        for bar in bars:
+            bar["symbol"] = display_name
+
+        try:
+            with db_lock:
                 count = target_writer.upsert_bars(bars)
                 total_bars += count
+                completed += 1
+                
                 elapsed = time.time() - start_time
                 rate = completed / elapsed if elapsed > 0 else 0
                 eta_mins = (total_tasks - completed) / rate / 60 if rate > 0 else 0
-                print(f"   ✅ {display_name}: {count} bars written. [{completed}/{total_tasks}] ETA: {eta_mins:.0f}m")
-            except Exception as e:
+                
+                return f"   ✅ {display_name} ({date_str}): {count} bars. [{completed}/{total_tasks}] ETA: {eta_mins:.0f}m"
+        except Exception as e:
+            with db_lock:
+                completed += 1
                 failed += 1
-                print(f"   ❌ {display_name}: Write failed: {e}")
+            return f"   ❌ {display_name} ({date_str}): Write failed: {e}"
+
+    with ThreadPoolExecutor(max_workers=len(massive_keys)) as executor:
+        futures = {executor.submit(process_task, task): task for task in tasks}
+        for future in as_completed(futures):
+            msg = future.result()
+            if msg:
+                print(msg)
 
     # ── Summary ──
     elapsed = time.time() - start_time
