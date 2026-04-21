@@ -468,18 +468,20 @@ export default function ChartUnit({
         const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
 
         if (wasAtEnd) {
-          // If we were at the end, shift to keep the edge visible (both forward and backward)
+          // If we were at the end, shift to keep the edge visible only when moving FORWARD
           const shift = formatted.length - lastDataCountRef.current;
-          if (shift !== 0) {
+          if (shift > 0) {
             ts.setVisibleLogicalRange({
               from: oldLogicalRange.from + shift,
               to: oldLogicalRange.to + shift
             });
-          } else {
-            ts.setVisibleLogicalRange(oldLogicalRange);
           }
+          // If shift < 0 (backwards replay), we explicitly do NOTHING to the visible range.
+          // This allows the deleted candles to naturally leave empty space on the right 
+          // without aggressively squishing the bar spacing against the Y-axis.
         } else {
-          // If scrolled back, stay frozen on the same bars
+          // If the user has explicitly scrolled back in time, try to preserve their exact view
+          // Only re-apply it if they are NOT at the end, otherwise it fights the natural deletion.
           ts.setVisibleLogicalRange(oldLogicalRange);
         }
 

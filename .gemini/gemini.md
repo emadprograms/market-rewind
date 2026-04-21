@@ -15,7 +15,10 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Ultra-Slim Logic**: Integrated with 40px playback system.
     - **Persistent Sidebar Access**: Sidebar toggle heavily integrated into the playback bar to prevent chart obfuscation.
     - **Step Overrides**: Added manual "STEP" selector (Auto, 1m, 5m, etc.) to the replay bar, allowing users to override the minimum chart timeframe.
-    - **Unified Replay Engine**: Multi-chart synchronization with dynamic or manual step resolution.
+    - **Unified Replay Engine**: 
+        - Synchronized playback across multiple charts.
+        - Dynamic tick rate driven by the lowest timeframe in the layout.
+        - **Squash Fix**: Backwards replay steps naturally crop data on the right without aggressive logical range shifts, preventing candle squishing.
 - [x] `src/components/ChartUnit.jsx`:
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift'; prioritized 'latest' edge when switching from 1D to intraday.
