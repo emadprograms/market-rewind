@@ -71,13 +71,13 @@ Market Rewind is a zero-read, local-first market replay tool.
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
 #### Stock Data Archiver (`stock_data_archiver/`)
-- [x] **Ultra-Fast Parallel Engine**: Optimized 9-worker architecture for 9x throughput increase.
-- [x] **9x Speed Optimization**: Removed database locks and implemented per-thread Turso connections for zero-wait parallelism.
-- [x] **Efficient Batching**: Reduced Turso HTTP writes from 960 to **exactly 1** per ticker-day using the native libSQL batch protocol.
+- [x] **Worker-Per-Day Architecture**: Each of 9 workers owns a dedicated API key and processes ALL tickers for one day before moving to the next.
+- [x] **Strict Rate Limiting**: 60s mandatory cooldown between API calls per key. Resume checks (no API call) skip without consuming cooldown.
+- [x] **Day Queue**: Days are distributed via a thread-safe queue. Days beyond 9 are queued and only start when a worker finishes its current day.
 - [x] `infisical_client.py`: Dual-DB connectivity (Source: `aw_ticker_notes`, Target: Archive).
-- [x] `massive_fetcher.py`: Thread-safe multi-key rotation (9 keys).
-- [x] `turso_writer.py`: Zero-lock, protocol-corrected batch writes with Tier-1 protection.
-- [x] `main.py`: Parallelized task orchestrator with real-time ETA tracking.
+- [x] `massive_fetcher.py`: Dedicated per-worker clients (no rotation/sharing). Progressive backoff on 429 (60s, 120s, 180s).
+- [x] `turso_writer.py`: Per-thread Turso connections with batch writes via libSQL tuple protocol. Tier-1 source protection.
+- [x] `main.py`: Day-queue orchestrator with `--cooldown` flag (default 60s) and real-time ETA tracking.
 
 ---
 *Last Update: 2026-04-21*
