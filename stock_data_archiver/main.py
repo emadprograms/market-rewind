@@ -110,61 +110,65 @@ def main():
     print(f"   Workers: {len(massive_keys)}")
     print("=" * 60)
 
-    # Flatten tasks into a list: (date, display_name, massive_ticker)
     tasks = []
     for date_str in dates:
         for display_name, massive_ticker in ticker_pairs:
             tasks.append((date_str, display_name, massive_ticker))
 
-    db_lock = threading.Lock()
+    # Shared counters for progress tracking (thread-safe via simple assignment/interleaving is okay for logs)
     completed = 0
     skipped = 0
     failed = 0
     total_bars = 0
     start_time = time.time()
+    counter_lock = threading.Lock() # Still need a tiny lock just for the UI counters
 
     def process_task(task):
         nonlocal completed, skipped, failed, total_bars
         date_str, display_name, massive_ticker = task
         
-        # 1. Resume check (Thread-safe)
-        if not args.skip_resume_check:
-            with db_lock:
-                existing = target_writer.check_day_exists(display_name, date_str)
-            
-            if existing > 0:
-                with db_lock:
-                    completed += 1
-                    skipped += 1
-                return f"   ⏭️  {display_name} ({date_str}): {existing} rows exist."
-
-        # 2. Fetch bars from Massive
-        bars = fetcher.fetch_day(massive_ticker, date_str)
-        if not bars:
-            with db_lock:
-                completed += 1
-            return f"   ⚠️  {display_name} ({date_str}): No data."
-
-        # 3. Write to Turso (Thread-safe)
-        for bar in bars:
-            bar["symbol"] = display_name
-
+        # Instantiate a dedicated writer for this thread/task to avoid lock contention
+        # This allows 9 parallel HTTP writes to Turso
+        local_writer = TursoWriter(url=target_creds["url"], token=target_creds["token"])
+        
         try:
-            with db_lock:
-                count = target_writer.upsert_bars(bars)
+            # 1. Resume check
+            if not args.skip_resume_check:
+                existing = local_writer.check_day_exists(display_name, date_str)
+                if existing > 0:
+                    with counter_lock:
+                        completed += 1
+                        skipped += 1
+                    return f"   ⏭️  {display_name} ({date_str}): {existing} rows exist."
+
+            # 2. Fetch bars from Massive
+            bars = fetcher.fetch_day(massive_ticker, date_str)
+            if not bars:
+                with counter_lock:
+                    completed += 1
+                return f"   ⚠️  {display_name} ({date_str}): No data."
+
+            # 3. Write to Turso
+            for bar in bars:
+                bar["symbol"] = display_name
+
+            count = local_writer.upsert_bars(bars)
+            
+            with counter_lock:
                 total_bars += count
                 completed += 1
-                
                 elapsed = time.time() - start_time
                 rate = completed / elapsed if elapsed > 0 else 0
                 eta_mins = (total_tasks - completed) / rate / 60 if rate > 0 else 0
-                
                 return f"   ✅ {display_name} ({date_str}): {count} bars. [{completed}/{total_tasks}] ETA: {eta_mins:.0f}m"
+                
         except Exception as e:
-            with db_lock:
+            with counter_lock:
                 completed += 1
                 failed += 1
-            return f"   ❌ {display_name} ({date_str}): Write failed: {e}"
+            return f"   ❌ {display_name} ({date_str}): Failed: {e}"
+        finally:
+            local_writer.close()
 
     with ThreadPoolExecutor(max_workers=len(massive_keys)) as executor:
         futures = {executor.submit(process_task, task): task for task in tasks}
@@ -186,7 +190,6 @@ def main():
     print("=" * 60)
 
     source_writer.close()
-    target_writer.close()
 
 
 if __name__ == "__main__":

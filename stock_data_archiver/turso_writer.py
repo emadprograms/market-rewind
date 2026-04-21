@@ -6,7 +6,7 @@ Pattern mirrors: data-harvester/src/database/operations.py
 """
 from datetime import datetime
 from libsql_client import create_client_sync
-from config import US_EASTERN, UTC, BATCH_SIZE
+from config import US_EASTERN, UTC
 
 
 # Session classification boundaries (Eastern Time)
@@ -104,45 +104,43 @@ class TursoWriter:
     def upsert_bars(self, bars: list[dict]) -> int:
         """
         Batch upserts bars into market_data with Tier-1 source protection.
-        Uses the libSQL batch API to minimize network roundtrips.
+        Uses the libSQL batch API — sends ALL bars in a single HTTP call.
         """
         if not bars:
             return 0
 
-        total = 0
-        for i in range(0, len(bars), BATCH_SIZE):
-            chunk = bars[i:i + BATCH_SIZE]
-            statements = []
-            
-            for bar in chunk:
-                ts = bar["timestamp"]
-                session = _classify_session(ts)
-                ts_str = ts.strftime('%Y-%m-%d %H:%M:%S')
-                
-                statements.append({
-                    "sql": """INSERT INTO market_data 
-                       (timestamp, symbol, open, high, low, close, volume, session, source) 
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                       ON CONFLICT(symbol, timestamp) DO UPDATE SET
-                           open=excluded.open,
-                           high=excluded.high,
-                           low=excluded.low,
-                           close=excluded.close,
-                           volume=excluded.volume,
-                           session=excluded.session,
-                           source=excluded.source
-                       WHERE 
-                           (market_data.source NOT IN ('MASSIVE', 'BINANCE')) OR 
-                           (excluded.source IN ('MASSIVE', 'BINANCE'))
-                    """,
-                    "args": [ts_str, bar["symbol"], bar["open"], bar["high"], bar["low"],
-                             bar["close"], bar["volume"], session, "MASSIVE"]
-                })
-            
-            self.client.batch(statements)
-            total += len(chunk)
-        
-        return total
+        _SQL = """INSERT INTO market_data 
+               (timestamp, symbol, open, high, low, close, volume, session, source) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(symbol, timestamp) DO UPDATE SET
+                   open=excluded.open,
+                   high=excluded.high,
+                   low=excluded.low,
+                   close=excluded.close,
+                   volume=excluded.volume,
+                   session=excluded.session,
+                   source=excluded.source
+               WHERE 
+                   (market_data.source NOT IN ('MASSIVE', 'BINANCE')) OR 
+                   (excluded.source IN ('MASSIVE', 'BINANCE'))"""
+
+        statements = []
+        for bar in bars:
+            ts = bar["timestamp"]
+            session = _classify_session(ts)
+            ts_str = ts.strftime('%Y-%m-%d %H:%M:%S')
+            statements.append((
+                _SQL,
+                [ts_str, bar["symbol"], bar["open"], bar["high"], bar["low"],
+                 bar["close"], bar["volume"], session, "MASSIVE"]
+            ))
+
+        # Send all statements in one HTTP call (chunked at 500 for safety)
+        CHUNK = 500
+        for i in range(0, len(statements), CHUNK):
+            self.client.batch(statements[i:i + CHUNK])
+
+        return len(bars)
 
     def close(self):
         """Closes the database connection."""
