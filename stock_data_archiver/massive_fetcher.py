@@ -58,6 +58,9 @@ class MassiveFetcher:
         # Try fetching, with retry on rate limit (rotate to next key)
         max_retries = self.total_keys + 1
         for attempt in range(max_retries):
+            # MANDATORY PACING: Small sleep to avoid slamming the API with 9 concurrent threads
+            time.sleep(0.5)
+            
             client, key_idx = self._get_next_client()
             try:
                 aggs = client.list_aggs(
@@ -87,7 +90,7 @@ class MassiveFetcher:
                 error_str = str(e).lower()
                 if "429" in error_str or "rate" in error_str or "limit" in error_str:
                     print(f"      ⚠️ Rate limit on key {key_idx}/{self.total_keys}. Rotating...")
-                    time.sleep(1)  # Brief pause before trying next key
+                    time.sleep(2)  # Increased pause before trying next key
                     continue
                 else:
                     print(f"      ❌ Massive Error for {ticker} on {date_str} (key {key_idx}): {e}")

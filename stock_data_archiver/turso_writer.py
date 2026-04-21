@@ -5,6 +5,7 @@ Handles connection, schema init, resume checks, and batch upserts.
 Pattern mirrors: data-harvester/src/database/operations.py
 """
 from datetime import datetime
+import pytz
 from libsql_client import create_client_sync
 from config import US_EASTERN, UTC
 
@@ -16,7 +17,6 @@ _MARKET_CLOSE = datetime.strptime("16:00", "%H:%M").time()
 
 def _classify_session(utc_timestamp: datetime) -> str:
     """Classifies a UTC timestamp into PRE/REG/POST based on Eastern Time."""
-    import pytz
     if utc_timestamp.tzinfo is None:
         utc_timestamp = pytz.utc.localize(utc_timestamp)
     et_time = utc_timestamp.astimezone(US_EASTERN).time()

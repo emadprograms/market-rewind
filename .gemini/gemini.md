@@ -71,15 +71,13 @@ Market Rewind is a zero-read, local-first market replay tool.
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
 #### Stock Data Archiver (`stock_data_archiver/`)
-- [x] **Parallel Backfill Engine**: Fixed historical 1-minute OHLCV gap for Oct 2025 – Jan 2026.
-- [x] **9x Throughput**: Implemented `ThreadPoolExecutor` to use all 9 API keys concurrently.
-- [x] **Optimized Writing**: Leverages libSQL `.batch()` API for high-performance upserts (100 bars per request), minimizing network roundtrips.
-- [x] `infisical_client.py`: 
-    - **Dual DB Connectivity**: Connects to Source DB (`aw_ticker_notes`) and Target DB (`oldstockdataarchive`).
-    - **Keys**: Rotates through 9 rotating Massive (Polygon.io) API keys.
-- [x] `massive_fetcher.py`: Thread-safe round-robin logic for concurrent fetching. Timezone-aware date handling (UTC/ET).
-- [x] `turso_writer.py`: Thread-safe batch upserts with Tier-1 source protection.
-- [x] `main.py`: Parallelized task queue with real-time ETA and status tracking.
+- [x] **Ultra-Fast Parallel Engine**: Optimized 9-worker architecture for 9x throughput increase.
+- [x] **9x Speed Optimization**: Removed database locks and implemented per-thread Turso connections for zero-wait parallelism.
+- [x] **Efficient Batching**: Reduced Turso HTTP writes from 960 to **exactly 1** per ticker-day using the native libSQL batch protocol.
+- [x] `infisical_client.py`: Dual-DB connectivity (Source: `aw_ticker_notes`, Target: Archive).
+- [x] `massive_fetcher.py`: Thread-safe multi-key rotation (9 keys).
+- [x] `turso_writer.py`: Zero-lock, protocol-corrected batch writes with Tier-1 protection.
+- [x] `main.py`: Parallelized task orchestrator with real-time ETA tracking.
 
 ---
 *Last Update: 2026-04-21*

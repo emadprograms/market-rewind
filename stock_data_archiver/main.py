@@ -46,6 +46,7 @@ def main():
     parser.add_argument("--from-date", default=DEFAULT_FROM, help=f"Start date (default: {DEFAULT_FROM})")
     parser.add_argument("--to-date", default=DEFAULT_TO, help=f"End date (default: {DEFAULT_TO})")
     parser.add_argument("--skip-resume-check", action="store_true", help="Force re-fetch even if data exists")
+    parser.add_argument("--delay", type=float, default=0.5, help="Seconds to wait between fetches per worker (default: 0.5)")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -96,7 +97,7 @@ def main():
 
     # ── Step 5: Initialize Massive fetcher ──
     print("\n🚀 Step 5: Initializing Massive fetcher...")
-    fetcher = MassiveFetcher(massive_keys)
+    fetcher = MassiveFetcher(api_keys=massive_keys, delay=args.delay)
 
     # ── Step 6: Generate date range ──
     dates = generate_date_range(args.from_date, args.to_date)
