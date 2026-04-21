@@ -88,9 +88,16 @@ class InfisicalClient:
             print(f"⚠️ Error fetching Massive keys: {e}")
             return []
 
-    def get_turso_creds(self) -> dict:
-        """Retrieves Turso OL Stock Data Archive credentials."""
+    def get_source_creds(self) -> dict:
+        """Retrieves Source Turso credentials (where symbol_map lives)."""
         return {
-            "url": self.get_secret("turso_emadarshadalam_oldstockdataarchive_db_url"),
-            "token": self.get_secret("turso_emadarshadalam_oldstockdataarchive_auth_token")
+            "url": self.get_secret("turso_arshademad_stockdataarchive_db_url"),
+            "token": self.get_secret("turso_arshademad_stockdataarchive_auth_token")
+        }
+
+    def get_target_creds(self) -> dict:
+        """Retrieves Target Turso credentials (where we write historical data)."""
+        return {
+            "url": self.get_secret("turso_emadarshadalam1_oldstockdataarchive_db_url"),
+            "token": self.get_secret("turso_emadarshadalam1_oldstockdataarchive_auth_token")
         }

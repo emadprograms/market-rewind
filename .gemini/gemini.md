@@ -68,8 +68,20 @@ Market Rewind is a zero-read, local-first market replay tool.
         - Supports 2-point placement logic with live canvas previews.
         - Robust off-screen clipping for persistent chart analysis.
 
-### 📦 Key Dependencies
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
+#### Stock Data Archiver (`stock_data_archiver/`)
+- [x] **Standalone Backfill Utility**: Fixed historical 1-minute OHLCV gap for Oct 2025 – Jan 2026.
+- [x] `infisical_client.py`: 
+    - **Dual DB Connectivity**: Connects to Source DB (for `symbol_map`) and Target DB (for archival storage).
+    - **Keys**: Rotates through 9 rotating Massive (Polygon.io) API keys.
+- [x] `massive_fetcher.py`:
+    - **Throughput Ops**: Implements round-robin key rotation to maximize rate limits.
+    - **Retry Logic**: Automatic backoff and key-switching on 429 (Too Many Requests) errors.
+- [x] `turso_writer.py`:
+    - **Tier-1 Source Protection**: UPSERT logic (`ON CONFLICT`) ensures 'MASSIVE' source bars are never overwritten by lower-quality data.
+    - **Resume Tracking**: Automatically skips days already populated in the target database.
+- [x] `main.py`: Interactive CLI with real-time ETA calculation and progress tracking.
+
 ---
-*Last Update: 2026-04-17*
+*Last Update: 2026-04-21*

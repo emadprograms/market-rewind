@@ -67,20 +67,24 @@ def main():
     print(f"   Found {len(massive_keys)} API keys.")
 
     # ── Step 3: Connect to Turso ──
-    print("\n🗄️  Step 3: Connecting to Turso database...")
-    turso_creds = infisical.get_turso_creds()
-    if not turso_creds.get("url") or not turso_creds.get("token"):
-        print("❌ Missing Turso credentials in Infisical. Exiting.")
+    print("\n🗄️  Step 3: Connecting to Turso databases...")
+    source_creds = infisical.get_source_creds()
+    target_creds = infisical.get_target_creds()
+
+    if not source_creds.get("url") or not target_creds.get("url"):
+        print("❌ Missing Source or Target Turso credentials in Infisical. Exiting.")
         sys.exit(1)
     
-    writer = TursoWriter(url=turso_creds["url"], token=turso_creds["token"])
+    source_writer = TursoWriter(url=source_creds["url"], token=source_creds["token"])
+    target_writer = TursoWriter(url=target_creds["url"], token=target_creds["token"])
 
     # ── Step 4: Discover tickers from symbol_map ──
     print("\n📊 Step 4: Reading symbol_map for Massive-eligible tickers...")
-    ticker_pairs = writer.get_massive_tickers()
+    ticker_pairs = source_writer.get_massive_tickers()
     if not ticker_pairs:
         print("❌ No tickers with massive_ticker found in symbol_map. Exiting.")
-        writer.close()
+        source_writer.close()
+        target_writer.close()
         sys.exit(1)
     
     print(f"   Found {len(ticker_pairs)} tickers:")
@@ -117,7 +121,7 @@ def main():
             
             # Resume check: skip if data already exists
             if not args.skip_resume_check:
-                existing = writer.check_day_exists(display_name, date_str)
+                existing = target_writer.check_day_exists(display_name, date_str)
                 if existing > 0:
                     print(f"   ⏭️  {display_name}: {existing} rows already exist. Skipping.")
                     skipped += 1
@@ -136,7 +140,7 @@ def main():
 
             # Write to Turso
             try:
-                count = writer.upsert_bars(bars)
+                count = target_writer.upsert_bars(bars)
                 total_bars += count
                 elapsed = time.time() - start_time
                 rate = completed / elapsed if elapsed > 0 else 0
@@ -158,7 +162,8 @@ def main():
     print(f"   Time elapsed:        {elapsed / 60:.1f} minutes")
     print("=" * 60)
 
-    writer.close()
+    source_writer.close()
+    target_writer.close()
 
 
 if __name__ == "__main__":
