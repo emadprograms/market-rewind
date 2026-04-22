@@ -509,7 +509,6 @@ export default function ChartUnit({
                             targetTimeToRestore = oldData[safeIndex].time;
                         }
                     }
-                }
             }
         }
 
