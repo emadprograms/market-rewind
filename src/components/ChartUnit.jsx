@@ -475,13 +475,16 @@ export default function ChartUnit({
               from: oldLogicalRange.from + shift,
               to: oldLogicalRange.to + shift
             });
+          } else {
+            // BACKWARDS replay: Explicitly restore the exact previous logical range.
+            // Since older indices (index 0) remain unchanged, restoring the exact range 
+            // keeps all remaining candles firmly locked in their identical physical pixels.
+            // This prevents `lightweight-charts` from defaulting its internal auto-scale on `setData`, 
+            // which was causing the severe squishing issue against the Y-axis.
+            ts.setVisibleLogicalRange(oldLogicalRange);
           }
-          // If shift < 0 (backwards replay), we explicitly do NOTHING to the visible range.
-          // This allows the deleted candles to naturally leave empty space on the right 
-          // without aggressively squishing the bar spacing against the Y-axis.
         } else {
-          // If the user has explicitly scrolled back in time, try to preserve their exact view
-          // Only re-apply it if they are NOT at the end, otherwise it fights the natural deletion.
+          // If the user has explicitly scrolled back in time, preserve their exact view
           ts.setVisibleLogicalRange(oldLogicalRange);
         }
 
