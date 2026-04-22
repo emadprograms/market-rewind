@@ -42,7 +42,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install archiver dependencies
-        run: pip install -r stock_data_archiver/requirements.txt
+        run: pip install -r backend/historical_archiver/requirements.txt
 
       - name: Run Stock Data Archiver
         env:
@@ -52,7 +52,7 @@ jobs:
         run: |
           echo "🏁 Starting backfill: ${{ inputs.from_date }} → ${{ inputs.to_date }}"
           echo "   Cooldown: ${{ inputs.cooldown }}s per key"
-          python stock_data_archiver/main.py \
+          python backend/historical_archiver/main.py \
             --from-date ${{ inputs.from_date }} \
             --to-date ${{ inputs.to_date }} \
             --cooldown ${{ inputs.cooldown }}
@@ -79,7 +79,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r stock_data_archiver/requirements.txt
+          pip install -r backend/historical_archiver/requirements.txt
           pip install libsql
 
       - name: Sync Archive DB → Local SQLite
@@ -92,7 +92,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
           echo "📦 Syncing archive database to local SQLite..."
-          python stock_data_archiver/sync_release.py
+          python backend/historical_archiver/sync_release.py
 
       - name: Upload as GitHub Release
         env:
@@ -102,7 +102,7 @@ jobs:
           gh release delete latest-archive --cleanup-tag -y || true
           git tag latest-archive
           git push origin latest-archive --force
-          gh release create latest-archive database/archive_data.db \
+          gh release create latest-archive backend/historical_archiver/archive_data.db \
             -t "Latest Archive Data" \
             -n "Archive database synced after backfill (${{ inputs.from_date }} → ${{ inputs.to_date }})"
 

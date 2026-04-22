@@ -1,7 +1,7 @@
 """
 Sync Release — Exports the Archive Turso database to a local SQLite file.
 Uses Infisical to fetch the archive database credentials (same source of truth
-as the stock_data_archiver).
+as the historical archiver).
 
 This script is called by the GitHub Actions workflow after a backfill completes,
 to create a downloadable SQLite snapshot of the archive database.
@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DB_PATH = "database/archive_data.db"
+DB_PATH = "backend/historical_archiver/archive_data.db"
 
 
 def run_sync():

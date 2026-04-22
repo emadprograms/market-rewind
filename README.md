@@ -10,27 +10,40 @@ Market Rewind is a professional, **Local-First** market replay tool. It uses Tur
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### Getting Started
 
+#### Prerequisites
 - A Turso (LibSQL) database populated with 1-minute market data.
 
-### Running Locally
-
+#### Running Locally
 1. Install dependencies: `npm install`.
 2. Run the dev server: `npm run dev`.
 
-### Using the App
+### Managing the Database(s)
 
-1. **Trigger Data Sync**: Manually trigger the GitHub Action "Sync Local Database" in the Repository to update the initial DB.
-2. **Click "Fetch latest from GitHub"**: This will download the remote data to your browser's local storage.
-3. **Select Date & Ticker**: The app will read directly from the local replica.
+Market Rewind relies on two separate synchronization mechanisms managed in the `backend/` directory:
+
+1. **App Database (`backend/app_db_sync/`)**
+   - Automatically triggered via the "Sync Local Database" GitHub Action.
+   - Syncs the lightweight production data from Turso and publishes it as the `latest-data` GitHub Release.
+   - The React frontend fetches this release on load.
+
+2. **Historical Data Archive (`backend/historical_archiver/`)**
+   - A heavy-duty worker engine to backfill historical 1-minute OHLCV data from Polygon.io.
+   - Triggered via the "Stock Data Archiver" GitHub Action, with configurable date ranges.
+   - Optionally syncs the deep archive to the `latest-archive` GitHub Release for local inspection.
+
+### Using the App
+1. **Trigger Data Sync**: Execute the "Sync Local Database" workflow in GitHub Actions to update the `latest-data` release.
+2. **Fetch in Browser**: In the Market Rewind UI, click "Fetch latest from GitHub" to download the remote data to your browser's persistent storage.
+3. **Select Date & Ticker**: The app reads directly from your private local replica.
 4. **Playback**: Use the playback controls to rewind the market.
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 18, Vite.
-- **Database**: libSQL (@tursodatabase/sync-wasm).
-- **Charting**: Lightweight Charts.
+- **Frontend**: React 18, Vite, Lightweight Charts.
+- **Backend/Scripts**: Python 3.12 (app db sync & archiver API workers), Infisical (Secrets).
+- **Database**: libSQL (@tursodatabase/sync-wasm), Turso.
 - **Hosting**: Vercel (Static Site).
 
 ## 📄 License

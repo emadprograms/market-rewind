@@ -10,7 +10,7 @@ __pycache__/
 *.pyc
 
 # Local Database (Avoid 100MB limit issues)
-database/*.db
+backend/**/*.db
 
 # Env
 .env
@@ -19,8 +19,9 @@ database/*.db
 .env.test.local
 .env.production.local
 
-# Archiver
-stock_data_archiver/__pycache__/
+# Backends
+backend/**/__pycache__/
+backend/**/venv/
 scratch.py
 
 # System

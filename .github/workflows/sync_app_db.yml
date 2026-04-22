@@ -34,13 +34,13 @@ jobs:
           echo "Starting Master Sync once..."
           
           # 2. Run the sync script ONCE
-          python database/sync_backend.py
+          python backend/app_db_sync/sync.py
           
           # 3. Upload as a GitHub Release to bypass the 100MB limit
           echo "Uploading database as a GitHub Release..."
           gh release delete latest-data --cleanup-tag -y || true
           git tag latest-data
           git push origin latest-data --force
-          gh release create latest-data database/market_data.db -t "Latest Market Data" -n "Auto-synced from Turso"
+          gh release create latest-data backend/app_db_sync/market_data.db -t "Latest Market Data" -n "Auto-synced from Turso"
           
           echo "Sync complete. Backend task finished."

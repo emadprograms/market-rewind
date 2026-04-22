@@ -11,9 +11,9 @@ Architecture:
   - 60-second cooldown between API calls per worker
 
 Usage:
-    python stock_data_archiver/main.py                                              # Full run
-    python stock_data_archiver/main.py --from-date 2025-10-01 --to-date 2025-10-01  # Single day
-    python stock_data_archiver/main.py --cooldown 30                                 # Custom cooldown
+    python backend/historical_archiver/main.py                                              # Full run
+    python backend/historical_archiver/main.py --from-date 2025-10-01 --to-date 2025-10-01  # Single day
+    python backend/historical_archiver/main.py --cooldown 30                                 # Custom cooldown
 """
 import sys
 import os

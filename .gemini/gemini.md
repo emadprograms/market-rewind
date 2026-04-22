@@ -73,18 +73,20 @@ Market Rewind is a zero-read, local-first market replay tool.
 
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
-#### Stock Data Archiver (`stock_data_archiver/`)
-- [x] **Worker-Per-Day Architecture**: Each of 9 workers owns a dedicated API key and processes ALL tickers for one day before moving to the next.
-- [x] **Strict Rate Limiting**: 60s mandatory cooldown between API calls per key. Resume checks (no API call) skip without consuming cooldown.
-- [x] **Day Queue**: Days are distributed via a thread-safe queue. Days beyond 9 are queued and only start when a worker finishes its current day.
-- [x] `infisical_client.py`: Dual-DB connectivity (Source: `aw_ticker_notes`, Target: Archive).
-- [x] `massive_fetcher.py`: Dedicated per-worker clients (no rotation/sharing). Progressive backoff on 429 (60s, 120s, 180s).
-- [x] `turso_writer.py`: Per-thread Turso connections with batch writes via libSQL tuple protocol. Tier-1 source protection.
-- [x] `main.py`: Day-queue orchestrator with `--cooldown` flag (default 60s) and real-time ETA tracking.
+#### Backends (`backend/`)
+- [x] **App DB Sync (`backend/app_db_sync/`)**: Scripts for syncing the main Turso database into the local application.
+- [x] **Historical Archiver (`backend/historical_archiver/`)**: 
+    - Worker-Per-Day Architecture: Each of 9 workers owns a dedicated API key and processes ALL tickers for one day before moving to the next.
+    - Strict Rate Limiting: 60s mandatory cooldown between API calls per key. Resume checks (no API call) skip without consuming cooldown.
+    - Day Queue: Days are distributed via a thread-safe queue. Days beyond 9 are queued and only start when a worker finishes its current day.
+    - `infisical_client.py`: Dual-DB connectivity (Source: `aw_ticker_notes`, Target: Archive).
+    - `massive_fetcher.py`: Dedicated per-worker clients (no rotation/sharing). Progressive backoff on 429 (60s, 120s, 180s).
+    - `turso_writer.py`: Per-thread Turso connections with batch writes via libSQL tuple protocol. Tier-1 source protection.
+    - `main.py`: Day-queue orchestrator with `--cooldown` flag (default 60s) and real-time ETA tracking.
 
 #### GitHub Actions Workflows (`.github/workflows/`)
-- [x] `market_backend.yml`: Manual trigger to sync main Turso DB → local SQLite and publish as `latest-data` GitHub Release.
-- [x] `stock_data_archiver.yml`: Manual trigger with configurable inputs:
+- [x] `sync_app_db.yml`: Manual trigger to sync main Turso DB → local SQLite and publish as `latest-data` GitHub Release.
+- [x] `sync_archive_db.yml`: Manual trigger with configurable inputs:
     - `from_date` / `to_date`: Date range for backfill.
     - `cooldown`: Seconds between API calls per worker (default: 60).
     - `update_release`: Toggle to sync the **archive** Turso DB → SQLite and publish as `latest-archive` GitHub Release.
@@ -92,4 +94,4 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`.
 
 ---
-*Last Update: 2026-04-21*
+*Last Update: 2026-04-22*

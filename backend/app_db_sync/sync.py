@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 SYNC_URL = os.environ.get("TURSO_DB_URL")
 AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
-DB_PATH = "database/market_data.db"
+DB_PATH = "backend/app_db_sync/market_data.db"
 
 def run_single_sync():
     """
@@ -20,7 +20,7 @@ def run_single_sync():
         logger.error("Missing TURSO_DB_URL or TURSO_AUTH_TOKEN")
         sys.exit(1)
 
-    os.makedirs("database", exist_ok=True)
+    os.makedirs("backend/app_db_sync", exist_ok=True)
     
     logger.info(f"Connecting to {DB_PATH} and performing ONE-TIME master sync...")
     try:
