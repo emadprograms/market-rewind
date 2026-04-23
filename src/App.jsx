@@ -389,16 +389,16 @@ export default function App() {
               
               return (maximizedId !== null ? [maximizedId] : Array.from({ length: gridCount }).map((_, i) => i)).map((i) => {
                 const hasSPY = tickers.includes('SPY');
-                const leftTicker = i === 0 ? (hasSPY ? 'SPY' : sessionTicker) : sessionTicker;
+                const defaultTicker = i === 1 ? (hasSPY ? 'SPY' : sessionTicker) : sessionTicker;
 
                 return (
                   <ChartUnit 
                     key={i} 
                     id={i} 
                     tickers={tickers} 
-                    initialTicker={leftTicker}
-                    initialTf={i === 0 ? '1D' : '5min'}
-                    initialEth={i !== 0}
+                    initialTicker={defaultTicker}
+                    initialTf={i === 1 ? '1D' : '5min'}
+                    initialEth={i !== 1}
                     selectedDate={selectedDate} 
                     isReplayMode={isSessionStarted}
                     globalTime={currentTime}
