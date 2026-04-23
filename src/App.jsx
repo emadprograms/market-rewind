@@ -417,7 +417,7 @@ export default function App() {
         </main>
 
         <div className="playback-bar">
-          <button className="btn-icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} title="Toggle Sidebar" style={{ marginRight: 'auto' }}>
+          <button className="btn-icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} title="Toggle Sidebar" style={{ position: 'absolute', left: '16px' }}>
             <Menu size={20} />
           </button>
           
