@@ -19,6 +19,9 @@ Market Rewind is a zero-read, local-first market replay tool.
         - Synchronized playback across multiple charts.
         - Dynamic tick rate driven by the lowest timeframe in the layout.
         - **Squash Fix**: Backwards replay steps naturally crop data on the right without aggressive logical range shifts, preventing candle squishing.
+    - **Local-Time Start/Reset Engine**: 
+        - Default `entryTime` updated to `09:20` (ET).
+        - DST-aware conversion logic (`getUtcTimeFromEt`) ensures the simulator starts and resets to the exact ET time selected by the user, regardless of seasonal timezone offsets (EST vs EDT).
 - [x] `src/components/ChartUnit.jsx`:
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift'; prioritized 'latest' edge when switching from 1D to intraday.

@@ -20,7 +20,7 @@ export default function App() {
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSessionStarted, setIsSessionStarted] = useState(false);
-  const [entryTime, setEntryTime] = useState('13:29');
+  const [entryTime, setEntryTime] = useState('09:20');
   const [sessionTicker, setSessionTicker] = useState('SPY');
   const [maximizedId, setMaximizedId] = useState(null);
   const [drawings, setDrawings] = useState({}); // { ticker: { rays: [], rects: [] } }
@@ -108,13 +108,26 @@ export default function App() {
     }
   }, [selectedDate, entryTime, tickers, isDbLoaded, isSessionStarted]);
 
+  // Helper: Converts ET user input to UTC string to match masterData
+  const getUtcTimeFromEt = (dateStr, etTimeStr) => {
+    const probeDate = new Date(`${dateStr}T14:00:00Z`);
+    const nyHour = new Intl.DateTimeFormat('en-US', { 
+      timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' 
+    }).format(probeDate);
+    const offsetHours = 14 - parseInt(nyHour, 10);
+    const [hh, mm] = etTimeStr.split(':');
+    const localMs = new Date(`${dateStr}T${hh}:${mm}:00Z`).getTime();
+    const targetUtcDate = new Date(localMs + (offsetHours * 3600000));
+    return targetUtcDate.toISOString().replace('T', ' ').substring(0, 19);
+  };
+
   async function loadMarketData() {
     setIsLoading(true);
     const data = await fetchMarketData(tickers[0], selectedDate);
     setMasterData(data);
     
     if (data.length > 0) {
-      const targetTimeStr = `${selectedDate} ${entryTime}:00`;
+      const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
       const startBar = data.find(d => d.time >= targetTimeStr) || data[data.length - 1];
       setCurrentTime(startBar ? startBar.time : null);
     } else {
@@ -174,7 +187,7 @@ export default function App() {
   // --- Handlers ---
   const togglePlay = () => setIsPlaying(!isPlaying);
   const resetToOpen = () => {
-    const targetTimeStr = `${selectedDate} ${entryTime}:00`;
+    const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
     const startBar = masterData.find(d => d.time >= targetTimeStr) || masterData[masterData.length - 1];
     if (startBar) setCurrentTime(startBar.time);
     setIsPlaying(false);
