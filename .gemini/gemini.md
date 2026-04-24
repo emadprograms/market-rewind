@@ -17,6 +17,12 @@ Market Rewind is a zero-read, local-first market replay tool.
         - **Tooltips**: Hovering over any icon reveals its purpose (title attributes).
         - **Compact Layout Selector**: Single-column vertical grid for selecting up to 10 chart layouts.
         - **Integrated Date Picker**: Invisible date input overlaid on a calendar icon for clean aesthetics.
+    - **Intelligent Layout Defaults**: 
+        - **1-Chart**: `5m` company chart.
+        - **2-Chart**: `5m` ETH enabled (Left) + `1D` (Right).
+        - **3-Chart**: `5m`, `1H`, `1D` vertical stack/grid.
+        - **4-Chart**: `5m`, `1H`, `1D` + `5m SPY` context chart.
+        - **Force-Remount**: Charts now use a composite key ``${layoutMode}-${i}`` to ensure defaults are re-applied instantly upon layout switch.
     - **Ultra-Slim Logic**: Integrated with 40px playback system.
     - **Step Overrides**: Added manual "STEP" selector (Auto, 1m, 5m, etc.) to the replay bar, allowing users to override the minimum chart timeframe.
     - **Unified Replay Engine**: 

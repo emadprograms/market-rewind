@@ -373,17 +373,35 @@ export default function App() {
               const gridCount = layoutMode === '1' ? 1 : (layoutMode.startsWith('2') ? 2 : (layoutMode.startsWith('3') ? 3 : 4));
               
               return (maximizedId !== null ? [maximizedId] : Array.from({ length: gridCount }).map((_, i) => i)).map((i) => {
-                const hasSPY = tickers.includes('SPY');
-                const defaultTicker = i === 1 ? (hasSPY ? 'SPY' : sessionTicker) : sessionTicker;
+                let initialTicker = sessionTicker;
+                let initialTf = '5min';
+                let initialEth = false;
+
+                if (gridCount === 2) {
+                  if (i === 0) { initialTf = '5min'; initialEth = true; }
+                  else if (i === 1) { initialTf = '1D'; }
+                } else if (gridCount === 3) {
+                  if (i === 0) { initialTf = '5min'; }
+                  else if (i === 1) { initialTf = '1H'; }
+                  else if (i === 2) { initialTf = '1D'; }
+                } else if (gridCount === 4) {
+                  if (i === 0) { initialTf = '5min'; }
+                  else if (i === 1) { initialTf = '1H'; }
+                  else if (i === 2) { initialTf = '1D'; }
+                  else if (i === 3) { 
+                    initialTicker = tickers.includes('SPY') ? 'SPY' : sessionTicker;
+                    initialTf = '5min';
+                  }
+                }
 
                 return (
                   <ChartUnit 
-                    key={i} 
+                    key={`${layoutMode}-${i}`} 
                     id={i} 
                     tickers={tickers} 
-                    initialTicker={defaultTicker}
-                    initialTf={i === 1 ? '1D' : '5min'}
-                    initialEth={i !== 1}
+                    initialTicker={initialTicker}
+                    initialTf={initialTf}
+                    initialEth={initialEth}
                     selectedDate={selectedDate} 
                     isReplayMode={isSessionStarted}
                     globalTime={currentTime}
