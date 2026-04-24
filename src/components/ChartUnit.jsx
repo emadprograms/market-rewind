@@ -612,29 +612,7 @@ export default function ChartUnit({
         }
 
       } else {
-        // Full reset (e.g. timeframe change or symbol change)
-        const isUpdate = lastDataCountRef.current > 0;
-        let targetTimeToRestore = null;
-
-        
-        if (isUpdate && chartRef.current && priceSeriesRef.current && oldLogicalRange) {
-            const oldData = priceSeriesRef.current.data();
-            if (oldData && oldData.length > 0) {
-                const barsToRight = oldData.length - 1 - oldLogicalRange.to;
-                // If the right edge was visible or very close, stick to the end
-
-                    if (barsToRight < 2) {
-                        targetTimeToRestore = null; // Use scrollToRealTime instead of anchoring to the start-of-day timestamp
-                    } else {
-                        const midIndex = Math.floor((oldLogicalRange.from + oldLogicalRange.to) / 2);
-                        const safeIndex = Math.max(0, Math.min(oldData.length - 1, midIndex));
-                        if (oldData[safeIndex]) {
-                            targetTimeToRestore = oldData[safeIndex].time;
-                        }
-                    }
-            }
-        }
-
+        // Full reset (e.g. timeframe change, symbol change, or ETH toggle)
         priceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
           time, open, high, low, close
         })));
@@ -652,11 +630,9 @@ export default function ChartUnit({
           // --- Handle Infinite Scroll Prepend Shift ---
           if (pendingHistoryPrependRef.current) {
               const { oldFirstTime, oldLogicalRange } = pendingHistoryPrependRef.current;
-              // Find how many new bars were prepended
               const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
               
               if (newFirstIndex > 0 && oldLogicalRange) {
-                  // Seamlessly shift the viewport right by exactly the number of new bars
                   chartRef.current.timeScale().setVisibleLogicalRange({
                       from: oldLogicalRange.from + newFirstIndex,
                       to: oldLogicalRange.to + newFirstIndex
@@ -664,49 +640,13 @@ export default function ChartUnit({
               }
               pendingHistoryPrependRef.current = null;
           } else {
-              // Normal load logic
+              // Normal load: always scroll to the latest data with proper right-margin padding.
+              // We intentionally do NOT try to anchor to the old viewport's timestamp because
+              // cross-timeframe switches have completely different data windows (e.g., 1D loads
+              // 2 years, 1m loads 3 days), making old timestamps unreliable anchors.
               setTimeout(() => {
                 if (!chartRef.current) return;
-                
-                const zoomMap = {
-                  '1min': 120,
-                  '5min': 78,
-                  '15min': 60,
-                  '30min': 50,
-                  '1H': 60,
-                  '1D': 50
-                };
-
-                if (lastBarSpacingRef.current === null) {
-                  lastBarSpacingRef.current = zoomMap[timeframe] 
-                    ? chartContainerRef.current.clientWidth / zoomMap[timeframe] 
-                    : 6;
-                }
-
-                const count = chartContainerRef.current.clientWidth / lastBarSpacingRef.current;
-                
-                if (targetTimeToRestore !== null) {
-                    let midIdx = formatted.findIndex(d => d.time >= targetTimeToRestore);
-                    if (midIdx === -1) midIdx = total - 1;
-                    
-                    let fromIndex = midIdx - Math.floor(count / 2);
-                    let toIndex = fromIndex + count;
-                    
-                    if (toIndex >= total) {
-                        chartRef.current.timeScale().scrollToRealTime();
-                        return;
-                    } else if (fromIndex < 0) {
-                        fromIndex = 0;
-                        toIndex = Math.min(total, count);
-                    }
-
-                    chartRef.current.timeScale().setVisibleLogicalRange({
-                        from: fromIndex,
-                        to: toIndex
-                    });
-                } else {
-                    chartRef.current.timeScale().scrollToRealTime();
-                }
+                chartRef.current.timeScale().scrollToRealTime();
               }, 80);
           }
         }
