@@ -23,6 +23,9 @@ export default function ChartUnit({
   allDrawings = {},
   onUpdateDrawings,
   onTimeframeChange,
+  isSymbolSynced,
+  globalTicker,
+  onGlobalTickerChange,
   style = {}
 }) {
   const chartContainerRef = useRef();
@@ -43,6 +46,13 @@ export default function ChartUnit({
   const [showVP, setShowVP] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawType, setDrawType] = useState('ray'); // 'ray' | 'rect'
+
+  // Sync with global ticker if enabled
+  useEffect(() => {
+    if (isSymbolSynced && globalTicker && globalTicker !== ticker) {
+      setTicker(globalTicker);
+    }
+  }, [isSymbolSynced, globalTicker]);
   const [rectAnchor, setRectAnchor] = useState(null); // {price, time}
   const [ghostPoint, setGhostPoint] = useState(null); // {price, time} for rect preview
   const [isAtEnd, setIsAtEnd] = useState(true);
@@ -773,6 +783,9 @@ export default function ChartUnit({
                       className={`dropdown-item ${t === ticker ? 'selected' : ''}`}
                       onClick={() => {
                         setTicker(t);
+                        if (isSymbolSynced && onGlobalTickerChange) {
+                          onGlobalTickerChange(t);
+                        }
                         setIsTickerOpen(false);
                         setTickerSearch('');
                       }}

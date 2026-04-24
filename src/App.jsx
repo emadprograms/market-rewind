@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink, Menu } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink, Menu, Link } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
 import { fetchTickers, fetchMarketData, loadDatabaseFromFile, isDBLoaded, initDB } from './lib/db';
 import { getTzForTicker, getTzLabel } from './lib/timezones';
@@ -21,6 +21,8 @@ export default function App() {
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [entryTime, setEntryTime] = useState('09:20');
   const [sessionTicker, setSessionTicker] = useState(() => localStorage.getItem('lastUsedTicker') || 'SPY');
+  const [globalTicker, setGlobalTicker] = useState(() => localStorage.getItem('lastUsedTicker') || 'SPY');
+  const [isSymbolSynced, setIsSymbolSynced] = useState(false);
   const [maximizedId, setMaximizedId] = useState(null);
   const [drawings, setDrawings] = useState({}); // { ticker: { rays: [], rects: [] } }
   const [chartTimeframes, setChartTimeframes] = useState({}); // { chartId: timeframe }
@@ -61,6 +63,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('lastUsedTicker', sessionTicker);
+    setGlobalTicker(sessionTicker);
   }, [sessionTicker]);
 
   async function checkLocalDatabase() {
@@ -370,6 +373,16 @@ export default function App() {
               {l.id === '4' && <><div/><div/><div/><div/></>}
             </div>
           ))}
+
+          {/* Sync Symbols Toggle */}
+          <div 
+            className={`layout-icon ${isSymbolSynced ? 'active' : ''}`}
+            onClick={() => setIsSymbolSynced(!isSymbolSynced)}
+            title="Sync Symbols Across All Charts"
+            style={{ marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}
+          >
+            <Link size={18} />
+          </div>
         </div>
 
         {/* Links */}
@@ -480,6 +493,9 @@ export default function App() {
                     allDrawings={drawings}
                     onUpdateDrawings={handleUpdateDrawings}
                     onTimeframeChange={handleTimeframeChange}
+                    isSymbolSynced={isSymbolSynced}
+                    globalTicker={globalTicker}
+                    onGlobalTickerChange={setGlobalTicker}
                     style={style}
                   />
                 );
