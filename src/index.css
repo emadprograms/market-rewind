@@ -1,6 +1,6 @@
 :root {
-  --bg-dark: #0a0b10;
-  --bg-card: rgba(20, 22, 30, 0.7);
+  --bg-dark: #000000;
+  --bg-card: #000000;
   --border-color: rgba(255, 255, 255, 0.1);
   --accent-green: #26a69a;
   --accent-red: #ef5350;
@@ -29,16 +29,14 @@ body {
   flex-direction: row;
   height: 100dvh;
   width: 100vw;
-  background: radial-gradient(circle at top right, rgba(38, 166, 154, 0.05), transparent),
-              radial-gradient(circle at bottom left, rgba(239, 83, 80, 0.05), transparent);
+  background-color: var(--bg-dark);
 }
 
 /* --- Sidebar (Icon Dock) --- */
 .sidebar {
   width: 48px;
   flex-shrink: 0;
-  background: rgba(10, 11, 16, 0.85);
-  backdrop-filter: var(--glass-blur);
+  background: #000000;
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -294,11 +292,10 @@ select:focus, input:focus {
   left: 0;
   min-width: 180px;
   max-height: 320px;
-  background: rgba(15, 18, 25, 0.95);
-  backdrop-filter: var(--glass-blur);
+  background: #000000;
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8);
   z-index: 1000;
   overflow: hidden;
   display: flex;
@@ -441,8 +438,7 @@ select:focus, input:focus {
 
 .playback-bar {
   height: 40px;
-  background: rgba(10, 11, 16, 0.95);
-  backdrop-filter: var(--glass-blur);
+  background: #000000;
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -554,8 +550,7 @@ select:focus, input:focus {
 }
 
 .session-card {
-  background: rgba(20, 22, 30, 0.8);
-  backdrop-filter: blur(20px);
+  background: #000000;
   border: 1px solid var(--accent-green);
   border-radius: 16px;
   padding: 32px;

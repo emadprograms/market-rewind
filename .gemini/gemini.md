@@ -80,6 +80,10 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Ultra-Slim Aesthetics**:
         - **Chart Header**: 2px vertical padding.
         - **Playback Bar**: 40px total height.
+    - **OLED Absolute Black Theme**:
+        - Replaced all off-black colors with absolute `#000000`.
+        - Removed all background gradients and glass-morphism blurs for maximum contrast.
+        - Simplified sidebar and playback bar aesthetics for OLED displays.
 - [x] `src/lib/SessionShading.js`:
     - **TradingView Session Shading**: 
         - Pre-Market: Warm Yellow (`rgba(255, 210, 0, 0.07)`).
