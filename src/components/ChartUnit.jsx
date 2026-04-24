@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
-import { Maximize2, Minimize2, Search, ChevronDown, Clock, ChevronRight, Minus, Square } from 'lucide-react';
+import { Maximize2, Minimize2, Search, ChevronDown, Clock, ChevronRight, Minus, Square, Trash2 } from 'lucide-react';
 import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
@@ -869,6 +869,22 @@ export default function ChartUnit({
               <Square size={12} style={{ margin: 'auto' }} />
             </div>
             <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>RECT</span>
+          </div>
+
+          {/* CLEAR DRAWINGS */}
+          <div 
+            className="switch-container" 
+            onClick={() => {
+              if (window.confirm('Clear all drawings for ' + ticker + '?')) {
+                onUpdateDrawings(ticker, { rays: [], rects: [] });
+              }
+            }}
+            title="Clear All Drawings"
+          >
+            <div className="switch-track" style={{ width: '28px', background: 'rgba(239, 83, 80, 0.1)' }}>
+              <Trash2 size={14} color="var(--accent-red)" style={{ margin: 'auto' }} />
+            </div>
+            <span style={{fontWeight: '600', letterSpacing: '0.05em', color: 'var(--accent-red)'}}>CLEAR</span>
           </div>
         </div>
         
