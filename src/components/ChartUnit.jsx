@@ -22,7 +22,8 @@ export default function ChartUnit({
   isMaximized,
   allDrawings = {},
   onUpdateDrawings,
-  onTimeframeChange
+  onTimeframeChange,
+  style = {}
 }) {
   const chartContainerRef = useRef();
   
@@ -735,7 +736,7 @@ export default function ChartUnit({
 
 
   return (
-    <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`}>
+    <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`} style={{ ...style, position: 'relative' }}>
       <div className="chart-header">
         <div className="chart-controls">
           

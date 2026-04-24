@@ -131,12 +131,14 @@ body {
   grid-template-rows: 1fr; 
 }
 .workspace.grid-2v { 
-  grid-template-columns: 1fr 1fr; 
-  grid-template-rows: 1fr; 
+  display: flex;
+  flex-direction: row;
+  gap: 0;
 }
 .workspace.grid-2h { 
-  grid-template-columns: 1fr; 
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 .workspace.grid-3 { 
   grid-template-areas: "a b" "c c"; 
@@ -159,16 +161,68 @@ body {
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 }
 .workspace.grid-3h { 
-  grid-template-columns: 1fr; 
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); 
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 .workspace.grid-3v { 
-  grid-template-columns: 1fr 1fr 1fr; 
-  grid-template-rows: 1fr; 
+  display: flex;
+  flex-direction: row;
+  gap: 0;
 }
 .workspace.grid-4 { 
   grid-template-columns: 1fr 1fr; 
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
+}
+
+/* Resizable Gutters */
+.gutter {
+  position: relative;
+  background: transparent;
+  flex-shrink: 0;
+  transition: background 0.2s;
+  z-index: 1000;
+}
+
+.gutter-v {
+  width: 4px;
+  cursor: col-resize;
+  margin: 0 -1px;
+}
+
+.gutter-h {
+  height: 4px;
+  cursor: row-resize;
+  margin: -1px 0;
+}
+
+.gutter:hover {
+  background: var(--accent-green);
+}
+
+.gutter-line {
+  position: absolute;
+  background: var(--border-color);
+}
+
+.gutter-v .gutter-line {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.gutter-h .gutter-line {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.gutter:hover .gutter-line {
+  background: rgba(255, 255, 255, 0.5);
 }
 
 /* Assign areas for complex Grid-3 variants */

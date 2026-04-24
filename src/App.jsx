@@ -25,6 +25,15 @@ export default function App() {
   const [drawings, setDrawings] = useState({}); // { ticker: { rays: [], rects: [] } }
   const [chartTimeframes, setChartTimeframes] = useState({}); // { chartId: timeframe }
   const [manualStepMinutes, setManualStepMinutes] = useState(null);
+  const [panelSizes, setPanelSizes] = useState({
+    '2v': [50, 50],
+    '2h': [50, 50],
+    '3': [33.3, 33.3, 33.4],
+    '4': [50, 50, 50, 50]
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragInfo = useRef({ active: false, mode: null, index: null });
+  const workspaceRef = useRef();
 
   
   const playbackRef = useRef();
@@ -240,6 +249,80 @@ export default function App() {
     }));
   };
 
+  const handleGutterMouseDown = (mode, index, e) => {
+    e.preventDefault();
+    setIsDragging(true);
+    dragInfo.current = { active: true, mode, index };
+    document.body.style.cursor = mode === 'v' ? 'col-resize' : 'row-resize';
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!dragInfo.current.active || !workspaceRef.current) return;
+      
+      const rect = workspaceRef.current.getBoundingClientRect();
+      const { mode, index } = dragInfo.current;
+      
+      let percent;
+      if (mode === 'v') {
+        percent = ((e.clientX - rect.left) / rect.width) * 100;
+      } else {
+        percent = ((e.clientY - rect.top) / rect.height) * 100;
+      }
+      
+      setPanelSizes(prev => {
+        const currentSizes = [...prev[layoutMode]];
+        // For a simple 1-splitter resize, we adjust currentSizes[index] and currentSizes[index+1]
+        // But we need to keep the sum of currentSizes[index] and currentSizes[index+1] constant
+        // so we don't affect other panels.
+        
+        const combinedPercent = currentSizes[index] + currentSizes[index + 1];
+        
+        // Calculate where the mouse is relative to the START of the first of the two panels
+        let relativeStart = 0;
+        for (let i = 0; i < index; i++) relativeStart += currentSizes[i];
+        
+        let newSizeA = percent - relativeStart;
+        let newSizeB = combinedPercent - newSizeA;
+        
+        // Clamp (minimum 10% per panel)
+        if (newSizeA < 10) { newSizeA = 10; newSizeB = combinedPercent - 10; }
+        if (newSizeB < 10) { newSizeB = 10; newSizeA = combinedPercent - 10; }
+        
+        currentSizes[index] = newSizeA;
+        currentSizes[index + 1] = newSizeB;
+        
+        return { ...prev, [layoutMode]: currentSizes };
+      });
+    };
+
+    const handleMouseUp = () => {
+      if (dragInfo.current.active) {
+        setIsDragging(false);
+        dragInfo.current.active = false;
+        document.body.style.cursor = 'default';
+      }
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, layoutMode]);
+
+  const Gutter = ({ mode, index }) => (
+    <div 
+      className={`gutter gutter-${mode}`} 
+      onMouseDown={(e) => handleGutterMouseDown(mode, index, e)}
+    >
+      <div className="gutter-line" />
+    </div>
+  );
+
   const handleTimeframeChange = (chartId, tf) => {
     setChartTimeframes(prev => ({
       ...prev,
@@ -335,7 +418,7 @@ export default function App() {
       {/* --- MAIN CONTENT --- */}
       <div className="main-content" style={{ position: 'relative' }}>
 
-        <main className={`workspace grid-${layoutMode}`}>
+        <main className={`workspace grid-${layoutMode}`} ref={workspaceRef}>
           {isLoading ? (
             <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
                <Activity className="animate-pulse" size={48} />
@@ -379,7 +462,7 @@ export default function App() {
             (() => {
               const gridCount = layoutMode === '1' ? 1 : (layoutMode.startsWith('2') ? 2 : (layoutMode.startsWith('3') ? 3 : 4));
               
-              return (maximizedId !== null ? [maximizedId] : Array.from({ length: gridCount }).map((_, i) => i)).map((i) => {
+              const charts = (maximizedId !== null ? [maximizedId] : Array.from({ length: gridCount }).map((_, i) => i)).map((i) => {
                 let initialTicker = sessionTicker;
                 let initialTf = '5min';
                 let initialEth = false;
@@ -401,6 +484,14 @@ export default function App() {
                   }
                 }
 
+                const sizes = panelSizes[layoutMode] || [100 / gridCount];
+                const style = {};
+                if (!maximizedId) {
+                  const size = sizes[i] !== undefined ? sizes[i] : (100 / gridCount);
+                  if (layoutMode.endsWith('v')) style.width = `${size}%`;
+                  if (layoutMode.endsWith('h')) style.height = `${size}%`;
+                }
+
                 return (
                   <ChartUnit 
                     key={`${layoutMode}-${i}`} 
@@ -418,9 +509,26 @@ export default function App() {
                     allDrawings={drawings}
                     onUpdateDrawings={handleUpdateDrawings}
                     onTimeframeChange={handleTimeframeChange}
+                    style={style}
                   />
                 );
               });
+
+              const isResizable = ['2v', '2h', '3v', '3h'].includes(layoutMode);
+              
+              if (!maximizedId && isResizable) {
+                const res = [];
+                const mode = layoutMode.endsWith('v') ? 'v' : 'h';
+                charts.forEach((chart, idx) => {
+                  res.push(chart);
+                  if (idx < charts.length - 1) {
+                    res.push(<Gutter key={`g-${idx}`} mode={mode} index={idx} />);
+                  }
+                });
+                return res;
+              }
+
+              return charts;
             })()
 
           )}
