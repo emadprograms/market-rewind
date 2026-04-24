@@ -106,7 +106,11 @@ export default function ChartUnit({
   }, [timeframe]);
 
   // 0. Fetch initial local master data
+  const dataVersionRef = useRef(0);
+  const lastRenderedVersionRef = useRef(0);
+  
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       setIsLoadingHistory(true);
       
@@ -119,13 +123,17 @@ export default function ChartUnit({
       else if (timeframe === '1D') daysBack = 365 * 2; // 2 years for daily charts
       
       const data = await fetchMarketData(ticker, selectedDate, daysBack);
+      if (cancelled) return; // stale fetch from a previous render
+      
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }
+      dataVersionRef.current += 1;
       setLocalMasterData(data);
       setIsLoadingHistory(false);
     }
     load();
+    return () => { cancelled = true; };
   }, [ticker, selectedDate, timeframe]);
 
   // Infinite Scroll Listener
