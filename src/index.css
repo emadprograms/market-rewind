@@ -218,15 +218,22 @@ body {
   transform: translateY(-50%);
 }
 
-/* Active (dragging) highlight */
-.gutter:hover .gutter-line,
+/* Hover highlight — only on devices with a real mouse */
+@media (hover: hover) {
+  .gutter:hover .gutter-line {
+    background: var(--accent-green);
+    box-shadow: 0 0 8px var(--accent-green);
+  }
+  .gutter-v:hover .gutter-line { width: 3px; }
+  .gutter-h:hover .gutter-line { height: 3px; }
+}
+
+/* Active (dragging) highlight — works on all devices */
 .gutter.active .gutter-line {
   background: var(--accent-green);
   box-shadow: 0 0 8px var(--accent-green);
 }
-.gutter-v:hover .gutter-line,
 .gutter-v.active .gutter-line { width: 3px; }
-.gutter-h:hover .gutter-line,
 .gutter-h.active .gutter-line { height: 3px; }
 
 /* Wider touch target on touch devices */
