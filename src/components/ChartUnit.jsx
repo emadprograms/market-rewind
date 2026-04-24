@@ -605,7 +605,7 @@ export default function ChartUnit({
                 // If the right edge was visible or very close, stick to the end
 
                     if (barsToRight < 2) {
-                        targetTimeToRestore = oldData[oldData.length - 1].time;
+                        targetTimeToRestore = null; // Use scrollToRealTime instead of anchoring to the start-of-day timestamp
                     } else {
                         const midIndex = Math.floor((oldLogicalRange.from + oldLogicalRange.to) / 2);
                         const safeIndex = Math.max(0, Math.min(oldData.length - 1, midIndex));
