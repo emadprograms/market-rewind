@@ -22,12 +22,14 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Local-Time Start/Reset Engine**: 
         - Default `entryTime` updated to `09:20` (ET).
         - DST-aware conversion logic (`getUtcTimeFromEt`) ensures the simulator starts and resets to the exact ET time selected by the user, regardless of seasonal timezone offsets (EST vs EDT).
+        - **Target Date Persistence**: Uses `localStorage` to automatically remember and restore the exact target date the user was last simulating.
 - [x] `src/components/ChartUnit.jsx` & `src/lib/db.js`:
     - **Dynamic Data Optimization**: Initial payload size maps to the timeframe (e.g., `1m` chart fetches 3 days, `1D` chart fetches 2 years). Drops initial load from 500,000 rows to <5,000 rows for intraday, eliminating UI lag.
     - **Infinite Scroll Engine**: Tracks scroll viewport bounds (`subscribeVisibleLogicalRangeChange`) to dynamically fetch 30-day SQLite chunks when approaching the left boundary.
     - **Seamless Viewport Prepend**: Mathematically shifts the `timeScale` rightwards by the exact number of prepended candles, completely masking the background chunk injections.
     - **Right Margin Padding**: Enforced via native `scrollToRealTime()`, guaranteeing space on the right side of the active candle on reset/load.
     - **Timeframe Jump Fix**: Replaced rigid anchoring with dynamic fallback to prevent `1D` to intraday switches from jumping backwards to the morning open.
+    - **ETH Toggle Stabilization**: Added `showEth` to context tracking, preventing the chart from squishing against the Y-axis when injecting extended hours data.
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS.
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift'.
     - **Stale Data Fix**: Eliminated race condition where switching symbols displayed old data under the new ticker.
@@ -38,16 +40,17 @@ Market Rewind is a zero-read, local-first market replay tool.
 
 
     - **Live Price Line (1D)**: Dynamic dashed yellow line indicator for extended hours / incomplete daily candles.
-    - **Scroll to End UI**: Floating "return to latest" button that appears on hover when scrolled away from the most recent data point.
+    - **Scroll to End UI**: Floating "return to latest" button appears on hover when scrolled away from the most recent data point. Click action binds to `scrollToRealTime()` to enforce proper right-margin padding.
 
 
     - **TradingView-Style Keyboard Navigation**:
         - **Standalone Letters (`A-Z`)**: Instantly opens the "Change Symbol" popup to swap tickers without clicking.
         - **Standalone Numbers (`0-9`)**: Instantly opens the "Change Interval" popup to swap timeframes (e.g., `5`, `1D`).
     - **Drawing & View Tools (Synced & Persistent)**:
-        - `Alt + J`: Toggle **Horizontal Ray** mode (anchored start, extends right).
-        - `Alt + Shift + R`: Toggle **Rectangle** drawing mode (click-to-start, click-to-finish).
-        - `Alt + Shift + E`: Toggle **Extended Trading Hours (ETH)** on/off.
+        - *Note: Shortcuts are hardened against Mac OS interception via robust `keyCode` fallbacks, and feature a full `Ctrl` alternative if the OS totally blocks the `Option/Alt` key.*
+        - `Alt/Ctrl + J`: Toggle **Horizontal Ray** mode (anchored start, extends right).
+        - `Alt/Ctrl + Shift + R`: Toggle **Rectangle** drawing mode (click-to-start, click-to-finish).
+        - `Alt/Ctrl + Shift + E`: Toggle **Extended Trading Hours (ETH)** on/off.
         - `Escape` exits draw mode.
     - **Keyboard Action Modal**: Global `?` key triggers an overlay displaying all active hotkeys and navigation shortcuts.
 - [x] `src/index.css`:
