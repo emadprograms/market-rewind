@@ -254,6 +254,7 @@ export default function App() {
     setIsDragging(true);
     dragInfo.current = { active: true, mode, index };
     document.body.style.cursor = mode === 'v' ? 'col-resize' : 'row-resize';
+    document.body.classList.add('is-resizing');
   };
 
   const calcResize = (clientX, clientY) => {
@@ -294,6 +295,7 @@ export default function App() {
       setIsDragging(false);
       dragInfo.current.active = false;
       document.body.style.cursor = 'default';
+      document.body.classList.remove('is-resizing');
     }
   };
 
@@ -321,16 +323,6 @@ export default function App() {
       window.removeEventListener('touchcancel', handleDragEnd);
     };
   }, [isDragging, layoutMode]);
-
-  const Gutter = ({ mode, index }) => (
-    <div 
-      className={`gutter gutter-${mode}`} 
-      onMouseDown={(e) => handleGutterStart(mode, index, e)}
-      onTouchStart={(e) => handleGutterStart(mode, index, e)}
-    >
-      <div className="gutter-line" />
-    </div>
-  );
 
   const handleTimeframeChange = (chartId, tf) => {
     setChartTimeframes(prev => ({
@@ -527,11 +519,20 @@ export default function App() {
               
               if (!maximizedId && isResizable) {
                 const res = [];
-                const mode = layoutMode.endsWith('v') ? 'v' : 'h';
+                const gutterMode = layoutMode.endsWith('v') ? 'v' : 'h';
                 charts.forEach((chart, idx) => {
                   res.push(chart);
                   if (idx < charts.length - 1) {
-                    res.push(<Gutter key={`g-${idx}`} mode={mode} index={idx} />);
+                    res.push(
+                      <div 
+                        key={`g-${idx}`}
+                        className={`gutter gutter-${gutterMode} ${isDragging && dragInfo.current.index === idx ? 'active' : ''}`}
+                        onMouseDown={(e) => handleGutterStart(gutterMode, idx, e)}
+                        onTouchStart={(e) => handleGutterStart(gutterMode, idx, e)}
+                      >
+                        <div className="gutter-line" />
+                      </div>
+                    );
                   }
                 });
                 return res;

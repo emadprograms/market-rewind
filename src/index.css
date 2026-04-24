@@ -180,27 +180,23 @@ body {
   position: relative;
   background: transparent;
   flex-shrink: 0;
-  transition: background 0.2s;
   z-index: 1000;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .gutter-v {
-  width: 4px;
+  width: 6px;
   cursor: col-resize;
-  margin: 0 -1px;
 }
 
 .gutter-h {
-  height: 4px;
+  height: 6px;
   cursor: row-resize;
-  margin: -1px 0;
 }
 
-.gutter:hover {
-  background: var(--accent-green);
-}
-
+/* Always-visible thin divider line */
 .gutter-line {
   position: absolute;
   background: var(--border-color);
@@ -222,14 +218,29 @@ body {
   transform: translateY(-50%);
 }
 
-.gutter:hover .gutter-line {
-  background: rgba(255, 255, 255, 0.5);
+/* Active (dragging) highlight */
+.gutter:hover .gutter-line,
+.gutter.active .gutter-line {
+  background: var(--accent-green);
+  box-shadow: 0 0 8px var(--accent-green);
 }
+.gutter-v:hover .gutter-line,
+.gutter-v.active .gutter-line { width: 3px; }
+.gutter-h:hover .gutter-line,
+.gutter-h.active .gutter-line { height: 3px; }
 
 /* Wider touch target on touch devices */
 @media (pointer: coarse) {
-  .gutter-v { width: 12px; margin: 0 -5px; }
-  .gutter-h { height: 12px; margin: -5px 0; }
+  .gutter-v { width: 16px; }
+  .gutter-h { height: 16px; }
+}
+
+/* Prevent charts from stealing pointer events during resize */
+body.is-resizing * {
+  pointer-events: none !important;
+}
+body.is-resizing .gutter {
+  pointer-events: auto !important;
 }
 
 /* Assign areas for complex Grid-3 variants */
