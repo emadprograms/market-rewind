@@ -551,6 +551,8 @@ export default function ChartUnit({
 
   // 3. Update Chart Data
   useEffect(() => {
+    if (isLoadingHistory) return; // Prevent intermediate renders while async fetch is pending
+    
     if (priceSeriesRef.current && volumeSeriesRef.current && chartData.length > 0) {
       const formatted = chartData.map(d => {
         const isoString = d.time.replace(' ', 'T') + 'Z';
@@ -721,7 +723,7 @@ export default function ChartUnit({
         lastDataCountRef.current = 0;
     }
 
-  }, [chartData, isReplayMode]);
+  }, [chartData, isReplayMode, isLoadingHistory]);
 
   // 3b. Refresh shading plugin when ticker/timeframe/ETH changes
   useEffect(() => {
