@@ -898,7 +898,7 @@ export default function ChartUnit({
           {!isAtEnd && (
             <button 
               className="scroll-to-end-btn"
-              onClick={() => chartRef.current?.timeScale().scrollToPosition(0, true)}
+              onClick={() => chartRef.current?.timeScale().scrollToRealTime()}
               title="Scroll to latest"
             >
               <ChevronRight size={18} />
