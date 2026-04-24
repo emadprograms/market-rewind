@@ -30,13 +30,16 @@ body {
   height: 100dvh;
   width: 100vw;
   background-color: var(--bg-dark);
+  background: radial-gradient(circle at top right, rgba(38, 166, 154, 0.05), transparent),
+              radial-gradient(circle at bottom left, rgba(239, 83, 80, 0.05), transparent);
 }
 
 /* --- Sidebar (Icon Dock) --- */
 .sidebar {
   width: 48px;
   flex-shrink: 0;
-  background: #000000;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: var(--glass-blur);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -292,7 +295,8 @@ select:focus, input:focus {
   left: 0;
   min-width: 180px;
   max-height: 320px;
-  background: #000000;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8);
@@ -438,7 +442,8 @@ select:focus, input:focus {
 
 .playback-bar {
   height: 40px;
-  background: #000000;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: var(--glass-blur);
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -550,7 +555,8 @@ select:focus, input:focus {
 }
 
 .session-card {
-  background: #000000;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(20px);
   border: 1px solid var(--accent-green);
   border-radius: 16px;
   padding: 32px;
