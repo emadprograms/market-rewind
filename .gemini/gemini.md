@@ -53,6 +53,11 @@ Market Rewind is a zero-read, local-first market replay tool.
 
 
     - **Live Price Line (1D)**: Dynamic dashed yellow line indicator for extended hours / incomplete daily candles.
+    - **Header Action Bar**:
+        - **ETH Toggle**: Extended trading hours visibility.
+        - **VP Toggle**: Visible range volume profile visibility.
+        - **RAY Button**: Click to enter Horizontal Ray drawing mode (matches `Alt+J`).
+        - **RECT Button**: Click to enter Rectangle drawing mode (matches `Alt+Shift+R`).
     - **Scroll to End UI**: Floating "return to latest" button appears on hover when scrolled away from the most recent data point. Click action binds to `scrollToRealTime()` to enforce proper right-margin padding.
 
 

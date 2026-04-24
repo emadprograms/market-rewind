@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
-import { Maximize2, Minimize2, Search, ChevronDown, Clock, ChevronRight } from 'lucide-react';
+import { Maximize2, Minimize2, Search, ChevronDown, Clock, ChevronRight, Minus, Square } from 'lucide-react';
 import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
@@ -826,11 +826,49 @@ export default function ChartUnit({
           </div>
 
           {/* VOLUME PROFILE TOGGLE */}
-          <div className="switch-container" onClick={() => setShowVP(!showVP)}>
+          <div className="switch-container" onClick={() => setShowVP(!showVP)} title="Volume Profile">
             <div className={`switch-track ${showVP ? 'active' : ''}`}>
               <div className="switch-thumb" />
             </div>
             <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>VP</span>
+          </div>
+
+          {/* HORIZONTAL RAY DRAWING */}
+          <div 
+            className="switch-container" 
+            onClick={() => {
+              if (isDrawingMode && drawType === 'ray') {
+                setIsDrawingMode(false);
+              } else {
+                setIsDrawingMode(true);
+                setDrawType('ray');
+              }
+            }}
+            title="Horizontal Ray (Alt+J)"
+          >
+            <div className={`switch-track ${isDrawingMode && drawType === 'ray' ? 'active' : ''}`} style={{ width: '28px' }}>
+              <Minus size={14} style={{ margin: 'auto' }} />
+            </div>
+            <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>RAY</span>
+          </div>
+
+          {/* RECTANGLE DRAWING */}
+          <div 
+            className="switch-container" 
+            onClick={() => {
+              if (isDrawingMode && drawType === 'rect') {
+                setIsDrawingMode(false);
+              } else {
+                setIsDrawingMode(true);
+                setDrawType('rect');
+              }
+            }}
+            title="Rectangle (Alt+Shift+R)"
+          >
+            <div className={`switch-track ${isDrawingMode && drawType === 'rect' ? 'active' : ''}`} style={{ width: '28px' }}>
+              <Square size={12} style={{ margin: 'auto' }} />
+            </div>
+            <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>RECT</span>
           </div>
         </div>
         
