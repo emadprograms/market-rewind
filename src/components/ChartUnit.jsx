@@ -568,8 +568,8 @@ export default function ChartUnit({
                 });
             } else {
                 chartRef.current.timeScale().setVisibleLogicalRange({
-                  from: total - count,
-                  to: total
+                  from: total - count + 15, // +15 matches rightOffset to prevent sticking to y-axis
+                  to: total + 15
                 });
             }
           }, 80);
