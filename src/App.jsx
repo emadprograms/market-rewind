@@ -9,7 +9,7 @@ const TODAY = new Date().toISOString().split('T')[0];
 export default function App() {
   // --- Global State ---
   const [tickers, setTickers] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(TODAY);
+  const [selectedDate, setSelectedDate] = useState(() => localStorage.getItem('lastUsedDate') || TODAY);
   const [masterData, setMasterData] = useState([]);
   const [currentTime, setCurrentTime] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -45,6 +45,11 @@ export default function App() {
   useEffect(() => {
     checkLocalDatabase();
   }, []);
+
+  // Save selectedDate to localStorage
+  useEffect(() => {
+    localStorage.setItem('lastUsedDate', selectedDate);
+  }, [selectedDate]);
 
   async function checkLocalDatabase() {
     setIsLoading(true);

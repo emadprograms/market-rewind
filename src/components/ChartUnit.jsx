@@ -332,25 +332,30 @@ export default function ChartUnit({
       const isHovered = container.matches(':hover') || container.contains(document.activeElement);
       if (!isHovered) return;
 
-      // --- 1. Modifier Shortcuts (Alt / Shift) ---
-      if (e.altKey) {
-        if (e.code === 'KeyJ' && !e.shiftKey) {
+      // --- 1. Modifier Shortcuts (Alt/Ctrl / Shift) ---
+      if (e.altKey || e.ctrlKey) {
+        const keyLower = e.key.toLowerCase();
+        const isKeyJ = e.code === 'KeyJ' || e.keyCode === 74 || keyLower === 'j' || keyLower === '∆';
+        const isKeyE = e.code === 'KeyE' || e.keyCode === 69 || keyLower === 'e' || keyLower === '´';
+        const isKeyR = e.code === 'KeyR' || e.keyCode === 82 || keyLower === 'r' || keyLower === '‰';
+
+        if (isKeyJ && !e.shiftKey) {
           e.preventDefault();
           setDrawType('ray');
           setIsDrawingMode(prev => !prev || drawType !== 'ray');
           setRectAnchor(null);
         }
-        if (e.code === 'KeyE' && e.shiftKey) {
+        if (isKeyE && e.shiftKey) {
           e.preventDefault();
           setShowEth(prev => !prev);
         }
-        if (e.code === 'KeyR' && e.shiftKey) {
+        if (isKeyR && e.shiftKey) {
           e.preventDefault();
           setDrawType('rect');
           setIsDrawingMode(prev => !prev || drawType !== 'rect');
           setRectAnchor(null);
         }
-        return; // Don't process standalone letters if Alt is pressed
+        return; // Don't process standalone letters if modifiers are pressed
       }
 
       // --- 2. System Keys ---
@@ -907,7 +912,7 @@ export default function ChartUnit({
           }}>
             <span>MODE: {drawType.toUpperCase()}</span>
             <span>{drawType === 'ray' ? 'Click to place ray' : (rectAnchor ? 'Click to finish rectangle' : 'Click to start rectangle')}</span>
-            <span>Alt+J: Ray · Alt+Shift+R: Rect · ESC/DEL</span>
+            <span>Alt/Ctrl+J: Ray · Alt/Ctrl+Shift+R: Rect · ESC/DEL</span>
           </div>
         )}
 
