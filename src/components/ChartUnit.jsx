@@ -106,8 +106,7 @@ export default function ChartUnit({
   }, [timeframe]);
 
   // 0. Fetch initial local master data
-  const dataVersionRef = useRef(0);
-  const lastRenderedVersionRef = useRef(0);
+  const dataTimeframeRef = useRef(timeframe);
   
   useEffect(() => {
     let cancelled = false;
@@ -128,7 +127,7 @@ export default function ChartUnit({
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }
-      dataVersionRef.current += 1;
+      dataTimeframeRef.current = timeframe;
       setLocalMasterData(data);
       setIsLoadingHistory(false);
     }
@@ -189,6 +188,8 @@ export default function ChartUnit({
   // This ensures higher-timeframe candles (1D, 1H) progressively build during replay.
   const chartData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
+    if (timeframe !== dataTimeframeRef.current) return []; // PREVENT STALE RENDER DURING ASYNC FETCH
+    
     let filtered = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
     
     // In replay mode, trim raw 1-min bars to only those that have "happened"
@@ -559,8 +560,6 @@ export default function ChartUnit({
 
   // 3. Update Chart Data
   useEffect(() => {
-    if (isLoadingHistory) return; // Prevent intermediate renders while async fetch is pending
-    
     if (priceSeriesRef.current && volumeSeriesRef.current && chartData.length > 0) {
       const formatted = chartData.map(d => {
         const isoString = d.time.replace(' ', 'T') + 'Z';
