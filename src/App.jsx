@@ -18,7 +18,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('Checking storage...');
   const [isDbLoaded, setIsDbLoaded] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [entryTime, setEntryTime] = useState('09:20');
   const [sessionTicker, setSessionTicker] = useState('SPY');
@@ -244,103 +243,85 @@ export default function App() {
   return (
     <div className="app-container">
       
-      {/* --- SIDEBAR --- */}
-      <aside className={`sidebar ${isSidebarOpen ? '' : 'closed'}`} style={{ flexShrink: 0 }}>
-        <div className="logo" style={{ justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Activity size={18} /> MARKET<span>REWIND</span>
-          </div>
-          <button className="btn-icon" onClick={() => setIsSidebarOpen(false)} title="Close Sidebar">
-            <Menu size={16} />
+      {/* --- SIDEBAR (Minimal Icon Dock) --- */}
+      <aside className="sidebar">
+        {/* App Logo */}
+        <div className="logo" title="Market Rewind">
+          <Activity size={24} color="var(--accent-green)" />
+        </div>
+
+        {/* Database Status */}
+        <div className={`status-badge ${isDbLoaded ? 'status-online' : ''}`} title={dbStatus} style={{ padding: '6px', borderRadius: '50%' }}>
+          <Database size={16} />
+        </div>
+
+        {/* Upload DB */}
+        <label className="upload-zone" title="Load market_data.db" style={{ padding: '8px', cursor: 'pointer', border: 'none' }}>
+          <UploadCloud size={20} className="file-icon" />
+          <input type="file" accept=".db,.sqlite" onChange={handleFileUpload} style={{ display: 'none' }} />
+        </label>
+
+        {/* Date Selector (Hidden Input overlaid on Icon) */}
+        <div style={{ position: 'relative', width: '24px', height: '24px', cursor: 'pointer' }} title="Target Date">
+          <CalendarIcon size={20} style={{ position: 'absolute', top: 2, left: 2, color: 'var(--text-secondary)' }} />
+          <input 
+            type="date" 
+            value={selectedDate} 
+            onChange={(e) => setSelectedDate(e.target.value)} 
+            disabled={!isSessionStarted} 
+            style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} 
+          />
+        </div>
+
+        {/* Reset Session */}
+        {isSessionStarted && (
+          <button className="btn-icon" onClick={() => setIsSessionStarted(false)} title="Reset Session">
+            <RotateCcw size={18} color="var(--accent-red)" />
           </button>
-        </div>
+        )}
 
-        <div className={`status-badge ${isDbLoaded ? 'status-online' : ''}`} style={{ fontSize: '0.7rem', padding: '6px 10px' }}>
-          <Database size={14} />
-          <span>{dbStatus}</span>
-        </div>
+        <div style={{ flex: 1 }}></div>
 
-        <div className="sidebar-section">
-          <h3>Load Data</h3>
-          <label className="upload-zone" style={{ padding: '12px' }}>
-            <UploadCloud size={20} className="file-icon" />
-            <div style={{fontSize: '0.65rem', color: 'var(--text-secondary)'}}>
-              <b>market_data.db</b>
+        {/* Layout Grid (Compact) */}
+        <div className="layout-selector" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', padding: '0 4px', marginBottom: 'auto' }}>
+          {[
+            { id: '1', class: 'l1' },
+            { id: '2v', class: 'l2v' },
+            { id: '2h', class: 'l2h' },
+            { id: '3', class: 'l3' },
+            { id: '3b', class: 'l3b' },
+            { id: '3l', class: 'l3l' },
+            { id: '3r', class: 'l3r' },
+            { id: '3h', class: 'l3h' },
+            { id: '3v', class: 'l3v' },
+            { id: '4', class: 'l4' }
+          ].map(l => (
+            <div 
+              key={l.id} 
+              className={`layout-icon ${l.class} ${layoutMode === l.id ? 'active' : ''}`}
+              onClick={() => setLayoutMode(l.id)}
+              title={`Layout ${l.id.toUpperCase()}`}
+              style={{ width: '16px', height: '16px' }}
+            >
+              {l.id === '1' && <div />}
+              {l.id === '2v' && <><div/><div/></>}
+              {l.id === '2h' && <><div/><div/></>}
+              {l.id.startsWith('3') && <><div/><div/><div/></>}
+              {l.id === '4' && <><div/><div/><div/><div/></>}
             </div>
-            <input type="file" accept=".db,.sqlite" onChange={handleFileUpload} />
-          </label>
+          ))}
         </div>
 
-        <div className="sidebar-section">
-           <h3>Replay Settings</h3>
-           <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-             <div>
-               <label style={{fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px', display: 'block'}}>Date</label>
-               <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} disabled={!isSessionStarted} style={{ fontSize: '0.85rem' }} />
-             </div>
-             <div>
-                <label style={{fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em'}}>Layout Grid</label>
-                <div className="layout-selector">
-                  {[
-                    { id: '1', class: 'l1' },
-                    { id: '2v', class: 'l2v' },
-                    { id: '2h', class: 'l2h' },
-                    { id: '3', class: 'l3' },
-                    { id: '3b', class: 'l3b' },
-                    { id: '3l', class: 'l3l' },
-                    { id: '3r', class: 'l3r' },
-                    { id: '3h', class: 'l3h' },
-                    { id: '3v', class: 'l3v' },
-                    { id: '4', class: 'l4' }
-                  ].map(l => (
-                    <div 
-                      key={l.id} 
-                      className={`layout-icon ${l.class} ${layoutMode === l.id ? 'active' : ''}`}
-                      onClick={() => setLayoutMode(l.id)}
-                      title={`Layout ${l.id.toUpperCase()}`}
-                    >
-                      {l.id === '1' && <div />}
-                      {l.id === '2v' && <><div/><div/></>}
-                      {l.id === '2h' && <><div/><div/></>}
-                      {l.id.startsWith('3') && <><div/><div/><div/></>}
-                      {l.id === '4' && <><div/><div/><div/><div/></>}
-                    </div>
-                  ))}
-                </div>
-             </div>
-             {isSessionStarted && (
-               <button className="btn-outline" onClick={() => setIsSessionStarted(false)} style={{marginTop: '4px', fontSize: '0.75rem', padding: '6px'}}>
-                 <RotateCcw size={12} /> Reset
-               </button>
-             )}
-           </div>
-        </div>
-
-        <div className="sidebar-section" style={{ marginTop: 'auto' }}>
-          <h3>Links</h3>
-          <a 
-            href="https://github.com/emadprograms/market-rewind/releases/tag/latest-data" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            style={{ textDecoration: 'none', color: 'var(--text-secondary)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}
-          >
-            <ExternalLink size={12} /> Market Data (Latest)
+        {/* Links */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+          <a href="https://github.com/emadprograms/market-rewind/releases/tag/latest-data" target="_blank" rel="noopener noreferrer" title="Latest Market Data">
+            <HardDrive size={16} color="var(--text-secondary)" />
           </a>
-          <a 
-            href="https://github.com/emadprograms/market-rewind/releases/tag/latest-archive" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            style={{ textDecoration: 'none', color: 'var(--text-secondary)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}
-          >
-            <ExternalLink size={12} /> Archive Data (Historical)
+          <a href="https://github.com/emadprograms/market-rewind/releases/tag/latest-archive" target="_blank" rel="noopener noreferrer" title="Archive Historical Data">
+            <Database size={16} color="var(--text-secondary)" />
           </a>
-          <a 
-            href="https://github.com/emadprograms/market-rewind" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            style={{ textDecoration: 'none', color: 'var(--text-secondary)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <ExternalLink size={12} /> Source Code
+          <a href="https://github.com/emadprograms/market-rewind" target="_blank" rel="noopener noreferrer" title="Source Code">
+            <ExternalLink size={16} color="var(--text-secondary)" />
           </a>
         </div>
       </aside>
@@ -421,10 +402,7 @@ export default function App() {
           )}
         </main>
 
-        <div className="playback-bar">
-          <button className="btn-icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} title="Toggle Sidebar" style={{ position: 'absolute', left: '16px' }}>
-            <Menu size={20} />
-          </button>
+        <div className="playback-bar" style={{ paddingLeft: '16px' }}>
           
           <div className="time-display">
             {formatDisplayTime(currentTime)}
