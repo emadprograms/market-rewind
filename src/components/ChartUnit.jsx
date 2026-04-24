@@ -49,6 +49,7 @@ export default function ChartUnit({
   const priceLineRef = useRef(null);
   const lastTickerRef = useRef(ticker);
   const lastTfRef = useRef(timeframe);
+  const lastEthRef = useRef(showEth);
 
 
 
@@ -568,7 +569,9 @@ export default function ChartUnit({
       }
 
       // Incremental update if same ticker/timeframe AND (new bar added OR same bar updated)
-      const isSameContext = lastTickerRef.current === ticker && lastTfRef.current === timeframe;
+      const isSameContext = lastTickerRef.current === ticker && 
+                            lastTfRef.current === timeframe && 
+                            lastEthRef.current === showEth;
       const ts = chartRef.current.timeScale();
       const oldLogicalRange = ts.getVisibleLogicalRange();
 
@@ -710,6 +713,7 @@ export default function ChartUnit({
       lastDataCountRef.current = formatted.length;
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
+      lastEthRef.current = showEth;
 
     } else if (priceSeriesRef.current) {
         priceSeriesRef.current.setData([]);
