@@ -282,8 +282,8 @@ export default function App() {
 
         <div style={{ flex: 1 }}></div>
 
-        {/* Layout Grid (Compact) */}
-        <div className="layout-selector" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', padding: '0 4px', marginBottom: 'auto' }}>
+        {/* Layout Grid (Single Column) */}
+        <div className="layout-selector" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 4px', marginBottom: 'auto', alignItems: 'center' }}>
           {[
             { id: '1', class: 'l1' },
             { id: '2v', class: 'l2v' },
@@ -301,7 +301,6 @@ export default function App() {
               className={`layout-icon ${l.class} ${layoutMode === l.id ? 'active' : ''}`}
               onClick={() => setLayoutMode(l.id)}
               title={`Layout ${l.id.toUpperCase()}`}
-              style={{ width: '16px', height: '16px' }}
             >
               {l.id === '1' && <div />}
               {l.id === '2v' && <><div/><div/></>}
