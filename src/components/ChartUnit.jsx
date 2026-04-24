@@ -735,8 +735,10 @@ export default function ChartUnit({
   const filteredTickers = tickers.filter(t => t.toLowerCase().includes(tickerSearch.toLowerCase()));
 
 
-  return (
-    <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`} style={{ ...style, position: 'relative' }}>
+    const hasExplicitSize = style.width || style.height;
+    const mergedStyle = { ...style, position: 'relative', ...(hasExplicitSize ? { flex: 'none' } : {}) };
+    return (
+    <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`} style={mergedStyle}>
       <div className="chart-header">
         <div className="chart-controls">
           
@@ -877,7 +879,8 @@ export default function ChartUnit({
             className="switch-container" 
             onClick={() => {
               if (window.confirm('Clear all drawings for ' + ticker + '?')) {
-                onUpdateDrawings(ticker, { rays: [], rects: [] });
+                onUpdateDrawings(ticker, 'rays', []);
+                onUpdateDrawings(ticker, 'rects', []);
               }
             }}
             title="Clear All Drawings"

@@ -420,15 +420,15 @@ export default function App() {
 
         <main className={`workspace grid-${layoutMode}`} ref={workspaceRef}>
           {isLoading ? (
-            <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
+            <div style={{flex: 1, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
                <Activity className="animate-pulse" size={48} />
             </div>
           ) : !isDbLoaded ? (
-            <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
+            <div style={{flex: 1, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)'}}>
                Please upload your database file on the left to begin.
             </div>
           ) : !isSessionStarted ? (
-            <div style={{gridColumn: '1/-1', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+            <div style={{flex: 1, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                <div className="session-card">
                  <div style={{marginBottom: '24px', textAlign: 'center'}}>
                    <h2 style={{color: 'var(--accent-green)', marginBottom: '8px'}}>Configure Session</h2>
