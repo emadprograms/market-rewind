@@ -22,10 +22,15 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Local-Time Start/Reset Engine**: 
         - Default `entryTime` updated to `09:20` (ET).
         - DST-aware conversion logic (`getUtcTimeFromEt`) ensures the simulator starts and resets to the exact ET time selected by the user, regardless of seasonal timezone offsets (EST vs EDT).
-- [x] `src/components/ChartUnit.jsx`:
-    - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS (nested `min-height: 0` for canvas containment).
-    - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift'; prioritized 'latest' edge when switching from 1D to intraday.
-    - **Stale Data Fix**: Eliminated race condition where switching symbols displayed old data under the new ticker. Root cause was `ticker` in the effect deps causing premature ref updates before async fetch completed. Fixed by decoupling the data effect from `ticker`/`timeframe` deps.
+- [x] `src/components/ChartUnit.jsx` & `src/lib/db.js`:
+    - **Dynamic Data Optimization**: Initial payload size maps to the timeframe (e.g., `1m` chart fetches 3 days, `1D` chart fetches 2 years). Drops initial load from 500,000 rows to <5,000 rows for intraday, eliminating UI lag.
+    - **Infinite Scroll Engine**: Tracks scroll viewport bounds (`subscribeVisibleLogicalRangeChange`) to dynamically fetch 30-day SQLite chunks when approaching the left boundary.
+    - **Seamless Viewport Prepend**: Mathematically shifts the `timeScale` rightwards by the exact number of prepended candles, completely masking the background chunk injections.
+    - **Right Margin Padding**: Enforced via native `scrollToRealTime()`, guaranteeing space on the right side of the active candle on reset/load.
+    - **Timeframe Jump Fix**: Replaced rigid anchoring with dynamic fallback to prevent `1D` to intraday switches from jumping backwards to the morning open.
+    - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS.
+    - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift'.
+    - **Stale Data Fix**: Eliminated race condition where switching symbols displayed old data under the new ticker.
 
     - **Stable Replay View & Auto-Reveal**: Viewport stays frozen during replay analysis; automatically shifts to reveal new candles if the user is at the right edge.
     - **Persistent Zoom Level**: Tracks manual `barSpacing` changes to maintain consistent candle width across all timeframe switches, preventing visual reset.
