@@ -266,17 +266,17 @@ export default function ChartUnit({
 
       // --- 1. Modifier Shortcuts (Alt / Shift) ---
       if (e.altKey) {
-        if (e.key.toLowerCase() === 'j' && !e.shiftKey) {
+        if (e.code === 'KeyJ' && !e.shiftKey) {
           e.preventDefault();
           setDrawType('ray');
           setIsDrawingMode(prev => !prev || drawType !== 'ray');
           setRectAnchor(null);
         }
-        if (e.key.toLowerCase() === 'e' && e.shiftKey) {
+        if (e.code === 'KeyE' && e.shiftKey) {
           e.preventDefault();
           setShowEth(prev => !prev);
         }
-        if (e.key.toLowerCase() === 'r' && e.shiftKey) {
+        if (e.code === 'KeyR' && e.shiftKey) {
           e.preventDefault();
           setDrawType('rect');
           setIsDrawingMode(prev => !prev || drawType !== 'rect');
