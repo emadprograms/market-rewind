@@ -92,18 +92,16 @@ export function isDBLoaded() {
 /**
  * Fetches data from the LOCAL database.
  */
-export async function fetchMarketData(ticker, dateIso) {
+export async function fetchMarketData(ticker, dateIso, daysBack = 30) {
   const db = await initDB();
   if (!db) return [];
   
   try {
-    // Lookback 90 days to provide enough historical context for daily charts
-    // while preventing the system from loading millions of rows into RAM.
     const results = db.exec(
       `SELECT timestamp, open, high, low, close, volume, session 
        FROM market_data 
        WHERE symbol = ? 
-         AND timestamp >= datetime(?, '-90 days')
+         AND timestamp >= datetime(?, '-${daysBack} days')
          AND timestamp <= ? 
        ORDER BY timestamp`,
       [ticker, `${dateIso} 00:00:00`, `${dateIso} 23:59:59`]
@@ -122,6 +120,42 @@ export async function fetchMarketData(ticker, dateIso) {
     }));
   } catch (error) {
     console.error('Failed to fetch local market data:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetches an older chunk of data for infinite scrolling.
+ * Queries backwards from the exact `endTimestamp`.
+ */
+export async function fetchHistoricalChunk(ticker, endTimestamp, daysBack = 30) {
+  const db = await initDB();
+  if (!db) return [];
+  
+  try {
+    const results = db.exec(
+      `SELECT timestamp, open, high, low, close, volume, session 
+       FROM market_data 
+       WHERE symbol = ? 
+         AND timestamp >= datetime(?, '-${daysBack} days')
+         AND timestamp < ? 
+       ORDER BY timestamp`,
+      [ticker, endTimestamp, endTimestamp]
+    );
+    
+    if (!results || results.length === 0) return [];
+    
+    return results[0].values.map(([timestamp, open, high, low, close, volume, session]) => ({
+      time: timestamp,
+      open: Number(open),
+      high: Number(high),
+      low: Number(low),
+      close: Number(close),
+      volume: Number(volume),
+      session: session
+    }));
+  } catch (error) {
+    console.error('Failed to fetch historical chunk:', error);
     return [];
   }
 }

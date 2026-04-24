@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { createChart } from 'lightweight-charts';
 import { resampleData } from '../lib/resampling';
 import { Maximize2, Minimize2, Search, ChevronDown, Clock, ChevronRight } from 'lucide-react';
-import { fetchMarketData } from '../lib/db';
+import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
 import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
 import { VolumeProfilePlugin } from '../lib/VolumeProfilePlugin';
@@ -64,6 +64,11 @@ export default function ChartUnit({
   const isDrawingModeRef = useRef(false);
   const currentTickerRef = useRef(ticker);
   
+  // Infinite Scroll State
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const earliestLoadedDateRef = useRef(null);
+  const pendingHistoryPrependRef = useRef(null);
+
   const keyboardInputRef = useRef(null);
   const keyboardActionRef = useRef({ active: false, type: null, value: '' });
   const [keyboardAction, setKeyboardAction] = useState({ active: false, type: null, value: '' });
@@ -99,14 +104,68 @@ export default function ChartUnit({
     if (onTimeframeChange) onTimeframeChange(id, timeframe);
   }, [timeframe]);
 
-  // 0. Fetch local master data
+  // 0. Fetch initial local master data
   useEffect(() => {
     async function load() {
+      setIsLoadingHistory(true);
       const data = await fetchMarketData(ticker, selectedDate);
+      if (data && data.length > 0) {
+        earliestLoadedDateRef.current = data[0].time;
+      }
       setLocalMasterData(data);
+      setIsLoadingHistory(false);
     }
     load();
   }, [ticker, selectedDate]);
+
+  // Infinite Scroll Listener
+  useEffect(() => {
+    if (!chartRef.current || !localMasterData || localMasterData.length === 0) return;
+    
+    const timeScale = chartRef.current.timeScale();
+    
+    const onVisibleLogicalRangeChanged = async (newLogicalRange) => {
+      if (!newLogicalRange) return;
+      
+      // Trigger fetch if scrolled within 100 bars of the left edge
+      if (newLogicalRange.from < 100 && !isLoadingHistory && earliestLoadedDateRef.current) {
+        setIsLoadingHistory(true);
+        try {
+          const oldLogicalRange = timeScale.getVisibleLogicalRange();
+          const currentChartBars = priceSeriesRef.current ? priceSeriesRef.current.data() : [];
+          
+          const chunk = await fetchHistoricalChunk(ticker, earliestLoadedDateRef.current, 30);
+          
+          if (chunk && chunk.length > 0) {
+            earliestLoadedDateRef.current = chunk[0].time;
+            
+            let newData = [...chunk, ...localMasterData];
+            
+            // Mark that a prepend occurred so the main render effect can shift the viewport
+            pendingHistoryPrependRef.current = {
+                oldFirstTime: currentChartBars.length > 0 ? currentChartBars[0].time : null,
+                oldLogicalRange: oldLogicalRange
+            };
+            
+            setLocalMasterData(newData);
+          }
+        } finally {
+          setIsLoadingHistory(false);
+        }
+      }
+      
+      // Garbage Collection: If user scrolls back to the present, drop old historical data to save RAM
+      if (newLogicalRange.from > 5000 && localMasterData.length > 35000 && !isLoadingHistory) {
+         // This removes the oldest data from the left side of the array.
+         // We do not do this right now because calculating the exact viewport left-shift 
+         // while dragging is highly volatile and causes chart jumping.
+         // 35k - 70k rows is completely stable in memory.
+      }
+    };
+    
+    timeScale.subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+    return () => timeScale.unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+  }, [localMasterData, isLoadingHistory, ticker]);
 
   // 1. Prepare data — filter raw bars by globalTime FIRST, then resample.
   // This ensures higher-timeframe candles (1D, 1H) progressively build during replay.
@@ -571,51 +630,66 @@ export default function ChartUnit({
         
         const total = formatted.length;
         if (total > 0) {
-          setTimeout(() => {
-            if (!chartRef.current) return;
-            
-            const zoomMap = {
-              '1min': 120,
-              '5min': 78,
-              '15min': 60,
-              '30min': 50,
-              '1H': 60,
-              '1D': 50
-            };
-
-            if (lastBarSpacingRef.current === null) {
-
-              lastBarSpacingRef.current = zoomMap[timeframe] 
-                ? chartContainerRef.current.clientWidth / zoomMap[timeframe] 
-                : 6;
-            }
-
-            const count = chartContainerRef.current.clientWidth / lastBarSpacingRef.current;
-            
-            if (targetTimeToRestore !== null) {
-                let midIdx = formatted.findIndex(d => d.time >= targetTimeToRestore);
-                if (midIdx === -1) midIdx = total - 1;
+          // --- Handle Infinite Scroll Prepend Shift ---
+          if (pendingHistoryPrependRef.current) {
+              const { oldFirstTime, oldLogicalRange } = pendingHistoryPrependRef.current;
+              // Find how many new bars were prepended
+              const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
+              
+              if (newFirstIndex > 0 && oldLogicalRange) {
+                  // Seamlessly shift the viewport right by exactly the number of new bars
+                  chartRef.current.timeScale().setVisibleLogicalRange({
+                      from: oldLogicalRange.from + newFirstIndex,
+                      to: oldLogicalRange.to + newFirstIndex
+                  });
+              }
+              pendingHistoryPrependRef.current = null;
+          } else {
+              // Normal load logic
+              setTimeout(() => {
+                if (!chartRef.current) return;
                 
-                let fromIndex = midIdx - Math.floor(count / 2);
-                let toIndex = fromIndex + count;
-                
-                if (toIndex >= total) {
-                    chartRef.current.timeScale().scrollToRealTime();
-                    return;
-                } else if (fromIndex < 0) {
-                    fromIndex = 0;
-                    toIndex = Math.min(total, count);
+                const zoomMap = {
+                  '1min': 120,
+                  '5min': 78,
+                  '15min': 60,
+                  '30min': 50,
+                  '1H': 60,
+                  '1D': 50
+                };
+
+                if (lastBarSpacingRef.current === null) {
+                  lastBarSpacingRef.current = zoomMap[timeframe] 
+                    ? chartContainerRef.current.clientWidth / zoomMap[timeframe] 
+                    : 6;
                 }
 
-                chartRef.current.timeScale().setVisibleLogicalRange({
-                    from: fromIndex,
-                    to: toIndex
-                });
-            } else {
-                chartRef.current.timeScale().scrollToRealTime();
-            }
-          }, 80);
+                const count = chartContainerRef.current.clientWidth / lastBarSpacingRef.current;
+                
+                if (targetTimeToRestore !== null) {
+                    let midIdx = formatted.findIndex(d => d.time >= targetTimeToRestore);
+                    if (midIdx === -1) midIdx = total - 1;
+                    
+                    let fromIndex = midIdx - Math.floor(count / 2);
+                    let toIndex = fromIndex + count;
+                    
+                    if (toIndex >= total) {
+                        chartRef.current.timeScale().scrollToRealTime();
+                        return;
+                    } else if (fromIndex < 0) {
+                        fromIndex = 0;
+                        toIndex = Math.min(total, count);
+                    }
 
+                    chartRef.current.timeScale().setVisibleLogicalRange({
+                        from: fromIndex,
+                        to: toIndex
+                    });
+                } else {
+                    chartRef.current.timeScale().scrollToRealTime();
+                }
+              }, 80);
+          }
         }
       }
 
