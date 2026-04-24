@@ -36,13 +36,15 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Scroll to End UI**: Floating "return to latest" button that appears on hover when scrolled away from the most recent data point.
 
 
-    - **Drawing Tools (Synced & Persistent)**:
-        - `H` key: Toggle **Horizontal Ray** mode (anchored start, extends right).
-        - `R` key: Toggle **Rectangle** mode (2-click placement).
-        - **Syncing**: All drawings are synced across charts of the same ticker.
-        - **Visuals**: Dynamic "ghost" previews during placement; premium semi-transparent fills for rectangles.
-        - **Deletion**: Double-click any drawing path to remove; `Delete` to clear all for the active symbol.
+    - **TradingView-Style Keyboard Navigation**:
+        - **Standalone Letters (`A-Z`)**: Instantly opens the "Change Symbol" popup to swap tickers without clicking.
+        - **Standalone Numbers (`0-9`)**: Instantly opens the "Change Interval" popup to swap timeframes (e.g., `5`, `1D`).
+    - **Drawing & View Tools (Synced & Persistent)**:
+        - `Alt + J`: Toggle **Horizontal Ray** mode (anchored start, extends right).
+        - `Alt + Shift + R`: Toggle **Rectangle** drawing mode (click-to-start, click-to-finish).
+        - `Alt + Shift + E`: Toggle **Extended Trading Hours (ETH)** on/off.
         - `Escape` exits draw mode.
+    - **Keyboard Action Modal**: Global `?` key triggers an overlay displaying all active hotkeys and navigation shortcuts.
 - [x] `src/index.css`:
     - **Deterministic Layout Engine**: 
         - Root workspace height set to `calc(100vh - 40px)`.

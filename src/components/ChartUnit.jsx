@@ -63,6 +63,22 @@ export default function ChartUnit({
   const tfRef = useRef();
   const isDrawingModeRef = useRef(false);
   const currentTickerRef = useRef(ticker);
+  
+  const keyboardInputRef = useRef(null);
+  const keyboardActionRef = useRef({ active: false, type: null, value: '' });
+  const [keyboardAction, setKeyboardAction] = useState({ active: false, type: null, value: '' });
+
+  const updateKeyboardAction = useCallback((newState) => {
+    const merged = { ...keyboardActionRef.current, ...newState };
+    keyboardActionRef.current = merged;
+    setKeyboardAction(merged);
+  }, []);
+
+  useEffect(() => {
+    if (keyboardAction.active && keyboardInputRef.current) {
+      keyboardInputRef.current.focus();
+    }
+  }, [keyboardAction.active]);
 
   useEffect(() => {
     currentTickerRef.current = ticker;
@@ -239,35 +255,64 @@ export default function ChartUnit({
   // Horizontal Ray Drawing: Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Ignore if user is already typing in an input/textarea
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
       // Only respond if this chart's container or its children are focused/hovered
       const container = chartContainerRef.current;
       if (!container) return;
       const isHovered = container.matches(':hover') || container.contains(document.activeElement);
+      if (!isHovered) return;
 
-      if (e.key === 'h' || e.key === 'H') {
-        if (isHovered) {
+      // --- 1. Modifier Shortcuts (Alt / Shift) ---
+      if (e.altKey) {
+        if (e.key.toLowerCase() === 'j' && !e.shiftKey) {
           e.preventDefault();
           setDrawType('ray');
           setIsDrawingMode(prev => !prev || drawType !== 'ray');
           setRectAnchor(null);
         }
-      }
-      if (e.key === 'r' || e.key === 'R') {
-        if (isHovered) {
+        if (e.key.toLowerCase() === 'e' && e.shiftKey) {
+          e.preventDefault();
+          setShowEth(prev => !prev);
+        }
+        if (e.key.toLowerCase() === 'r' && e.shiftKey) {
           e.preventDefault();
           setDrawType('rect');
           setIsDrawingMode(prev => !prev || drawType !== 'rect');
           setRectAnchor(null);
         }
+        return; // Don't process standalone letters if Alt is pressed
       }
+
+      // --- 2. System Keys ---
       if (e.key === 'Escape') {
+        if (keyboardActionRef.current.active) {
+          updateKeyboardAction({ active: false, type: null, value: '' });
+          return;
+        }
         setIsDrawingMode(false);
         setRectAnchor(null);
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && isHovered) {
-        // Clear all drawings on this ticker
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (keyboardActionRef.current.active) return; // Let input handle backspace
         onUpdateDrawings(currentTickerRef.current, 'rays', []);
         onUpdateDrawings(currentTickerRef.current, 'rects', []);
+      }
+
+      // --- 3. Standalone Typing (Timeframe / Ticker) ---
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !keyboardActionRef.current.active) {
+        const isNum = /^[0-9]$/.test(e.key);
+        const isLetter = /^[a-zA-Z]$/.test(e.key);
+
+        if (isNum) {
+          e.preventDefault();
+          updateKeyboardAction({ active: true, type: 'timeframe', value: e.key });
+        } else if (isLetter) {
+          e.preventDefault();
+          updateKeyboardAction({ active: true, type: 'ticker', value: e.key });
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -782,7 +827,53 @@ export default function ChartUnit({
           }}>
             <span>MODE: {drawType.toUpperCase()}</span>
             <span>{drawType === 'ray' ? 'Click to place ray' : (rectAnchor ? 'Click to finish rectangle' : 'Click to start rectangle')}</span>
-            <span>H: Ray · R: Rect · ESC/DEL</span>
+            <span>Alt+J: Ray · Alt+Shift+R: Rect · ESC/DEL</span>
+          </div>
+        )}
+
+        {/* KEYBOARD ACTION MODAL */}
+        {keyboardAction.active && (
+          <div className="keyboard-action-modal">
+            <div className="modal-header">
+              {keyboardAction.type === 'timeframe' ? 'Change Interval' : 'Change Symbol'}
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const val = keyboardAction.value.trim().toLowerCase();
+              if (!val) {
+                updateKeyboardAction({ active: false });
+                return;
+              }
+
+              if (keyboardAction.type === 'timeframe') {
+                let newTf = null;
+                if (/^\d+$/.test(val)) {
+                  const num = parseInt(val);
+                  if (num === 1) newTf = '1min';
+                  else if (num === 5) newTf = '5min';
+                  else if (num === 15) newTf = '15min';
+                  else if (num === 30) newTf = '30min';
+                  else if (num === 60) newTf = '1H';
+                } else if (val === '1h') newTf = '1H';
+                else if (val === '1d') newTf = '1D';
+
+                if (newTf) {
+                  setTimeframe(newTf);
+                }
+              } else if (keyboardAction.type === 'ticker') {
+                setTicker(val.toUpperCase());
+              }
+
+              updateKeyboardAction({ active: false, value: '' });
+            }}>
+              <input
+                ref={keyboardInputRef}
+                type="text"
+                value={keyboardAction.value}
+                onChange={(e) => updateKeyboardAction({ value: e.target.value.toUpperCase() })}
+                onBlur={() => updateKeyboardAction({ active: false })}
+              />
+            </form>
           </div>
         )}
       </div>
