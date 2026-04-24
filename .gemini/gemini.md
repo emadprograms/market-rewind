@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v7.2 - UX Polish & Zoom Persistence)
+## Project State: COMPLETED (v7.5 - Sidebar Icon Dock & Context Isolation)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -12,8 +12,12 @@ Market Rewind is a zero-read, local-first market replay tool.
 
 #### Core Application (`src/`)
 - [x] `src/App.jsx`:
+    - **Minimal Icon Dock Sidebar**: 
+        - Fixed 48px width sidebar containing only icons.
+        - **Tooltips**: Hovering over any icon reveals its purpose (title attributes).
+        - **Compact Layout Selector**: Single-column vertical grid for selecting up to 10 chart layouts.
+        - **Integrated Date Picker**: Invisible date input overlaid on a calendar icon for clean aesthetics.
     - **Ultra-Slim Logic**: Integrated with 40px playback system.
-    - **Persistent Sidebar Access**: Sidebar toggle heavily integrated into the playback bar to prevent chart obfuscation.
     - **Step Overrides**: Added manual "STEP" selector (Auto, 1m, 5m, etc.) to the replay bar, allowing users to override the minimum chart timeframe.
     - **Unified Replay Engine**: 
         - Synchronized playback across multiple charts.
@@ -29,6 +33,9 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Seamless Viewport Prepend**: Mathematically shifts the `timeScale` rightwards by the exact number of prepended candles, completely masking the background chunk injections.
     - **Right Margin Padding**: Enforced via native `scrollToRealTime()`, guaranteeing space on the right side of the active candle on reset/load.
     - **Timeframe Jump Fix**: Replaced rigid anchoring with dynamic fallback to prevent `1D` to intraday switches from jumping backwards to the morning open.
+    - **Context Isolation (Sync Protection)**: 
+        - Implemented a **Data Payload Tagging System** that prevents the chart from rendering intermediate, out-of-sync data during an async database fetch. 
+        - Completely eliminates the '1h to 1m' resampler crash.
     - **ETH Toggle Stabilization**: Added `showEth` to context tracking, preventing the chart from squishing against the Y-axis when injecting extended hours data.
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS.
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift'.
@@ -107,4 +114,4 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`.
 
 ---
-*Last Update: 2026-04-22*
+*Last Update: 2026-04-25*
