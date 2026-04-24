@@ -249,75 +249,84 @@ export default function App() {
     }));
   };
 
-  const handleGutterMouseDown = (mode, index, e) => {
+  const handleGutterStart = (mode, index, e) => {
     e.preventDefault();
     setIsDragging(true);
     dragInfo.current = { active: true, mode, index };
     document.body.style.cursor = mode === 'v' ? 'col-resize' : 'row-resize';
   };
 
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!dragInfo.current.active || !workspaceRef.current) return;
+  const calcResize = (clientX, clientY) => {
+    if (!dragInfo.current.active || !workspaceRef.current) return;
+    
+    const rect = workspaceRef.current.getBoundingClientRect();
+    const { mode, index } = dragInfo.current;
+    
+    let percent;
+    if (mode === 'v') {
+      percent = ((clientX - rect.left) / rect.width) * 100;
+    } else {
+      percent = ((clientY - rect.top) / rect.height) * 100;
+    }
+    
+    setPanelSizes(prev => {
+      const currentSizes = [...prev[layoutMode]];
+      const combinedPercent = currentSizes[index] + currentSizes[index + 1];
       
-      const rect = workspaceRef.current.getBoundingClientRect();
-      const { mode, index } = dragInfo.current;
+      let relativeStart = 0;
+      for (let i = 0; i < index; i++) relativeStart += currentSizes[i];
       
-      let percent;
-      if (mode === 'v') {
-        percent = ((e.clientX - rect.left) / rect.width) * 100;
-      } else {
-        percent = ((e.clientY - rect.top) / rect.height) * 100;
-      }
+      let newSizeA = percent - relativeStart;
+      let newSizeB = combinedPercent - newSizeA;
       
-      setPanelSizes(prev => {
-        const currentSizes = [...prev[layoutMode]];
-        // For a simple 1-splitter resize, we adjust currentSizes[index] and currentSizes[index+1]
-        // But we need to keep the sum of currentSizes[index] and currentSizes[index+1] constant
-        // so we don't affect other panels.
-        
-        const combinedPercent = currentSizes[index] + currentSizes[index + 1];
-        
-        // Calculate where the mouse is relative to the START of the first of the two panels
-        let relativeStart = 0;
-        for (let i = 0; i < index; i++) relativeStart += currentSizes[i];
-        
-        let newSizeA = percent - relativeStart;
-        let newSizeB = combinedPercent - newSizeA;
-        
-        // Clamp (minimum 10% per panel)
-        if (newSizeA < 10) { newSizeA = 10; newSizeB = combinedPercent - 10; }
-        if (newSizeB < 10) { newSizeB = 10; newSizeA = combinedPercent - 10; }
-        
-        currentSizes[index] = newSizeA;
-        currentSizes[index + 1] = newSizeB;
-        
-        return { ...prev, [layoutMode]: currentSizes };
-      });
-    };
+      if (newSizeA < 10) { newSizeA = 10; newSizeB = combinedPercent - 10; }
+      if (newSizeB < 10) { newSizeB = 10; newSizeA = combinedPercent - 10; }
+      
+      currentSizes[index] = newSizeA;
+      currentSizes[index + 1] = newSizeB;
+      
+      return { ...prev, [layoutMode]: currentSizes };
+    });
+  };
 
-    const handleMouseUp = () => {
-      if (dragInfo.current.active) {
-        setIsDragging(false);
-        dragInfo.current.active = false;
-        document.body.style.cursor = 'default';
+  const handleDragEnd = () => {
+    if (dragInfo.current.active) {
+      setIsDragging(false);
+      dragInfo.current.active = false;
+      document.body.style.cursor = 'default';
+    }
+  };
+
+  useEffect(() => {
+    const onMouseMove = (e) => calcResize(e.clientX, e.clientY);
+    const onTouchMove = (e) => {
+      if (e.touches.length > 0) {
+        e.preventDefault();
+        calcResize(e.touches[0].clientX, e.touches[0].clientY);
       }
     };
 
     if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', handleDragEnd);
+      window.addEventListener('touchmove', onTouchMove, { passive: false });
+      window.addEventListener('touchend', handleDragEnd);
+      window.addEventListener('touchcancel', handleDragEnd);
     }
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', handleDragEnd);
+      window.removeEventListener('touchcancel', handleDragEnd);
     };
   }, [isDragging, layoutMode]);
 
   const Gutter = ({ mode, index }) => (
     <div 
       className={`gutter gutter-${mode}`} 
-      onMouseDown={(e) => handleGutterMouseDown(mode, index, e)}
+      onMouseDown={(e) => handleGutterStart(mode, index, e)}
+      onTouchStart={(e) => handleGutterStart(mode, index, e)}
     >
       <div className="gutter-line" />
     </div>

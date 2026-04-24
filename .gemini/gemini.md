@@ -26,6 +26,7 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Resizable Chart Panels**: 
         - **Draggable Dividers**: Real-time resizing support for `2V`, `2H`, `3V`, and `3H` layouts.
         - **Splitter System**: Uses a custom Flex-based engine with draggable gutters that remember their positions per layout session.
+        - **Touch Support**: Full `touchstart`/`touchmove`/`touchend` event handling for tablet resizing. Gutters widen to 12px on touch devices (`pointer: coarse` media query) for easier targeting. `touch-action: none` prevents browser gesture interference.
     - **Ultra-Slim Logic**: Integrated with 40px playback system.
     - **Step Overrides**: Added manual "STEP" selector (Auto, 1m, 5m, etc.) to the replay bar, allowing users to override the minimum chart timeframe.
     - **Unified Replay Engine**: 

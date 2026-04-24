@@ -182,6 +182,7 @@ body {
   flex-shrink: 0;
   transition: background 0.2s;
   z-index: 1000;
+  touch-action: none;
 }
 
 .gutter-v {
@@ -223,6 +224,12 @@ body {
 
 .gutter:hover .gutter-line {
   background: rgba(255, 255, 255, 0.5);
+}
+
+/* Wider touch target on touch devices */
+@media (pointer: coarse) {
+  .gutter-v { width: 12px; margin: 0 -5px; }
+  .gutter-h { height: 12px; margin: -5px 0; }
 }
 
 /* Assign areas for complex Grid-3 variants */
