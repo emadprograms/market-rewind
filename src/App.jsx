@@ -31,7 +31,7 @@ export default function App() {
     '3': [33.3, 33.3, 33.4],
     '4': [50, 50, 50, 50]
   });
-  const [isDragging, setIsDragging] = useState(false);
+  const [activeGutter, setActiveGutter] = useState(null);
   const dragInfo = useRef({ active: false, mode: null, index: null });
   const workspaceRef = useRef();
 
@@ -249,15 +249,14 @@ export default function App() {
     }));
   };
 
-  const handleGutterStart = (mode, index, e) => {
+  const handlePointerDown = (mode, index, e) => {
     e.preventDefault();
-    setIsDragging(true);
+    e.target.setPointerCapture(e.pointerId);
     dragInfo.current = { active: true, mode, index };
-    document.body.style.cursor = mode === 'v' ? 'col-resize' : 'row-resize';
-    document.body.classList.add('is-resizing');
+    setActiveGutter(index);
   };
 
-  const calcResize = (clientX, clientY) => {
+  const handlePointerMove = (e) => {
     if (!dragInfo.current.active || !workspaceRef.current) return;
     
     const rect = workspaceRef.current.getBoundingClientRect();
@@ -265,9 +264,9 @@ export default function App() {
     
     let percent;
     if (mode === 'v') {
-      percent = ((clientX - rect.left) / rect.width) * 100;
+      percent = ((e.clientX - rect.left) / rect.width) * 100;
     } else {
-      percent = ((clientY - rect.top) / rect.height) * 100;
+      percent = ((e.clientY - rect.top) / rect.height) * 100;
     }
     
     setPanelSizes(prev => {
@@ -290,39 +289,10 @@ export default function App() {
     });
   };
 
-  const handleDragEnd = () => {
-    if (dragInfo.current.active) {
-      setIsDragging(false);
-      dragInfo.current.active = false;
-      document.body.style.cursor = 'default';
-      document.body.classList.remove('is-resizing');
-    }
+  const handlePointerEnd = () => {
+    dragInfo.current.active = false;
+    setActiveGutter(null);
   };
-
-  useEffect(() => {
-    const onMouseMove = (e) => calcResize(e.clientX, e.clientY);
-    const onTouchMove = (e) => {
-      if (e.touches.length > 0) {
-        e.preventDefault();
-        calcResize(e.touches[0].clientX, e.touches[0].clientY);
-      }
-    };
-
-    if (isDragging) {
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', handleDragEnd);
-      window.addEventListener('touchmove', onTouchMove, { passive: false });
-      window.addEventListener('touchend', handleDragEnd);
-      window.addEventListener('touchcancel', handleDragEnd);
-    }
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', handleDragEnd);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', handleDragEnd);
-      window.removeEventListener('touchcancel', handleDragEnd);
-    };
-  }, [isDragging, layoutMode]);
 
   const handleTimeframeChange = (chartId, tf) => {
     setChartTimeframes(prev => ({
@@ -526,9 +496,11 @@ export default function App() {
                     res.push(
                       <div 
                         key={`g-${idx}`}
-                        className={`gutter gutter-${gutterMode} ${isDragging && dragInfo.current.index === idx ? 'active' : ''}`}
-                        onMouseDown={(e) => handleGutterStart(gutterMode, idx, e)}
-                        onTouchStart={(e) => handleGutterStart(gutterMode, idx, e)}
+                        className={`gutter gutter-${gutterMode} ${activeGutter === idx ? 'active' : ''}`}
+                        onPointerDown={(e) => handlePointerDown(gutterMode, idx, e)}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerEnd}
+                        onLostPointerCapture={handlePointerEnd}
                       >
                         <div className="gutter-line" />
                       </div>
