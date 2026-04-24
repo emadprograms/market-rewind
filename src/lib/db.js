@@ -97,12 +97,16 @@ export async function fetchMarketData(ticker, dateIso) {
   if (!db) return [];
   
   try {
+    // Lookback 90 days to provide enough historical context for daily charts
+    // while preventing the system from loading millions of rows into RAM.
     const results = db.exec(
       `SELECT timestamp, open, high, low, close, volume, session 
        FROM market_data 
-       WHERE symbol = ? AND timestamp <= ? 
+       WHERE symbol = ? 
+         AND timestamp >= datetime(?, '-90 days')
+         AND timestamp <= ? 
        ORDER BY timestamp`,
-      [ticker, `${dateIso} 23:59:59`]
+      [ticker, `${dateIso} 00:00:00`, `${dateIso} 23:59:59`]
     );
     
     if (!results || results.length === 0) return [];

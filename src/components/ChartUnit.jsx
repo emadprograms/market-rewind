@@ -600,8 +600,8 @@ export default function ChartUnit({
                 let toIndex = fromIndex + count;
                 
                 if (toIndex >= total) {
-                    toIndex = total; // can go slightly past the edge for padding
-                    fromIndex = Math.max(0, toIndex - count);
+                    chartRef.current.timeScale().scrollToRealTime();
+                    return;
                 } else if (fromIndex < 0) {
                     fromIndex = 0;
                     toIndex = Math.min(total, count);
@@ -612,10 +612,7 @@ export default function ChartUnit({
                     to: toIndex
                 });
             } else {
-                chartRef.current.timeScale().setVisibleLogicalRange({
-                  from: total - count + 15, // +15 matches rightOffset to prevent sticking to y-axis
-                  to: total + 15
-                });
+                chartRef.current.timeScale().scrollToRealTime();
             }
           }, 80);
 
