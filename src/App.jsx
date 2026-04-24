@@ -20,7 +20,7 @@ export default function App() {
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [entryTime, setEntryTime] = useState('09:20');
-  const [sessionTicker, setSessionTicker] = useState('SPY');
+  const [sessionTicker, setSessionTicker] = useState(() => localStorage.getItem('lastUsedTicker') || 'SPY');
   const [maximizedId, setMaximizedId] = useState(null);
   const [drawings, setDrawings] = useState({}); // { ticker: { rays: [], rects: [] } }
   const [chartTimeframes, setChartTimeframes] = useState({}); // { chartId: timeframe }
@@ -45,10 +45,14 @@ export default function App() {
     checkLocalDatabase();
   }, []);
 
-  // Save selectedDate to localStorage
+  // Save global settings to localStorage
   useEffect(() => {
     localStorage.setItem('lastUsedDate', selectedDate);
   }, [selectedDate]);
+
+  useEffect(() => {
+    localStorage.setItem('lastUsedTicker', sessionTicker);
+  }, [sessionTicker]);
 
   async function checkLocalDatabase() {
     setIsLoading(true);
@@ -73,8 +77,11 @@ export default function App() {
       const t = await fetchTickers();
       if (t.length > 0) {
         setTickers(t);
-        // Default session ticker to SPY if available, else first ticker
-        setSessionTicker(t.includes('SPY') ? 'SPY' : t[0]);
+        // Set default ticker only if current one is invalid
+        setSessionTicker(prev => {
+          if (t.includes(prev)) return prev;
+          return t.includes('SPY') ? 'SPY' : t[0];
+        });
         setIsDbLoaded(true);
         setDbStatus(`${t.length} Tickers active`);
       } else {
