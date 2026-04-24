@@ -108,7 +108,16 @@ export default function ChartUnit({
   useEffect(() => {
     async function load() {
       setIsLoadingHistory(true);
-      const data = await fetchMarketData(ticker, selectedDate);
+      
+      let daysBack = 30;
+      if (timeframe === '1min') daysBack = 3;
+      else if (timeframe === '5min') daysBack = 15;
+      else if (timeframe === '15min') daysBack = 30;
+      else if (timeframe === '30min') daysBack = 60;
+      else if (timeframe === '1H') daysBack = 120;
+      else if (timeframe === '1D') daysBack = 365 * 2; // 2 years for daily charts
+      
+      const data = await fetchMarketData(ticker, selectedDate, daysBack);
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }
@@ -116,7 +125,7 @@ export default function ChartUnit({
       setIsLoadingHistory(false);
     }
     load();
-  }, [ticker, selectedDate]);
+  }, [ticker, selectedDate, timeframe]);
 
   // Infinite Scroll Listener
   useEffect(() => {
