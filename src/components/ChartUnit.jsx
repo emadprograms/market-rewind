@@ -1180,7 +1180,7 @@ export default function ChartUnit({
               position: 'absolute',
               top: `${priceSeriesRef.current.priceToCoordinate(activeTrade.entryPrice)}px`,
               transform: 'translateY(-50%)',
-              right: '70px',
+              right: '90px',
               zIndex: 20,
               background: 'rgba(30, 41, 59, 0.8)',
               border: `2px solid ${activeTrade.type === 'long' ? '#26a69a' : '#ef5350'}`,
