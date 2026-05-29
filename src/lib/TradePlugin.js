@@ -24,13 +24,15 @@ class TradeRenderer {
                 ctx.strokeStyle = entryColor;
                 ctx.lineWidth = 2; // Thicker line
 
-                // Calculate gap based on badge position
+                // Calculate gap based on actual DOM position relative to canvas
                 let badgeStart = rightEdge;
                 let badgeEnd = rightEdge;
                 if (this._badgeRef && this._badgeRef.current) {
-                    const badgeWidth = this._badgeRef.current.offsetWidth;
-                    badgeEnd = rightEdge - 90; // CSS: right: 90px
-                    badgeStart = badgeEnd - badgeWidth;
+                    const badgeRect = this._badgeRef.current.getBoundingClientRect();
+                    const canvasRect = target.canvas.getBoundingClientRect();
+                    
+                    badgeStart = badgeRect.left - canvasRect.left;
+                    badgeEnd = badgeRect.right - canvasRect.left;
                 }
 
                 ctx.beginPath();
