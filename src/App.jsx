@@ -487,13 +487,20 @@ export default function App() {
 
                 const sizes = panelSizes[layoutMode] || [100 / gridCount];
                 const style = {};
-                if (!maximizedId) {
+                if (maximizedId === i) {
+                  // FORCE absolute expansion via inline styles to override any CSS specificity or container collapse
+                  style.position = 'absolute';
+                  style.top = '0';
+                  style.left = '0';
+                  style.width = '100%';
+                  style.height = '100%';
+                  style.zIndex = '9999';
+                } else if (!maximizedId) {
                   const size = sizes[i] !== undefined ? sizes[i] : (100 / gridCount);
                   if (layoutMode.endsWith('v')) style.width = `${size}%`;
                   if (layoutMode.endsWith('h')) style.height = `${size}%`;
-                }
-                // When a chart is maximized, hide non-maximized charts from layout
-                if (maximizedId !== null && maximizedId !== i) {
+                } else {
+                  // Hide charts that are not the maximized one
                   style.display = 'none';
                 }
 
