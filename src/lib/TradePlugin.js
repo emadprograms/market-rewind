@@ -27,15 +27,17 @@ class TradeRenderer {
                     ctx.lineTo(rightEdge, y);
                     ctx.stroke();
 
-                    // Label
-                    ctx.fillStyle = color;
-                    ctx.font = 'bold 10px Inter, sans-serif';
-                    ctx.textAlign = 'right';
-                    ctx.fillText(label, rightEdge - 5, y - 5);
+                    // Label - Only draw if label is provided
+                    if (label) {
+                        ctx.fillStyle = color;
+                        ctx.font = 'bold 10px Inter, sans-serif';
+                        ctx.textAlign = 'right';
+                        ctx.fillText(label, rightEdge - 5, y - 5);
+                    }
                 };
 
-                // Entry Line
-                drawLine(yEntry, '#94a3b8', 'Entry');
+                // Entry Line (No label)
+                drawLine(yEntry, '#94a3b8', null);
                 // SL Line
                 drawLine(ySL, '#ef5350', 'SL');
                 // TP Line

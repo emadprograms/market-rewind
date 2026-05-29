@@ -59,7 +59,10 @@ Market Rewind is a zero-read, local-first market replay tool.
         - **State**: `tradeSize` (lot count), `activeTrade` (object: type, entryPrice, slPrice, tpPrice, size, entryTime), `dragTarget` ('sl' | 'tp' | null).
         - **`placeOrder(type)`**: Captures current close price, sets default SL/TP at ±1%.
         - **Draggable SL/TP Lines**: `mousedown`/`mousemove`/`mouseup` listeners on the chart container detect proximity to SL/TP lines (10px threshold) and allow real-time price adjustment via `coordinateToPrice()`.
-        - **Trade Controls UI**: Bottom-left panel with size input + Buy/Sell buttons. Bottom-right badge shows active trade with close button.
+        - **High-Performance Trade Badge** (v7.6.1 fix):
+            - **DOM Context Alignment**: Badge moved inside `chartContainerRef` div to unify coordinate space.
+            - **Direct DOM Mutation**: `TradePlugin` now directly manipulates badge `style.top` via `useRef`, bypassing React re-renders. This ensures 60fps, drift-free tracking during vertical scaling and panning.
+            - **Cleanup**: Removed redundant "Entry" label from horizontal canvas line to avoid clutter.
         - **Plugin Sync**: `useEffect` keeps `tradePluginRef.current.setTrade()` in sync with `activeTrade` state.
         - **Blank Screen Fix**: Added missing `import { TradePlugin }`, `tradePluginRef`, `tradeSize`/`activeTrade` state declarations, and `placeOrder` function — all were referenced in JSX/effects but never declared, causing ReferenceErrors that crashed the entire React tree.
 
