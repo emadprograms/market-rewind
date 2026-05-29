@@ -23,7 +23,10 @@ Market Rewind is a zero-read, local-first market replay tool.
         - **3-Chart**: `5m`, `1H`, `1D` vertical stack/grid.
         - **4-Chart**: `5m`, `1H`, `1D` + `5m SPY` context chart.
         - **Force-Remount**: Charts now use a composite key `${layoutMode}-${i}` to ensure defaults are re-applied instantly upon layout switch.
-    - **Global Ticker Sync**: A new "Link" toggle in the left sidebar synchronizes the symbol across all open charts. Changing the symbol on one chart instantly updates the rest.
+    - **Grouped Symbol Linking System**: Replaced the global "Link" toggle with a multi-group synchronization system (Red, Blue, Green, Yellow). 
+        - **Group Picker**: Colored circles in each chart header allow assigning charts to specific sync groups.
+        - **Visual Indicators**: Chart cards display a colored top border corresponding to their active group.
+        - **Persistence**: Group assignments and group-specific tickers are persisted via `localStorage`.
     - **Resizable Chart Panels**: 
         - **Draggable Dividers**: Real-time resizing support for `2V`, `2H`, `3V`, and `3H` layouts.
         - **Splitter System**: Uses a custom Flex-based engine with draggable gutters that remember their positions per layout session.
@@ -136,4 +139,4 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`.
 
 ---
-*Last Update: 2026-04-25*
+*Last Update: 2026-05-29*

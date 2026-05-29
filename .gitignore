@@ -1,8 +1,13 @@
 # Dependencies
 node_modules/
+package-lock.json
 dist/
 dist-ssr/
 *.local
+
+# Assets
+sql-wasm.wasm
+
 
 # Python
 venv/
