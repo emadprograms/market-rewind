@@ -426,6 +426,7 @@ export default function ChartUnit({
       if (entries.length === 0 || entries[0].target !== chartContainerRef.current) return;
       const newRect = entries[0].contentRect;
       chartRef.current.applyOptions({ width: newRect.width, height: newRect.height });
+      setChartUpdateTick(t => t + 1);
     });
 
     if (chartContainerRef.current) {
