@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink, Menu, Link } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink, Menu } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
 import { fetchTickers, fetchMarketData, loadDatabaseFromFile, isDBLoaded, initDB } from './lib/db';
 import { getTzForTicker, getTzLabel } from './lib/timezones';
@@ -21,8 +21,15 @@ export default function App() {
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [entryTime, setEntryTime] = useState('09:20');
   const [sessionTicker, setSessionTicker] = useState(() => localStorage.getItem('lastUsedTicker') || 'SPY');
-  const [globalTicker, setGlobalTicker] = useState(() => localStorage.getItem('lastUsedTicker') || 'SPY');
-  const [isSymbolSynced, setIsSymbolSynced] = useState(false);
+  const availableGroups = ['red', 'blue', 'green', 'yellow', 'none'];
+  const [groupTickers, setGroupTickers] = useState(() => {
+    const saved = localStorage.getItem('groupTickers');
+    return saved ? JSON.parse(saved) : { red: 'SPY', blue: 'SPY', green: 'SPY', yellow: 'SPY' };
+  });
+  const [chartGroups, setChartGroups] = useState(() => {
+    const saved = localStorage.getItem('chartGroups');
+    return saved ? JSON.parse(saved) : {};
+  });
   const [maximizedId, setMaximizedId] = useState(null);
   const [drawings, setDrawings] = useState({}); // { ticker: { rays: [], rects: [] } }
   const [chartTimeframes, setChartTimeframes] = useState({}); // { chartId: timeframe }
@@ -63,8 +70,16 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('lastUsedTicker', sessionTicker);
-    setGlobalTicker(sessionTicker);
   }, [sessionTicker]);
+
+  // Persist group settings to localStorage
+  useEffect(() => {
+    localStorage.setItem('chartGroups', JSON.stringify(chartGroups));
+  }, [chartGroups]);
+
+  useEffect(() => {
+    localStorage.setItem('groupTickers', JSON.stringify(groupTickers));
+  }, [groupTickers]);
 
   async function checkLocalDatabase() {
     setIsLoading(true);
@@ -304,6 +319,17 @@ export default function App() {
     }));
   };
 
+  function handleTickerChange(chartId, newTicker) {
+    const group = chartGroups[chartId] || 'none';
+    if (group !== 'none') {
+      setGroupTickers(prev => ({ ...prev, [group]: newTicker }));
+    }
+  }
+
+  function handleGroupChange(chartId, newGroup) {
+    setChartGroups(prev => ({ ...prev, [chartId]: newGroup }));
+  }
+
   return (
     <div className="app-container">
       
@@ -374,15 +400,6 @@ export default function App() {
             </div>
           ))}
 
-          {/* Sync Symbols Toggle */}
-          <div 
-            className={`layout-icon ${isSymbolSynced ? 'active' : ''}`}
-            onClick={() => setIsSymbolSynced(!isSymbolSynced)}
-            title="Sync Symbols Across All Charts"
-            style={{ marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}
-          >
-            <Link size={18} />
-          </div>
         </div>
 
         {/* Links */}
@@ -493,9 +510,10 @@ export default function App() {
                     allDrawings={drawings}
                     onUpdateDrawings={handleUpdateDrawings}
                     onTimeframeChange={handleTimeframeChange}
-                    isSymbolSynced={isSymbolSynced}
-                    globalTicker={globalTicker}
-                    onGlobalTickerChange={setGlobalTicker}
+                    groupColor={chartGroups[i] || 'none'}
+                    groupTicker={groupTickers[chartGroups[i]]}
+                    onGroupChange={(newGroup) => handleGroupChange(i, newGroup)}
+                    onTickerChange={(newTicker) => handleTickerChange(i, newTicker)}
                     style={style}
                   />
                 );

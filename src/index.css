@@ -461,6 +461,35 @@ select:focus, input:focus {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* Group Picker */
+.group-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.group-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.group-dot:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+.group-dot.active {
+  border-color: white;
+  box-shadow: 0 0 0 1px white, 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
 .switch-track {
   width: 28px;
   height: 14px;

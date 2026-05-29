@@ -9,6 +9,13 @@ import { VolumeProfilePlugin } from '../lib/VolumeProfilePlugin';
 import { HorizontalRayPlugin } from '../lib/HorizontalRayPlugin';
 import { RectanglePlugin } from '../lib/RectanglePlugin';
 
+const borderColors = {
+  red: '#ef5350',
+  blue: '#42a5f5',
+  green: '#26a69a',
+  yellow: '#ffca28',
+};
+
 export default function ChartUnit({ 
   id, 
   globalTime, 
@@ -23,9 +30,10 @@ export default function ChartUnit({
   allDrawings = {},
   onUpdateDrawings,
   onTimeframeChange,
-  isSymbolSynced,
-  globalTicker,
-  onGlobalTickerChange,
+  groupColor = 'none',
+  groupTicker,
+  onGroupChange,
+  onTickerChange,
   style = {}
 }) {
   const chartContainerRef = useRef();
@@ -47,12 +55,19 @@ export default function ChartUnit({
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawType, setDrawType] = useState('ray'); // 'ray' | 'rect'
 
-  // Sync with global ticker if enabled
+  // Group-to-Ticker Sync: When group ticker changes, update local ticker
   useEffect(() => {
-    if (isSymbolSynced && globalTicker && globalTicker !== ticker) {
-      setTicker(globalTicker);
+    if (groupColor !== 'none' && groupTicker && groupTicker !== ticker) {
+      setTicker(groupTicker);
     }
-  }, [isSymbolSynced, globalTicker]);
+  }, [groupColor, groupTicker]);
+
+  // Group Transition: When chart is assigned to a group, adopt the group's ticker
+  useEffect(() => {
+    if (groupColor !== 'none' && groupTicker) {
+      setTicker(groupTicker);
+    }
+  }, [groupColor]);
   const [rectAnchor, setRectAnchor] = useState(null); // {price, time}
   const [ghostPoint, setGhostPoint] = useState(null); // {price, time} for rect preview
   const [isAtEnd, setIsAtEnd] = useState(true);
@@ -748,7 +763,10 @@ export default function ChartUnit({
     const hasExplicitSize = style.width || style.height;
     const mergedStyle = { ...style, position: 'relative', ...(hasExplicitSize ? { flex: 'none' } : {}) };
     return (
-    <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`} style={mergedStyle}>
+    <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`} style={{
+      ...mergedStyle,
+      borderTop: groupColor !== 'none' && borderColors[groupColor] ? `3px solid ${borderColors[groupColor]}` : undefined,
+    }}>
       <div className="chart-header">
         <div className="chart-controls">
           
@@ -783,8 +801,8 @@ export default function ChartUnit({
                       className={`dropdown-item ${t === ticker ? 'selected' : ''}`}
                       onClick={() => {
                         setTicker(t);
-                        if (isSymbolSynced && onGlobalTickerChange) {
-                          onGlobalTickerChange(t);
+                        if (onTickerChange) {
+                          onTickerChange(t);
                         }
                         setIsTickerOpen(false);
                         setTickerSearch('');
@@ -831,6 +849,18 @@ export default function ChartUnit({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* GROUP PICKER */}
+          <div className="group-picker" title="Assign to Group">
+            {['red', 'blue', 'green', 'yellow', 'none'].map(color => (
+              <div
+                key={color}
+                className={`group-dot ${color === groupColor ? 'active' : ''}`}
+                style={{ backgroundColor: color === 'none' ? '#555' : borderColors[color] }}
+                onClick={() => onGroupChange && onGroupChange(color)}
+              />
+            ))}
           </div>
 
           {/* PREMIUM ETH TOGGLE */}
