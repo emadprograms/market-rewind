@@ -16,7 +16,6 @@ class TradeRenderer {
                 if (yEntry === null || yEntry === undefined) return;
 
                 ctx.save();
-                ctx.setLineDash([4, 4]);
                 ctx.globalAlpha = 0.8;
 
                 // Entry Line: Color based on type, thicker, with gap
