@@ -115,6 +115,8 @@ Market Rewind is a zero-read, local-first market replay tool.
         - Renders orange-bordered, semi-transparent rectangles (`rgba(255, 152, 0, 0.15)`).
         - Supports 2-point placement logic with live canvas previews.
         - Robust off-screen clipping for persistent chart analysis.
+- [x] `src/lib/TradePlugin.js`:
+    - **Trade Visuals**: Renders draggable SL/TP and Entry lines for simulated trades.
 
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
@@ -134,6 +136,13 @@ Market Rewind is a zero-read, local-first market replay tool.
 - [x] `sync_archive_db.yml`: Manual trigger with configurable inputs:
     - `from_date` / `to_date`: Date range for backfill.
     - `cooldown`: Seconds between API calls per worker (default: 60).
+    - `update_release`: Toggle to sync the **archive** Turso DB → SQLite and publish as `latest-archive` GitHub Release.
+    - All credentials sourced from **Infisical** (no extra GitHub secrets needed beyond the 3 Infisical auth secrets).
+    - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`.
+
+---
+*Last Update: 2026-05-29*
+worker (default: 60).
     - `update_release`: Toggle to sync the **archive** Turso DB → SQLite and publish as `latest-archive` GitHub Release.
     - All credentials sourced from **Infisical** (no extra GitHub secrets needed beyond the 3 Infisical auth secrets).
     - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`.

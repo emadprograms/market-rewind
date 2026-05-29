@@ -86,10 +86,14 @@ export default function ChartUnit({
   const [isTfOpen, setIsTfOpen] = useState(false);
   const [tickerSearch, setTickerSearch] = useState('');
   
+  // Dragging State
+  const [dragTarget, setDragTarget] = useState(null); // 'sl' | 'tp' | null
+
   const tickerRef = useRef();
   const tfRef = useRef();
   const isDrawingModeRef = useRef(false);
   const currentTickerRef = useRef(ticker);
+
   
   // Infinite Scroll State
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -308,6 +312,10 @@ export default function ChartUnit({
     // Attach Rectangle Plugin
     rectPluginRef.current = new RectanglePlugin();
     priceSeriesRef.current.attachPrimitive(rectPluginRef.current);
+    
+    // Attach Trade Plugin
+    tradePluginRef.current = new TradePlugin();
+    priceSeriesRef.current.attachPrimitive(tradePluginRef.current);
     
     // Initial sync
     rayPluginRef.current.setRays(drawings.rays);
@@ -577,8 +585,65 @@ export default function ChartUnit({
     }
   }, [rectAnchor, ghostPoint, drawings.rects]);
 
+  // Trade Line Dragging Logic
+  useEffect(() => {
+    const container = chartContainerRef.current;
+    if (!container || !priceSeriesRef.current) return;
+
+    const series = priceSeriesRef.current;
+
+    const handleMouseDown = (e) => {
+      if (!activeTrade) return;
+
+      const rect = container.getBoundingClientRect();
+      const mouseY = e.clientY - rect.top;
+
+      const ySL = series.priceToCoordinate(activeTrade.slPrice);
+      const yTP = series.priceToCoordinate(activeTrade.tpPrice);
+
+      if (ySL !== null && Math.abs(mouseY - ySL) < 10) {
+        setDragTarget('sl');
+      } else if (yTP !== null && Math.abs(mouseY - yTP) < 10) {
+        setDragTarget('tp');
+      }
+    };
+
+    const handleMouseMove = (e) => {
+      if (!dragTarget) return;
+
+      const rect = container.getBoundingClientRect();
+      const mouseY = e.clientY - rect.top;
+      const newPrice = series.coordinateToPrice(mouseY);
+
+      if (newPrice !== null) {
+        setActiveTrade(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            [dragTarget === 'sl' ? 'slPrice' : 'tpPrice']: newPrice
+          };
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setDragTarget(null);
+    };
+
+    container.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      container.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [activeTrade, dragTarget]);
+
   // Update VP Enabled State
   useEffect(() => {
+
       if (vpPluginRef.current) {
           vpPluginRef.current.setEnabled(showVP);
       }
@@ -975,6 +1040,78 @@ export default function ChartUnit({
           </div>
         )}
 
+        {/* TRADE CONTROLS */}
+        <div className="trade-controls" style={{
+          position: 'absolute', bottom: '20px', left: '20px', zIndex: 20,
+          display: 'flex', alignItems: 'center', gap: '10px',
+          background: 'rgba(30, 41, 59, 0.8)', padding: '8px 12px',
+          borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(4px)', color: '#fff', fontFamily: 'Inter, system-ui, sans-serif'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>SIZE</span>
+            <input 
+              type="number" 
+              value={tradeSize} 
+              onChange={(e) => setTradeSize(Number(e.target.value))}
+              style={{ 
+                width: '50px', background: '#0f172a', border: '1px solid #334155', 
+                color: '#fff', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', textAlign: 'center'
+              }} 
+            />
+          </div>
+          
+          <button 
+            onClick={() => placeOrder('long')}
+            style={{ 
+              background: '#26a69a', color: '#fff', border: 'none', borderRadius: '4px', 
+              padding: '4px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+              transition: 'filter 0.2s'
+            }}
+            onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.2)'}
+            onMouseOut={e => e.currentTarget.style.filter = 'brightness(1)'}
+          >
+            BUY
+          </button>
+          
+          <button 
+            onClick={() => placeOrder('short')}
+            style={{ 
+              background: '#ef5350', color: '#fff', border: 'none', borderRadius: '4px', 
+              padding: '4px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+              transition: 'filter 0.2s'
+            }}
+            onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.2)'}
+            onMouseOut={e => e.currentTarget.style.filter = 'brightness(1)'}
+          >
+            SELL
+          </button>
+        </div>
+
+        {/* ACTIVE TRADE BADGE */}
+        {activeTrade && (
+          <div className="trade-badge" style={{
+            position: 'absolute', bottom: '20px', right: '20px', zIndex: 20,
+            background: activeTrade.type === 'long' ? 'rgba(38, 166, 154, 0.9)' : 'rgba(239, 83, 80, 0.9)',
+            color: '#fff', padding: '6px 12px', borderRadius: '6px',
+            fontSize: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)'
+          }}>
+            <span>{activeTrade.type.toUpperCase()} {activeTrade.size} LOTS</span>
+            <button 
+              onClick={() => setActiveTrade(null)}
+              style={{ 
+                background: 'rgba(0,0,0,0.2)', border: 'none', color: '#fff', 
+                borderRadius: '50%', width: '18px', height: '18px', 
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '10px', padding: 0
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* KEYBOARD ACTION MODAL */}
         {keyboardAction.active && (
           <div className="keyboard-action-modal">
@@ -1020,6 +1157,11 @@ export default function ChartUnit({
             </form>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+    )}
       </div>
     </div>
   );
