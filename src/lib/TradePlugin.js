@@ -9,7 +9,7 @@ class TradeRenderer {
             if (!this._data) return;
 
             const { entryPrice, slPrice, tpPrice, type } = this._data;
-            const series = this._pluginRef.series;
+            const series = this._pluginRef._series;
             if (!series) return;
 
             const yEntry = series.priceToCoordinate(entryPrice);
