@@ -1161,8 +1161,3 @@ export default function ChartUnit({
     </div>
   );
 }
-    )}
-      </div>
-    </div>
-  );
-}
