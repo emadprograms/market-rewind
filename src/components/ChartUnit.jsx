@@ -1082,7 +1082,7 @@ export default function ChartUnit({
 
         {/* TRADE CONTROLS */}
         <div className="trade-controls" style={{
-          position: 'absolute', bottom: '20px', left: '20px', zIndex: 20,
+          position: 'absolute', top: '20px', left: '20px', zIndex: 20,
           display: 'flex', alignItems: 'center', gap: '10px',
           background: 'rgba(30, 41, 59, 0.8)', padding: '8px 12px',
           borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
@@ -1129,29 +1129,35 @@ export default function ChartUnit({
         </div>
 
         {/* ACTIVE TRADE BADGE */}
-        {activeTrade && (
-          <div className="trade-badge" style={{
-            position: 'absolute', bottom: '20px', right: '20px', zIndex: 20,
-            background: activeTrade.type === 'long' ? 'rgba(38, 166, 154, 0.9)' : 'rgba(239, 83, 80, 0.9)',
-            color: '#fff', padding: '6px 12px', borderRadius: '6px',
-            fontSize: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)'
-          }}>
-            <span>{activeTrade.type.toUpperCase()} {activeTrade.size} LOTS</span>
-            <button 
-              onClick={() => setActiveTrade(null)}
-              style={{ 
-                background: 'rgba(0,0,0,0.2)', border: 'none', color: '#fff', 
-                borderRadius: '50%', width: '18px', height: '18px', 
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '10px', padding: 0
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        )}
+        {activeTrade && (() => {
+          const currentPrice = chartData[chartData.length - 1]?.close || 0;
+          const pnl = activeTrade.type === 'long' 
+            ? (currentPrice - activeTrade.entryPrice) * activeTrade.size 
+            : (activeTrade.entryPrice - currentPrice) * activeTrade.size;
 
+          return (
+            <div className="trade-badge" style={{
+              position: 'absolute', bottom: '20px', right: '20px', zIndex: 20,
+              background: activeTrade.type === 'long' ? 'rgba(38, 166, 154, 0.9)' : 'rgba(239, 83, 80, 0.9)',
+              color: '#fff', padding: '6px 12px', borderRadius: '6px',
+              fontSize: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)'
+            }}>
+              <span>{activeTrade.size} | {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span>
+              <button 
+                onClick={() => setActiveTrade(null)}
+                style={{ 
+                  background: 'rgba(0,0,0,0.2)', border: 'none', color: '#fff', 
+                  borderRadius: '50%', width: '18px', height: '18px', 
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '10px', padding: 0
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          );
+        })()}
         {/* KEYBOARD ACTION MODAL */}
         {keyboardAction.active && (
           <div className="keyboard-action-modal">
