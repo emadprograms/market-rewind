@@ -239,18 +239,63 @@ export default function ChartUnit({
     try {
       if (!chartData || chartData.length === 0) return;
       const lastBar = chartData[chartData.length - 1];
-      const entryPrice = lastBar.close;
-      const offset = entryPrice * 0.01; // 1% default SL/TP distance
+      const currentPrice = lastBar.close;
+      const offset = currentPrice * 0.01; // 1% default SL/TP distance
 
-      const trade = {
-        type,
-        entryPrice,
-        slPrice: type === 'long' ? entryPrice - offset : entryPrice + offset,
-        tpPrice: type === 'long' ? entryPrice + offset : entryPrice - offset,
-        size: tradeSize,
-        entryTime: lastBar.time,
-      };
-      setActiveTrade(trade);
+      setActiveTrade(prevTrade => {
+        if (!prevTrade) {
+          // Initial Open
+          return {
+            type,
+            entryPrice: currentPrice,
+            slPrice: type === 'long' ? currentPrice - offset : currentPrice + offset,
+            tpPrice: type === 'long' ? currentPrice + offset : currentPrice - offset,
+            size: tradeSize,
+            entryTime: lastBar.time,
+          };
+        }
+
+        if (prevTrade.type === type) {
+          // Adding to existing position (Same Direction)
+          const newSize = prevTrade.size + tradeSize;
+          const newEntryPrice = ((prevTrade.entryPrice * prevTrade.size) + (currentPrice * tradeSize)) / newSize;
+          
+          return {
+            ...prevTrade,
+            entryPrice: newEntryPrice,
+            slPrice: type === 'long' ? newEntryPrice - offset : newEntryPrice + offset,
+            tpPrice: type === 'long' ? newEntryPrice + offset : newEntryPrice - offset,
+            size: newSize,
+          };
+        } else {
+          // Opposite direction (Reduce or Flip)
+          const netSize = prevTrade.size - tradeSize;
+
+          if (netSize > 0) {
+            // Partial Close
+            return {
+              ...prevTrade,
+              size: netSize,
+            };
+          } else if (netSize === 0) {
+            // Full Close
+            return null;
+          } else {
+            // Flip Position
+            const flippedSize = Math.abs(netSize);
+            const flippedType = type; // The type of the order that caused the flip
+            
+            return {
+              type: flippedType,
+              entryPrice: currentPrice,
+              slPrice: flippedType === 'long' ? currentPrice - offset : currentPrice + offset,
+              tpPrice: flippedType === 'long' ? currentPrice + offset : currentPrice - offset,
+              size: flippedSize,
+              entryTime: lastBar.time,
+            };
+          }
+        }
+      });
     } catch(err) {
       console.error('placeOrder error:', err);
     }
