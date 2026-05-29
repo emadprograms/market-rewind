@@ -1127,11 +1127,9 @@ export default function ChartUnit({
 
         {/* TRADE CONTROLS */}
         <div className="trade-controls" style={{
-          position: 'absolute', top: '20px', left: '20px', zIndex: 20,
-          display: 'flex', alignItems: 'center', gap: '10px',
-          background: 'rgba(30, 41, 59, 0.8)', padding: '8px 12px',
-          borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
-          backdropFilter: 'blur(4px)', color: '#fff', fontFamily: 'Inter, system-ui, sans-serif'
+          position: 'absolute', top: '0px', left: '0px', zIndex: 20,
+          display: 'flex', alignItems: 'center', gap: '5px',
+          color: '#fff', fontFamily: 'Inter, system-ui, sans-serif'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <span style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>SIZE</span>
