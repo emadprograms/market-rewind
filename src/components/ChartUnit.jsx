@@ -761,7 +761,12 @@ export default function ChartUnit({
 
 
     const hasExplicitSize = style.width || style.height;
-    const mergedStyle = { ...style, position: 'relative', ...(hasExplicitSize ? { flex: 'none' } : {}) };
+    // Only apply position:'relative' when NOT maximized, so .is-maximized CSS can take precedence
+    const mergedStyle = { 
+      ...style, 
+      ...(!isMaximized ? { position: 'relative' } : {}), 
+      ...(hasExplicitSize ? { flex: 'none' } : {}) 
+    };
     return (
     <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`} style={{
       ...mergedStyle,
