@@ -1172,7 +1172,8 @@ export default function ChartUnit({
         <div className="trade-controls" style={{
           position: 'absolute', top: '0px', left: '0px', zIndex: 20,
           display: 'flex', alignItems: 'center', gap: '5px',
-          color: '#fff', fontFamily: 'Inter, system-ui, sans-serif'
+          color: '#fff', fontFamily: 'Inter, system-ui, sans-serif',
+          paddingTop: '10px', paddingLeft: '10px'
         }}>
           <button 
             onClick={() => placeOrder('long')}
