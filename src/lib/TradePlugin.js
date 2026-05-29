@@ -1,6 +1,7 @@
 class TradeRenderer {
-    constructor(data) {
+    constructor(data, badgeRef) {
         this._data = data;
+        this._badgeRef = badgeRef;
     }
 
     draw(target) {
@@ -15,13 +16,43 @@ class TradeRenderer {
                 if (yEntry === null || yEntry === undefined) return;
 
                 ctx.save();
-                ctx.lineWidth = 1;
                 ctx.setLineDash([4, 4]);
                 ctx.globalAlpha = 0.8;
 
+                // Entry Line: Color based on type, thicker, with gap
+                const entryColor = type === 'long' ? '#26a69a' : '#ef5350';
+                ctx.strokeStyle = entryColor;
+                ctx.lineWidth = 2; // Thicker line
+
+                // Calculate gap based on badge position
+                let badgeStart = rightEdge;
+                let badgeEnd = rightEdge;
+                if (this._badgeRef && this._badgeRef.current) {
+                    const badgeWidth = this._badgeRef.current.offsetWidth;
+                    badgeEnd = rightEdge - 90; // CSS: right: 90px
+                    badgeStart = badgeEnd - badgeWidth;
+                }
+
+                ctx.beginPath();
+                // Line segment 1: 0 to badgeStart
+                ctx.moveTo(0, yEntry);
+                ctx.lineTo(Math.max(0, badgeStart), yEntry);
+                ctx.stroke();
+
+                // Line segment 2: badgeEnd to rightEdge
+                if (badgeEnd < rightEdge) {
+                    ctx.beginPath();
+                    ctx.moveTo(badgeEnd, yEntry);
+                    ctx.lineTo(rightEdge, yEntry);
+                    ctx.stroke();
+                }
+
+                // SL & TP Lines
                 const drawLine = (y, color, label) => {
                     if (y === null || y === undefined || isNaN(y)) return;
                     ctx.strokeStyle = color;
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([4, 4]);
                     ctx.beginPath();
                     ctx.moveTo(0, y);
                     ctx.lineTo(rightEdge, y);
@@ -36,8 +67,6 @@ class TradeRenderer {
                     }
                 };
 
-                // Entry Line (No label)
-                drawLine(yEntry, '#94a3b8', null);
                 // SL Line
                 drawLine(ySL, '#ef5350', 'SL');
                 // TP Line
@@ -63,10 +92,10 @@ class TradePaneView {
     renderer() {
         try {
             const data = this._plugin._getViewData();
-            return new TradeRenderer(data);
+            return new TradeRenderer(data, this._plugin._badgeRef);
         } catch(e) {
             console.error('TradePaneView renderer error:', e);
-            return new TradeRenderer(null);
+            return new TradeRenderer(null, null);
         }
     }
 }
