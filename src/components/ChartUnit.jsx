@@ -82,32 +82,6 @@ export default function ChartUnit({
   const lastEthRef = useRef(showEth);
 
 
-
-  // Place a simulated trade at the current price
-  const placeOrder = useCallback((type) => {
-    if (!chartData || chartData.length === 0) return;
-    const lastBar = chartData[chartData.length - 1];
-    const entryPrice = lastBar.close;
-    const offset = entryPrice * 0.01; // 1% default SL/TP distance
-
-    const trade = {
-      type,
-      entryPrice,
-      slPrice: type === 'long' ? entryPrice - offset : entryPrice + offset,
-      tpPrice: type === 'long' ? entryPrice + offset : entryPrice - offset,
-      size: tradeSize,
-      entryTime: lastBar.time,
-    };
-    setActiveTrade(trade);
-  }, [chartData, tradeSize]);
-
-  // Sync activeTrade state to the TradePlugin for canvas rendering
-  useEffect(() => {
-    if (tradePluginRef.current) {
-      tradePluginRef.current.setTrade(activeTrade);
-    }
-  }, [activeTrade]);
-
   const drawings = allDrawings[ticker] || { rays: [], rects: [] };
 
   // Custom UI State
@@ -259,6 +233,35 @@ export default function ChartUnit({
     
     return resampleData(filtered, timeframe);
   }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
+
+  // Place a simulated trade at the current price
+  const placeOrder = useCallback((type) => {
+    try {
+      if (!chartData || chartData.length === 0) return;
+      const lastBar = chartData[chartData.length - 1];
+      const entryPrice = lastBar.close;
+      const offset = entryPrice * 0.01; // 1% default SL/TP distance
+
+      const trade = {
+        type,
+        entryPrice,
+        slPrice: type === 'long' ? entryPrice - offset : entryPrice + offset,
+        tpPrice: type === 'long' ? entryPrice + offset : entryPrice - offset,
+        size: tradeSize,
+        entryTime: lastBar.time,
+      };
+      setActiveTrade(trade);
+    } catch(err) {
+      console.error('placeOrder error:', err);
+    }
+  }, [chartData, tradeSize]);
+
+  // Sync activeTrade state to the TradePlugin for canvas rendering
+  useEffect(() => {
+    if (tradePluginRef.current) {
+      tradePluginRef.current.setTrade(activeTrade);
+    }
+  }, [activeTrade]);
 
   // 2. Initialize Charts
   useEffect(() => {
@@ -622,36 +625,44 @@ export default function ChartUnit({
     const series = priceSeriesRef.current;
 
     const handleMouseDown = (e) => {
-      if (!activeTrade) return;
+      try {
+        if (!activeTrade) return;
 
-      const rect = container.getBoundingClientRect();
-      const mouseY = e.clientY - rect.top;
+        const rect = container.getBoundingClientRect();
+        const mouseY = e.clientY - rect.top;
 
-      const ySL = series.priceToCoordinate(activeTrade.slPrice);
-      const yTP = series.priceToCoordinate(activeTrade.tpPrice);
+        const ySL = series.priceToCoordinate(activeTrade.slPrice);
+        const yTP = series.priceToCoordinate(activeTrade.tpPrice);
 
-      if (ySL !== null && Math.abs(mouseY - ySL) < 10) {
-        setDragTarget('sl');
-      } else if (yTP !== null && Math.abs(mouseY - yTP) < 10) {
-        setDragTarget('tp');
+        if (ySL !== null && Math.abs(mouseY - ySL) < 10) {
+          setDragTarget('sl');
+        } else if (yTP !== null && Math.abs(mouseY - yTP) < 10) {
+          setDragTarget('tp');
+        }
+      } catch (err) {
+        console.error('handleMouseDown error:', err);
       }
     };
 
     const handleMouseMove = (e) => {
-      if (!dragTarget) return;
+      try {
+        if (!dragTarget) return;
 
-      const rect = container.getBoundingClientRect();
-      const mouseY = e.clientY - rect.top;
-      const newPrice = series.coordinateToPrice(mouseY);
+        const rect = container.getBoundingClientRect();
+        const mouseY = e.clientY - rect.top;
+        const newPrice = series.coordinateToPrice(mouseY);
 
-      if (newPrice !== null) {
-        setActiveTrade(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            [dragTarget === 'sl' ? 'slPrice' : 'tpPrice']: newPrice
-          };
-        });
+        if (newPrice !== null) {
+          setActiveTrade(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              [dragTarget === 'sl' ? 'slPrice' : 'tpPrice']: newPrice
+            };
+          });
+        }
+      } catch (err) {
+        console.error('handleMouseMove error:', err);
       }
     };
 

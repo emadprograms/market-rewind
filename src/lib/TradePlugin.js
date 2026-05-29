@@ -4,44 +4,48 @@ class TradeRenderer {
     }
 
     draw(target) {
-        target.useMediaCoordinateSpace(scope => {
-            const ctx = scope.context;
-            if (!this._data) return;
+        try {
+            target.useMediaCoordinateSpace(scope => {
+                const ctx = scope.context;
+                if (!this._data) return;
 
-            const { yEntry, ySL, yTP, type } = this._data;
-            const rightEdge = scope.mediaSize.width;
+                const { yEntry, ySL, yTP, type } = this._data;
+                const rightEdge = scope.mediaSize.width;
 
-            if (yEntry === null) return;
+                if (yEntry === null || yEntry === undefined) return;
 
-            ctx.save();
-            ctx.lineWidth = 1;
-            ctx.setLineDash([4, 4]);
-            ctx.globalAlpha = 0.8;
+                ctx.save();
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.globalAlpha = 0.8;
 
-            const drawLine = (y, color, label) => {
-                if (y === null) return;
-                ctx.strokeStyle = color;
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(rightEdge, y);
-                ctx.stroke();
+                const drawLine = (y, color, label) => {
+                    if (y === null || y === undefined || isNaN(y)) return;
+                    ctx.strokeStyle = color;
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(rightEdge, y);
+                    ctx.stroke();
 
-                // Label
-                ctx.fillStyle = color;
-                ctx.font = 'bold 10px Inter, sans-serif';
-                ctx.textAlign = 'right';
-                ctx.fillText(label, rightEdge - 5, y - 5);
-            };
+                    // Label
+                    ctx.fillStyle = color;
+                    ctx.font = 'bold 10px Inter, sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(label, rightEdge - 5, y - 5);
+                };
 
-            // Entry Line
-            drawLine(yEntry, '#94a3b8', 'Entry');
-            // SL Line
-            drawLine(ySL, '#ef5350', 'SL');
-            // TP Line
-            drawLine(yTP, '#26a69a', 'TP');
+                // Entry Line
+                drawLine(yEntry, '#94a3b8', 'Entry');
+                // SL Line
+                drawLine(ySL, '#ef5350', 'SL');
+                // TP Line
+                drawLine(yTP, '#26a69a', 'TP');
 
-            ctx.restore();
-        });
+                ctx.restore();
+            });
+        } catch (err) {
+            console.error('TradeRenderer draw error:', err);
+        }
     }
 }
 
@@ -55,8 +59,13 @@ class TradePaneView {
     }
 
     renderer() {
-        const data = this._plugin._getViewData();
-        return new TradeRenderer(data);
+        try {
+            const data = this._plugin._getViewData();
+            return new TradeRenderer(data);
+        } catch(e) {
+            console.error('TradePaneView renderer error:', e);
+            return new TradeRenderer(null);
+        }
     }
 }
 
@@ -96,17 +105,23 @@ export class TradePlugin {
     }
 
     _getViewData() {
-        if (!this._trade || !this._series) return null;
+        try {
+            if (!this._trade || !this._series) return null;
 
-        const { entryPrice, slPrice, tpPrice, type } = this._trade;
+            const { entryPrice, slPrice, tpPrice, type } = this._trade;
+            if (entryPrice === undefined) return null;
 
-        const yEntry = this._series.priceToCoordinate(entryPrice);
-        const ySL = this._series.priceToCoordinate(slPrice);
-        const yTP = this._series.priceToCoordinate(tpPrice);
+            const yEntry = this._series.priceToCoordinate(entryPrice);
+            const ySL = this._series.priceToCoordinate(slPrice);
+            const yTP = this._series.priceToCoordinate(tpPrice);
 
-        // If the entry line is off-screen, skip rendering entirely
-        if (yEntry === null) return null;
+            // If the entry line is off-screen, skip rendering entirely
+            if (yEntry === null) return null;
 
-        return { yEntry, ySL, yTP, type };
+            return { yEntry, ySL, yTP, type };
+        } catch(e) {
+            console.error('TradePlugin _getViewData error:', e);
+            return null;
+        }
     }
 }
