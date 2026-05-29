@@ -1177,7 +1177,11 @@ export default function ChartUnit({
 
           return (
             <div className="trade-badge" style={{
-              position: 'absolute', bottom: '20px', right: '20px', zIndex: 20,
+              position: 'absolute',
+              top: `${priceSeriesRef.current.priceToCoordinate(activeTrade.entryPrice)}px`,
+              transform: 'translateY(-50%)',
+              left: '60px',
+              zIndex: 20,
               background: 'rgba(30, 41, 59, 0.8)',
               border: `3px solid ${activeTrade.type === 'long' ? '#26a69a' : '#ef5350'}`,
               color: '#fff', padding: '6px 12px', borderRadius: '6px',
