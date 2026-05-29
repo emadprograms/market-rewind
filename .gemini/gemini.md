@@ -126,6 +126,7 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Trade Visuals**: Renders dashed Entry (grey), SL (red), and TP (green) horizontal lines for simulated trades.
     - **Safe Coordinate Architecture** (v7.6 fix): Pre-computes pixel coordinates (`yEntry`, `ySL`, `yTP`) inside `_getViewData()` where `this._series` is reliably available. The renderer receives only pixel values, eliminating the previous crash-prone `_pluginRef._series` back-reference pattern.
     - **Null Safety**: `_getViewData()` returns `null` if `_trade` or `_series` is missing, or if `entryPrice` is off-screen — preventing canvas render loop crashes during plugin lifecycle transitions.
+    - **Try-Catch Isolation (Blank Page Fix)**: Wrapped critical render functions and React hooks in `try-catch` blocks. Previously, any miscalculation or missing price coordinate before the chart was fully hydrated with data threw a fatal error inside the `lightweight-charts` drawing loop, forcing React to unmount the entire page. These harmless missing-data moments are now safely ignored.
 
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
