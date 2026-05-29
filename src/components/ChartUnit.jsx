@@ -1138,7 +1138,8 @@ export default function ChartUnit({
           return (
             <div className="trade-badge" style={{
               position: 'absolute', bottom: '20px', right: '20px', zIndex: 20,
-              background: activeTrade.type === 'long' ? 'rgba(38, 166, 154, 0.9)' : 'rgba(239, 83, 80, 0.9)',
+              background: 'rgba(30, 41, 59, 0.8)',
+              border: `3px solid ${activeTrade.type === 'long' ? '#26a69a' : '#ef5350'}`,
               color: '#fff', padding: '6px 12px', borderRadius: '6px',
               fontSize: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px',
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)'
