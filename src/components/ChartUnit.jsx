@@ -57,6 +57,7 @@ export default function ChartUnit({
   const [tradeSize, setTradeSize] = useState(1);
   const [activeTrade, setActiveTrade] = useState(null);
   const [chartUpdateTick, setChartUpdateTick] = useState(0); // Force re-render on chart movements
+  const tradeBadgeRef = useRef(null); // Direct ref for high-performance positioning
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawType, setDrawType] = useState('ray'); // 'ray' | 'rect'
 
@@ -394,6 +395,7 @@ export default function ChartUnit({
     
     // Attach Trade Plugin
     tradePluginRef.current = new TradePlugin();
+    tradePluginRef.current.setBadgeRef(tradeBadgeRef);
     priceSeriesRef.current.attachPrimitive(tradePluginRef.current);
     
     // Initial sync
@@ -1113,6 +1115,44 @@ export default function ChartUnit({
             </button>
           )}
 
+          {/* ACTIVE TRADE BADGE */}
+          {activeTrade && (() => {
+            const currentPrice = chartData[chartData.length - 1]?.close || 0;
+            const pnl = activeTrade.type === 'long' 
+              ? (currentPrice - activeTrade.entryPrice) * activeTrade.size 
+              : (activeTrade.entryPrice - currentPrice) * activeTrade.size;
+
+            return (
+              <div 
+                ref={tradeBadgeRef}
+                className="trade-badge" style={{
+                  position: 'absolute',
+                  transform: 'translateY(-50%)',
+                  right: '90px',
+                  zIndex: 20,
+                  background: 'rgba(30, 41, 59, 0.8)',
+                  border: `2px solid ${activeTrade.type === 'long' ? '#26a69a' : '#ef5350'}`,
+                  color: '#fff', padding: '4px 8px', borderRadius: '4px',
+                  fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)'
+                }}>
+                <span>
+                  {activeTrade.size} | <span style={{ color: pnl >= 0 ? '#26a69a' : '#ef5350' }}>${pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span>
+                </span>
+                <button 
+                  onClick={() => setActiveTrade(null)}
+                  style={{ 
+                    background: 'rgba(0,0,0,0.2)', border: 'none', color: '#fff', 
+                    borderRadius: '50%', width: '14px', height: '14px', 
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '9px', padding: 0
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })()}
         </div>
 
         {isDrawingMode && (
@@ -1171,43 +1211,6 @@ export default function ChartUnit({
           </button>
         </div>
 
-        {/* ACTIVE TRADE BADGE */}
-        {activeTrade && (() => {
-          const currentPrice = chartData[chartData.length - 1]?.close || 0;
-          const pnl = activeTrade.type === 'long' 
-            ? (currentPrice - activeTrade.entryPrice) * activeTrade.size 
-            : (activeTrade.entryPrice - currentPrice) * activeTrade.size;
-
-          return (
-            <div className="trade-badge" style={{
-              position: 'absolute',
-              top: `${priceSeriesRef.current.priceToCoordinate(activeTrade.entryPrice)}px`,
-              transform: 'translateY(-50%)',
-              right: '90px',
-              zIndex: 20,
-              background: 'rgba(30, 41, 59, 0.8)',
-              border: `2px solid ${activeTrade.type === 'long' ? '#26a69a' : '#ef5350'}`,
-              color: '#fff', padding: '4px 8px', borderRadius: '4px',
-              fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)'
-            }}>
-              <span>
-                {activeTrade.size} | <span style={{ color: pnl >= 0 ? '#26a69a' : '#ef5350' }}>${pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span>
-              </span>
-              <button 
-                onClick={() => setActiveTrade(null)}
-                style={{ 
-                  background: 'rgba(0,0,0,0.2)', border: 'none', color: '#fff', 
-                  borderRadius: '50%', width: '14px', height: '14px', 
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '9px', padding: 0
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          );
-        })()}
         {/* KEYBOARD ACTION MODAL */}
         {keyboardAction.active && (
           <div className="keyboard-action-modal">

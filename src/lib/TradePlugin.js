@@ -76,11 +76,16 @@ export class TradePlugin {
         this._paneViews = [new TradePaneView(this)];
         this._requestUpdate = () => {};
         this._trade = null;
+        this._badgeRef = null;
     }
 
     setTrade(trade) {
         this._trade = trade;
         this._requestUpdate();
+    }
+
+    setBadgeRef(ref) {
+        this._badgeRef = ref;
     }
 
     attached({ chart, series, requestUpdate }) {
@@ -106,7 +111,12 @@ export class TradePlugin {
 
     _getViewData() {
         try {
-            if (!this._trade || !this._series) return null;
+            if (!this._trade || !this._series) {
+                if (this._badgeRef && this._badgeRef.current) {
+                    this._badgeRef.current.style.display = 'none';
+                }
+                return null;
+            }
 
             const { entryPrice, slPrice, tpPrice, type } = this._trade;
             if (entryPrice === undefined) return null;
@@ -115,7 +125,17 @@ export class TradePlugin {
             const ySL = this._series.priceToCoordinate(slPrice);
             const yTP = this._series.priceToCoordinate(tpPrice);
 
-            // If the entry line is off-screen, skip rendering entirely
+            // Update the HTML badge position directly to bypass React render cycle
+            if (this._badgeRef && this._badgeRef.current) {
+                const badge = this._badgeRef.current;
+                if (yEntry === null) {
+                    badge.style.display = 'none';
+                } else {
+                    badge.style.display = 'flex';
+                    badge.style.top = `${yEntry}px`;
+                }
+            }
+
             if (yEntry === null) return null;
 
             return { yEntry, ySL, yTP, type };
