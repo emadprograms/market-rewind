@@ -56,6 +56,7 @@ export default function ChartUnit({
   const [showVP, setShowVP] = useState(false);
   const [tradeSize, setTradeSize] = useState(1);
   const [activeTrade, setActiveTrade] = useState(null);
+  const [chartUpdateTick, setChartUpdateTick] = useState(0); // Force re-render on chart movements
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawType, setDrawType] = useState('ray'); // 'ray' | 'rect'
 
@@ -350,6 +351,7 @@ export default function ChartUnit({
 
     // Subscribe to zoom/scroll to persist width
     chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(() => {
+        setChartUpdateTick(t => t + 1);
         if (!chartRef.current) return;
         const ts = chartRef.current.timeScale();
         lastBarSpacingRef.current = ts.options().barSpacing;
