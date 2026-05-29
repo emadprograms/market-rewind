@@ -1131,19 +1131,6 @@ export default function ChartUnit({
           display: 'flex', alignItems: 'center', gap: '5px',
           color: '#fff', fontFamily: 'Inter, system-ui, sans-serif'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>SIZE</span>
-            <input 
-              type="number" 
-              value={tradeSize} 
-              onChange={(e) => setTradeSize(Number(e.target.value))}
-              style={{ 
-                width: '50px', background: '#0f172a', border: '1px solid #334155', 
-                color: '#fff', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', textAlign: 'center'
-              }} 
-            />
-          </div>
-          
           <button 
             onClick={() => placeOrder('long')}
             style={{ 
@@ -1156,6 +1143,16 @@ export default function ChartUnit({
           >
             BUY
           </button>
+          
+          <input 
+            type="number" 
+            value={tradeSize} 
+            onChange={(e) => setTradeSize(Number(e.target.value))}
+            style={{ 
+              width: '50px', background: '#0f172a', border: '1px solid #334155', 
+              color: '#fff', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', textAlign: 'center'
+            }} 
+          />
           
           <button 
             onClick={() => placeOrder('short')}
