@@ -27,18 +27,15 @@ class TradeRenderer {
                 // Calculate gap based on actual DOM positions relative to the canvas
                 let badgeStart = rightEdge;
                 let badgeEnd = rightEdge;
-                if (this._badgeRef && this._badgeRef.current) {
-                    const badge = this._badgeRef.current;
-                    const container = badge.parentElement;
-                    const canvas = container ? container.querySelector('canvas') : null;
+                const gapPadding = 6; // pixels of space between the line and the badge
 
-                    if (canvas) {
-                        const badgeRect = badge.getBoundingClientRect();
-                        const canvasRect = canvas.getBoundingClientRect();
-                        
-                        badgeStart = badgeRect.left - canvasRect.left;
-                        badgeEnd = badgeRect.right - canvasRect.left;
-                    }
+                if (this._badgeRef && this._badgeRef.current) {
+                    const badgeRect = this._badgeRef.current.getBoundingClientRect();
+                    // NATIVE FIX: The context always holds a reference to its canvas element!
+                    const canvasRect = scope.context.canvas.getBoundingClientRect();
+                    
+                    badgeStart = badgeRect.left - canvasRect.left - gapPadding;
+                    badgeEnd = badgeRect.right - canvasRect.left + gapPadding;
                 }
 
                 ctx.beginPath();
@@ -121,6 +118,9 @@ export class TradePlugin {
     setTrade(trade) {
         this._trade = trade;
         this._requestUpdate();
+        // Force a secondary redraw after React commits the DOM
+        // This ensures badgeRef.current is available so the gap can be calculated
+        setTimeout(() => this._requestUpdate(), 0);
     }
 
     setBadgeRef(ref) {
