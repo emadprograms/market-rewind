@@ -8,6 +8,7 @@ import { SessionShadingPlugin } from '../lib/SessionShading';
 import { VolumeProfilePlugin } from '../lib/VolumeProfilePlugin';
 import { HorizontalRayPlugin } from '../lib/HorizontalRayPlugin';
 import { RectanglePlugin } from '../lib/RectanglePlugin';
+import { TradePlugin } from '../lib/TradePlugin';
 
 const borderColors = {
   red: '#ef5350',
@@ -46,12 +47,15 @@ export default function ChartUnit({
   const vpPluginRef = useRef(null);
   const rayPluginRef = useRef(null);
   const rectPluginRef = useRef(null);
+  const tradePluginRef = useRef(null);
   
   const [ticker, setTicker] = useState(initialTicker || tickers[0]);
   const [localMasterData, setLocalMasterData] = useState([]);
   const [timeframe, setTimeframe] = useState(initialTf || '1D');
   const [showEth, setShowEth] = useState(initialEth || false);
   const [showVP, setShowVP] = useState(false);
+  const [tradeSize, setTradeSize] = useState(1);
+  const [activeTrade, setActiveTrade] = useState(null);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawType, setDrawType] = useState('ray'); // 'ray' | 'rect'
 
@@ -78,6 +82,31 @@ export default function ChartUnit({
   const lastEthRef = useRef(showEth);
 
 
+
+  // Place a simulated trade at the current price
+  const placeOrder = useCallback((type) => {
+    if (!chartData || chartData.length === 0) return;
+    const lastBar = chartData[chartData.length - 1];
+    const entryPrice = lastBar.close;
+    const offset = entryPrice * 0.01; // 1% default SL/TP distance
+
+    const trade = {
+      type,
+      entryPrice,
+      slPrice: type === 'long' ? entryPrice - offset : entryPrice + offset,
+      tpPrice: type === 'long' ? entryPrice + offset : entryPrice - offset,
+      size: tradeSize,
+      entryTime: lastBar.time,
+    };
+    setActiveTrade(trade);
+  }, [chartData, tradeSize]);
+
+  // Sync activeTrade state to the TradePlugin for canvas rendering
+  useEffect(() => {
+    if (tradePluginRef.current) {
+      tradePluginRef.current.setTrade(activeTrade);
+    }
+  }, [activeTrade]);
 
   const drawings = allDrawings[ticker] || { rays: [], rects: [] };
 

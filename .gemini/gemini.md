@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v7.5 - Sidebar Icon Dock & Context Isolation)
+## Project State: COMPLETED (v7.6 - Trade Execution Feature & Plugin Fix)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -55,6 +55,13 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Grid-4 Resilience**: Enforced strict container adherence through ResizeObserver and CSS.
     - **Context Anchoring**: Intelligent logical-center lookup to completely negate 'Overnight Gap Drift'.
     - **Stale Data Fix**: Eliminated race condition where switching symbols displayed old data under the new ticker.
+    - **Trade Execution System** (v7.6):
+        - **State**: `tradeSize` (lot count), `activeTrade` (object: type, entryPrice, slPrice, tpPrice, size, entryTime), `dragTarget` ('sl' | 'tp' | null).
+        - **`placeOrder(type)`**: Captures current close price, sets default SL/TP at ±1%.
+        - **Draggable SL/TP Lines**: `mousedown`/`mousemove`/`mouseup` listeners on the chart container detect proximity to SL/TP lines (10px threshold) and allow real-time price adjustment via `coordinateToPrice()`.
+        - **Trade Controls UI**: Bottom-left panel with size input + Buy/Sell buttons. Bottom-right badge shows active trade with close button.
+        - **Plugin Sync**: `useEffect` keeps `tradePluginRef.current.setTrade()` in sync with `activeTrade` state.
+        - **Blank Screen Fix**: Added missing `import { TradePlugin }`, `tradePluginRef`, `tradeSize`/`activeTrade` state declarations, and `placeOrder` function — all were referenced in JSX/effects but never declared, causing ReferenceErrors that crashed the entire React tree.
 
     - **Stable Replay View & Auto-Reveal**: Viewport stays frozen during replay analysis; automatically shifts to reveal new candles if the user is at the right edge.
     - **Persistent Zoom Level**: Tracks manual `barSpacing` changes to maintain consistent candle width across all timeframe switches, preventing visual reset.
@@ -116,7 +123,9 @@ Market Rewind is a zero-read, local-first market replay tool.
         - Supports 2-point placement logic with live canvas previews.
         - Robust off-screen clipping for persistent chart analysis.
 - [x] `src/lib/TradePlugin.js`:
-    - **Trade Visuals**: Renders draggable SL/TP and Entry lines for simulated trades.
+    - **Trade Visuals**: Renders dashed Entry (grey), SL (red), and TP (green) horizontal lines for simulated trades.
+    - **Safe Coordinate Architecture** (v7.6 fix): Pre-computes pixel coordinates (`yEntry`, `ySL`, `yTP`) inside `_getViewData()` where `this._series` is reliably available. The renderer receives only pixel values, eliminating the previous crash-prone `_pluginRef._series` back-reference pattern.
+    - **Null Safety**: `_getViewData()` returns `null` if `_trade` or `_series` is missing, or if `entryPrice` is off-screen — preventing canvas render loop crashes during plugin lifecycle transitions.
 
 - **Frontend**: `sql.js`, `lightweight-charts` (v4.2.1), `lucide-react`, `react`.
 
@@ -141,11 +150,4 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`.
 
 ---
-*Last Update: 2026-05-29*
-worker (default: 60).
-    - `update_release`: Toggle to sync the **archive** Turso DB → SQLite and publish as `latest-archive` GitHub Release.
-    - All credentials sourced from **Infisical** (no extra GitHub secrets needed beyond the 3 Infisical auth secrets).
-    - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`.
-
----
-*Last Update: 2026-05-29*
+*Last Update: 2026-05-30*

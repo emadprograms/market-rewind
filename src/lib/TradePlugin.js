@@ -8,13 +8,7 @@ class TradeRenderer {
             const ctx = scope.context;
             if (!this._data) return;
 
-            const { entryPrice, slPrice, tpPrice, type } = this._data;
-            const series = this._pluginRef._series;
-            if (!series) return;
-
-            const yEntry = series.priceToCoordinate(entryPrice);
-            const ySL = series.priceToCoordinate(slPrice);
-            const yTP = series.priceToCoordinate(tpPrice);
+            const { yEntry, ySL, yTP, type } = this._data;
             const rightEdge = scope.mediaSize.width;
 
             if (yEntry === null) return;
@@ -62,9 +56,7 @@ class TradePaneView {
 
     renderer() {
         const data = this._plugin._getViewData();
-        const renderer = new TradeRenderer(data);
-        renderer._pluginRef = this._plugin;
-        return renderer;
+        return new TradeRenderer(data);
     }
 }
 
@@ -104,6 +96,17 @@ export class TradePlugin {
     }
 
     _getViewData() {
-        return this._trade;
+        if (!this._trade || !this._series) return null;
+
+        const { entryPrice, slPrice, tpPrice, type } = this._trade;
+
+        const yEntry = this._series.priceToCoordinate(entryPrice);
+        const ySL = this._series.priceToCoordinate(slPrice);
+        const yTP = this._series.priceToCoordinate(tpPrice);
+
+        // If the entry line is off-screen, skip rendering entirely
+        if (yEntry === null) return null;
+
+        return { yEntry, ySL, yTP, type };
     }
 }
