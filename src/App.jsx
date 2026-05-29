@@ -463,7 +463,7 @@ export default function App() {
             (() => {
               const gridCount = layoutMode === '1' ? 1 : (layoutMode.startsWith('2') ? 2 : (layoutMode.startsWith('3') ? 3 : 4));
               
-              const charts = (maximizedId !== null ? [maximizedId] : Array.from({ length: gridCount }).map((_, i) => i)).map((i) => {
+              const charts = Array.from({ length: gridCount }).map((_, i) => {
                 let initialTicker = sessionTicker;
                 let initialTf = '5min';
                 let initialEth = false;
@@ -491,6 +491,10 @@ export default function App() {
                   const size = sizes[i] !== undefined ? sizes[i] : (100 / gridCount);
                   if (layoutMode.endsWith('v')) style.width = `${size}%`;
                   if (layoutMode.endsWith('h')) style.height = `${size}%`;
+                }
+                // When a chart is maximized, hide non-maximized charts from layout
+                if (maximizedId !== null && maximizedId !== i) {
+                  style.display = 'none';
                 }
 
                 return (

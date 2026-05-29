@@ -351,6 +351,19 @@ export default function ChartUnit({
     };
   }, []);
 
+  // Explicit resize when maximize state changes — ensures chart fills new dimensions immediately
+  useEffect(() => {
+    if (chartRef.current && chartContainerRef.current) {
+      const { clientWidth, clientHeight } = chartContainerRef.current;
+      if (clientWidth > 0 && clientHeight > 0) {
+        chartRef.current.applyOptions({
+          width: clientWidth,
+          height: clientHeight,
+        });
+      }
+    }
+  }, [isMaximized]);
+
   // Keep ref in sync with state for event handlers
   useEffect(() => {
     isDrawingModeRef.current = isDrawingMode;
