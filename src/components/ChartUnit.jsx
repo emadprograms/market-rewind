@@ -1136,8 +1136,19 @@ export default function ChartUnit({
                   fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px',
                   boxShadow: '0 2px 6px rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)'
                 }}>
-                <span>
-                  {activeTrade.size} | <span style={{ color: pnl >= 0 ? '#26a69a' : '#ef5350' }}>${pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span>
+                <span style={{ 
+                  background: activeTrade.type === 'long' ? '#26a69a' : '#ef5350',
+                  color: '#fff', 
+                  padding: '2px 5px', 
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  marginRight: '4px'
+                }}>
+                  {activeTrade.size}
+                </span>
+                <span style={{ color: pnl >= 0 ? '#26a69a' : '#ef5350' }}>
+                  ${pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
                 </span>
                 <button 
                   onClick={() => setActiveTrade(null)}
