@@ -42,6 +42,7 @@ Market Rewind is a zero-read, local-first market replay tool.
         - DST-aware conversion logic (`getUtcTimeFromEt`) ensures the simulator starts and resets to the exact ET time selected by the user, regardless of seasonal timezone offsets (EST vs EDT).
         - **Target Date Persistence**: Uses `localStorage` to automatically remember and restore the exact target date the user was last simulating.
         - **Ticker Persistence**: Uses `localStorage` to remember the last used ticker symbol across sessions.
+        - **Session Initialization Fix**: Corrected bug where market simulator initialized with the first available ticker instead of the user-selected symbol; updated timezone labels to reflect the active session symbol.
 - [x] `src/components/ChartUnit.jsx` & `src/lib/db.js`:
     - **Dynamic Data Optimization**: Initial payload size maps to the timeframe (e.g., `1m` chart fetches 3 days, `1D` chart fetches 2 years). Drops initial load from 500,000 rows to <5,000 rows for intraday, eliminating UI lag.
     - **Infinite Scroll Engine**: Tracks scroll viewport bounds (`subscribeVisibleLogicalRangeChange`) to dynamically fetch 30-day SQLite chunks when approaching the left boundary.

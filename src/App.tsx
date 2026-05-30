@@ -165,7 +165,7 @@ export default function App() {
 
   async function loadMarketData() {
     setIsLoading(true);
-    const data = await fetchMarketData(tickers[0], selectedDate, 1); // added daysBack
+    const data = await fetchMarketData(sessionTicker, selectedDate, 1); // added daysBack
     setMasterData(data as RawBar[]);
     
     if (data.length > 0) {
@@ -242,7 +242,7 @@ export default function App() {
 
   const formatDisplayTime = (isoStr: string | null) => {
     if (!isoStr) return '--:--:--';
-    const tz = getTzForTicker(tickers[0] || 'SPY');
+    const tz = getTzForTicker(sessionTicker);
     const label = getTzLabel(tz);
 
     const date = new Date(isoStr.replace(' ', 'T') + 'Z');
@@ -442,7 +442,7 @@ export default function App() {
                     </div>
                    <div>
                      <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>
-                       Start Time ({getTzLabel(getTzForTicker(tickers[0] || 'SPY'))})
+                       Start Time ({getTzLabel(getTzForTicker(sessionTicker))})
                      </label>
                      <input type="time" value={entryTime} onChange={(e) => setEntryTime(e.target.value)} style={{fontSize: '1rem', padding: '10px'}} />
                    </div>
