@@ -1,13 +1,10 @@
 import initSqlJs from "sql.js";
+import type { Database } from "sql.js";
+import type { RawBar } from "../types";
 
-let dbInstance = null;
-let SQL = null;
+let dbInstance: Database | null = null;
+let SQL: any = null;
 
-/**
- * Initializes sql.js engine.
- * Manually fetches the WASM binary and passes it directly, bypassing all
- * locateFile resolution issues with Vite's ESM bundler.
- */
 async function getSqlJs() {
   if (SQL) return SQL;
   
@@ -19,10 +16,7 @@ async function getSqlJs() {
   return SQL;
 }
 
-/**
- * Tries to load database from OPFS persistent storage.
- */
-async function loadFromOPFS() {
+async function loadFromOPFS(): Promise<Uint8Array | null> {
   try {
     const root = await navigator.storage.getDirectory();
     const fileHandle = await root.getFileHandle("market_data.db");
@@ -34,15 +28,11 @@ async function loadFromOPFS() {
   }
 }
 
-/**
- * Saves a new database ArrayBuffer to OPFS and loads it into memory.
- */
-export async function loadDatabaseFromFile(file) {
+export async function loadDatabaseFromFile(file: File): Promise<boolean> {
   try {
     const buffer = await file.arrayBuffer();
     const data = new Uint8Array(buffer);
     
-    // Save to OPFS so it survives a page reload
     const root = await navigator.storage.getDirectory();
     const fileHandle = await root.getFileHandle("market_data.db", { create: true });
     const writable = await fileHandle.createWritable();
@@ -50,7 +40,6 @@ export async function loadDatabaseFromFile(file) {
     await writable.close();
     console.log("Database saved to OPFS successfully.");
 
-    // Load into sql.js
     const sqlJs = await getSqlJs();
     dbInstance = new sqlJs.Database(data);
     return true;
@@ -60,16 +49,11 @@ export async function loadDatabaseFromFile(file) {
   }
 }
 
-/**
- * Initializes the database from existing OPFS cache.
- * Called automatically on app startup. Returns null if no localized file is found.
- */
-export async function initDB() {
+export async function initDB(): Promise<Database | null> {
   if (dbInstance) return dbInstance;
   
   const sqlJs = await getSqlJs();
   
-  // Try cached copy from OPFS
   const data = await loadFromOPFS();
   
   if (data) {
@@ -82,17 +66,11 @@ export async function initDB() {
   return null;
 }
 
-/**
- * Checks if DB is loaded
- */
-export function isDBLoaded() {
+export function isDBLoaded(): boolean {
   return dbInstance !== null;
 }
 
-/**
- * Fetches data from the LOCAL database.
- */
-export async function fetchMarketData(ticker, dateIso, daysBack = 30) {
+export async function fetchMarketData(ticker: string, dateIso: string, daysBack = 30): Promise<RawBar[]> {
   const db = await initDB();
   if (!db) return [];
   
@@ -110,13 +88,13 @@ export async function fetchMarketData(ticker, dateIso, daysBack = 30) {
     if (!results || results.length === 0) return [];
     
     return results[0].values.map(([timestamp, open, high, low, close, volume, session]) => ({
-      time: timestamp,
+      time: timestamp as string,
       open: Number(open),
       high: Number(high),
       low: Number(low),
       close: Number(close),
       volume: Number(volume),
-      session: session
+      session: session as string
     }));
   } catch (error) {
     console.error('Failed to fetch local market data:', error);
@@ -124,11 +102,7 @@ export async function fetchMarketData(ticker, dateIso, daysBack = 30) {
   }
 }
 
-/**
- * Fetches an older chunk of data for infinite scrolling.
- * Queries backwards from the exact `endTimestamp`.
- */
-export async function fetchHistoricalChunk(ticker, endTimestamp, daysBack = 30) {
+export async function fetchHistoricalChunk(ticker: string, endTimestamp: string, daysBack = 30): Promise<RawBar[]> {
   const db = await initDB();
   if (!db) return [];
   
@@ -146,13 +120,13 @@ export async function fetchHistoricalChunk(ticker, endTimestamp, daysBack = 30) 
     if (!results || results.length === 0) return [];
     
     return results[0].values.map(([timestamp, open, high, low, close, volume, session]) => ({
-      time: timestamp,
+      time: timestamp as string,
       open: Number(open),
       high: Number(high),
       low: Number(low),
       close: Number(close),
       volume: Number(volume),
-      session: session
+      session: session as string
     }));
   } catch (error) {
     console.error('Failed to fetch historical chunk:', error);
@@ -160,19 +134,16 @@ export async function fetchHistoricalChunk(ticker, endTimestamp, daysBack = 30) 
   }
 }
 
-/**
- * Fetches all available tickers from the LOCAL database.
- */
-export async function fetchTickers() {
+export async function fetchTickers(): Promise<string[]> {
   const db = await initDB();
   if (!db) return [];
   
   try {
     const results = db.exec('SELECT DISTINCT symbol FROM market_data ORDER BY symbol');
     if (!results || results.length === 0) return [];
-    return results[0].values.map(row => row[0]);
+    return results[0].values.map(row => row[0] as string);
   } catch (error) {
     console.error('Failed to fetch local tickers:', error);
-    throw error; // Rethrow to ensure App.jsx exits loading state
+    throw error;
   }
 }

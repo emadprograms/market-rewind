@@ -1,10 +1,26 @@
-class HorizontalRayRenderer {
-    constructor(data) {
+import type { 
+    IChartApi, 
+    ISeriesApi, 
+    ISeriesPrimitive, 
+    ISeriesPrimitivePaneRenderer, 
+    ISeriesPrimitivePaneView, 
+    Time 
+} from 'lightweight-charts';
+
+export interface HorizontalRay {
+    price: number;
+    time: string;
+}
+
+class HorizontalRayRenderer implements ISeriesPrimitivePaneRenderer {
+    _data: any;
+
+    constructor(data: any) {
         this._data = data;
     }
 
-    draw(target) {
-        target.useMediaCoordinateSpace(scope => {
+    draw(target: any) {
+        target.useMediaCoordinateSpace((scope: any) => {
             const ctx = scope.context;
             if (!this._data || !this._data.rays || this._data.rays.length === 0) return;
 
@@ -23,10 +39,6 @@ class HorizontalRayRenderer {
                 ctx.moveTo(ray.x, ray.y);
                 ctx.lineTo(rightEdge, ray.y);
                 ctx.stroke();
-
-                // Draw price label background on the axis (optional but good for UX)
-                // However, since we don't have direct access to the axis renderer here, 
-                // we'll stick to just the canvas drawing for now to keep it lean.
             }
 
             ctx.restore();
@@ -34,35 +46,43 @@ class HorizontalRayRenderer {
     }
 }
 
-class HorizontalRayPaneView {
-    constructor(plugin) {
+class HorizontalRayPaneView implements ISeriesPrimitivePaneView {
+    _plugin: HorizontalRayPlugin;
+
+    constructor(plugin: HorizontalRayPlugin) {
         this._plugin = plugin;
     }
 
-    zOrder() {
+    zOrder(): 'top' | 'bottom' | 'normal' {
         return 'top';
     }
 
-    renderer() {
+    renderer(): ISeriesPrimitivePaneRenderer {
         return new HorizontalRayRenderer(this._plugin._getViewData());
     }
 }
 
-export class HorizontalRayPlugin {
+export class HorizontalRayPlugin implements ISeriesPrimitive<Time> {
+    _chart: IChartApi | null;
+    _series: ISeriesApi<"Candlestick"> | null;
+    _paneViews: HorizontalRayPaneView[];
+    _requestUpdate: () => void;
+    _rays: HorizontalRay[];
+
     constructor() {
         this._chart = null;
         this._series = null;
         this._paneViews = [new HorizontalRayPaneView(this)];
         this._requestUpdate = () => {};
-        this._rays = []; // Array of { price, time }
+        this._rays = [];
     }
 
-    setRays(rays) {
+    setRays(rays: HorizontalRay[]) {
         this._rays = rays;
         this._requestUpdate();
     }
 
-    attached({ chart, series, requestUpdate }) {
+    attached({ chart, series, requestUpdate }: any) {
         this._chart = chart;
         this._series = series;
         if (requestUpdate) {
@@ -79,7 +99,7 @@ export class HorizontalRayPlugin {
         this._requestUpdate();
     }
 
-    paneViews() {
+    paneViews(): readonly ISeriesPrimitivePaneView[] {
         return this._paneViews;
     }
 
@@ -91,10 +111,10 @@ export class HorizontalRayPlugin {
         if (!visibleRange) return null;
 
         const renderRays = this._rays.map(ray => {
-            const y = this._series.priceToCoordinate(ray.price);
+            const y = this._series!.priceToCoordinate(ray.price);
             if (y === null) return null;
 
-            let x = timeScale.timeToCoordinate(ray.time);
+            let x = timeScale.timeToCoordinate(ray.time as Time);
             if (x === null) {
                 x = this._getClosestX(ray.time, timeScale);
             }
@@ -107,20 +127,20 @@ export class HorizontalRayPlugin {
         };
     }
 
-    _getClosestX(targetTime, timeScale) {
-        const data = this._series.data();
+    _getClosestX(targetTime: string, timeScale: any): number | null {
+        const data = this._series!.data();
         if (!data || data.length === 0) return null;
         
-        if (targetTime <= data[0].time) return -10000;
-        if (targetTime >= data[data.length - 1].time) return timeScale.timeToCoordinate(data[data.length - 1].time);
+        if (targetTime <= (data[0].time as string)) return -10000;
+        if (targetTime >= (data[data.length - 1].time as string)) return timeScale.timeToCoordinate(data[data.length - 1].time);
 
         let left = 0;
         let right = data.length - 1;
         while (left <= right) {
             const mid = Math.floor((left + right) / 2);
-            if (data[mid].time === targetTime) {
+            if ((data[mid].time as string) === targetTime) {
                 return timeScale.timeToCoordinate(data[mid].time);
-            } else if (data[mid].time < targetTime) {
+            } else if ((data[mid].time as string) < targetTime) {
                 left = mid + 1;
             } else {
                 right = mid - 1;
@@ -129,8 +149,8 @@ export class HorizontalRayPlugin {
         
         let closestIdx = right;
         if (left < data.length && right >= 0) {
-            const diffLeft = Math.abs(data[left].time - targetTime);
-            const diffRight = Math.abs(data[right].time - targetTime);
+            const diffLeft = Math.abs(new Date(data[left].time as string).getTime() - new Date(targetTime).getTime());
+            const diffRight = Math.abs(new Date(data[right].time as string).getTime() - new Date(targetTime).getTime());
             closestIdx = diffLeft < diffRight ? left : right;
         } else if (left < data.length) {
             closestIdx = left;

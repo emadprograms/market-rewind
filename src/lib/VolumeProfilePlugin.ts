@@ -1,10 +1,22 @@
-class VolumeProfileRenderer {
-    constructor(data) {
+import type { 
+    IChartApi, 
+    ISeriesApi, 
+    ISeriesPrimitive, 
+    ISeriesPrimitivePaneRenderer, 
+    ISeriesPrimitivePaneView,
+    Time
+} from 'lightweight-charts';
+import type { RawBar } from '../types';
+
+class VolumeProfileRenderer implements ISeriesPrimitivePaneRenderer {
+    _data: any;
+
+    constructor(data: any) {
         this._data = data;
     }
 
-    draw(target) {
-        target.useMediaCoordinateSpace(scope => {
+    draw(target: any) {
+        target.useMediaCoordinateSpace((scope: any) => {
             const ctx = scope.context;
             if (!this._data || !this._data.bins || this._data.bins.length === 0) return;
             
@@ -13,27 +25,23 @@ class VolumeProfileRenderer {
             ctx.save();
             ctx.globalAlpha = 0.85;
 
-            // Anchor to the left edge
             const leftEdge = 0;
 
             for (const bin of bins) {
-                // Determine colors based on POC
                 if (bin.isPOC) {
-                    ctx.fillStyle = 'rgba(255, 210, 0, 0.4)'; // Highlighted POC color
+                    ctx.fillStyle = 'rgba(255, 210, 0, 0.4)'; 
                 } else {
-                    ctx.fillStyle = 'rgba(41, 98, 255, 0.25)'; // Standard profile blue
+                    ctx.fillStyle = 'rgba(41, 98, 255, 0.25)'; 
                 }
 
                 const width = bin.width;
-                // Draw rectangle originating from leftEdge going right
                 ctx.fillRect(
                     leftEdge, 
                     bin.y - boxHeight / 2, 
                     width, 
-                    Math.max(1, boxHeight - 1) // Leave a 1px gap for clarity
+                    Math.max(1, boxHeight - 1) 
                 );
                 
-                // Optional: Draw Point of Control Line
                 if (bin.isPOC) {
                     ctx.fillStyle = 'rgba(255, 210, 0, 0.8)';
                     ctx.fillRect(
@@ -50,21 +58,34 @@ class VolumeProfileRenderer {
     }
 }
 
-class VolumeProfilePaneView {
-    constructor(plugin) {
+class VolumeProfilePaneView implements ISeriesPrimitivePaneView {
+    _plugin: VolumeProfilePlugin;
+
+    constructor(plugin: VolumeProfilePlugin) {
         this._plugin = plugin;
     }
 
-    zOrder() {
-        return 'bottom'; // Render behind candlesticks
+    zOrder(): 'bottom' | 'normal' | 'top' {
+        return 'bottom'; 
     }
 
-    renderer() {
+    renderer(): ISeriesPrimitivePaneRenderer {
         return new VolumeProfileRenderer(this._plugin._getViewData());
     }
 }
 
-export class VolumeProfilePlugin {
+export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
+    _chart: IChartApi | null;
+    _series: ISeriesApi<"Candlestick"> | null;
+    _paneViews: VolumeProfilePaneView[];
+    _requestUpdate: () => void;
+    _masterData: RawBar[];
+    _vpDataCache: any;
+    _lastLogicalRange: { from: number; to: number };
+    _lastWidth: number;
+    _enabled: boolean;
+    _resizeHandler: () => void;
+
     constructor() {
         this._chart = null;
         this._series = null;
@@ -74,31 +95,29 @@ export class VolumeProfilePlugin {
         this._masterData = [];
         this._vpDataCache = null;
         
-        // Cache invalidation keys
         this._lastLogicalRange = { from: -1, to: -1 };
         this._lastWidth = 0;
         this._enabled = false;
+        this._resizeHandler = () => this._invalidateCache();
     }
 
-    setEnabled(enabled) {
+    setEnabled(enabled: boolean) {
         this._enabled = enabled;
         this._invalidateCache();
     }
 
-    setData(data) {
+    setData(data: RawBar[]) {
         this._masterData = data;
         this._invalidateCache();
     }
 
-    attached({ chart, series, requestUpdate }) {
+    attached({ chart, series, requestUpdate }: any) {
         this._chart = chart;
         this._series = series;
         if (requestUpdate) {
             this._requestUpdate = requestUpdate;
         }
         
-        // Ensure to invalidate cache on resize
-        this._resizeHandler = () => this._invalidateCache();
         window.addEventListener('resize', this._resizeHandler);
     }
 
@@ -112,7 +131,7 @@ export class VolumeProfilePlugin {
         this._requestUpdate();
     }
 
-    paneViews() {
+    paneViews(): readonly ISeriesPrimitivePaneView[] {
         return this._paneViews;
     }
 
@@ -131,22 +150,20 @@ export class VolumeProfilePlugin {
 
             const viewportWidth = timeScale.width();
 
-            // Check cache (skip height — it's derived from price coords each frame)
             if (this._vpDataCache && 
-                Math.abs(this._lastLogicalRange.from - visibleRange.from) < 0.5 && 
-                Math.abs(this._lastLogicalRange.to - visibleRange.to) < 0.5 &&
+                Math.abs(this._lastLogicalRange.from - visibleRange.from!) < 0.5 && 
+                Math.abs(this._lastLogicalRange.to - visibleRange.to!) < 0.5 &&
                 this._lastWidth === viewportWidth
             ) {
                 return this._vpDataCache;
             }
 
             const data = this._masterData;
-            const fromIndex = Math.max(0, Math.floor(visibleRange.from));
-            const toIndex = Math.min(data.length - 1, Math.ceil(visibleRange.to));
+            const fromIndex = Math.max(0, Math.floor(visibleRange.from!));
+            const toIndex = Math.min(data.length - 1, Math.ceil(visibleRange.to!));
             
             if (toIndex <= fromIndex) return null;
 
-            // 1. Find Min/Max price in visible range
             let minPrice = Infinity;
             let maxPrice = -Infinity;
             for (let i = fromIndex; i <= toIndex; i++) {
@@ -157,12 +174,10 @@ export class VolumeProfilePlugin {
             
             if (minPrice === Infinity || minPrice === maxPrice) return null;
 
-            // 2. Generate Bins
             const numBins = 70;
             const binSize = (maxPrice - minPrice) / numBins;
             const bins = new Array(numBins).fill(0);
 
-            // 3. Populate Bins — distribute volume proportionally across price range
             for (let i = fromIndex; i <= toIndex; i++) {
                 const bar = data[i];
                 const topBin = Math.min(numBins - 1, Math.floor((bar.high - minPrice) / binSize));
@@ -176,7 +191,6 @@ export class VolumeProfilePlugin {
                 }
             }
 
-            // 4. Find Max Volume (POC)
             let maxVol = 0;
             let pocIndex = -1;
             for (let i = 0; i < numBins; i++) {
@@ -188,13 +202,11 @@ export class VolumeProfilePlugin {
 
             if (maxVol === 0) return null;
 
-            // 5. Convert to Coordinates
             const maxBarWidthPixels = viewportWidth * 0.25;
             const renderBins = [];
 
-            // Derive box height from price-to-coordinate mapping (no priceScale.height() needed)
-            const yTop = this._series.priceToCoordinate(maxPrice);
-            const yBottom = this._series.priceToCoordinate(minPrice);
+            const yTop = this._series!.priceToCoordinate(maxPrice);
+            const yBottom = this._series!.priceToCoordinate(minPrice);
             if (yTop === null || yBottom === null) return null;
             
             const totalPixels = Math.abs(yBottom - yTop);
@@ -204,7 +216,7 @@ export class VolumeProfilePlugin {
                 if (bins[i] === 0) continue;
                 
                 const binPriceCenter = minPrice + i * binSize + (binSize / 2);
-                const y = this._series.priceToCoordinate(binPriceCenter);
+                const y = this._series!.priceToCoordinate(binPriceCenter);
                 
                 if (y === null) continue;
 
@@ -221,12 +233,11 @@ export class VolumeProfilePlugin {
                 boxHeight
             };
             
-            this._lastLogicalRange = { from: visibleRange.from, to: visibleRange.to };
+            this._lastLogicalRange = { from: visibleRange.from as number, to: visibleRange.to as number };
             this._lastWidth = viewportWidth;
 
             return this._vpDataCache;
         } catch (e) {
-            // Gracefully fail — don't crash the chart renderer
             return null;
         }
     }

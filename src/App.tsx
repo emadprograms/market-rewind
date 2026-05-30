@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink, Menu } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
-import { fetchTickers, fetchMarketData, loadDatabaseFromFile, isDBLoaded, initDB } from './lib/db';
+import { fetchTickers, fetchMarketData, loadDatabaseFromFile, initDB } from './lib/db';
 import { getTzForTicker, getTzLabel } from './lib/timezones';
+import type { Timeframe, RawBar, AllDrawings, GroupColor } from './types';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
 export default function App() {
   // --- Global State ---
-  const [tickers, setTickers] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(() => localStorage.getItem('lastUsedDate') || TODAY);
-  const [masterData, setMasterData] = useState([]);
-  const [currentTime, setCurrentTime] = useState(null);
+  const [tickers, setTickers] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('lastUsedDate') || TODAY);
+  const [masterData, setMasterData] = useState<RawBar[]>([]);
+  const [currentTime, setCurrentTime] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [layoutMode, setLayoutMode] = useState('2v');
@@ -20,50 +21,47 @@ export default function App() {
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [entryTime, setEntryTime] = useState('09:20');
-  const [sessionTicker, setSessionTicker] = useState(() => localStorage.getItem('lastUsedTicker') || 'SPY');
-  const availableGroups = ['red', 'blue', 'green', 'yellow', 'none'];
-  const [groupTickers, setGroupTickers] = useState(() => {
+  const [sessionTicker, setSessionTicker] = useState<string>(() => localStorage.getItem('lastUsedTicker') || 'SPY');
+  
+  const [groupTickers, setGroupTickers] = useState<Record<string, string>>(() => {
     const saved = localStorage.getItem('groupTickers');
     return saved ? JSON.parse(saved) : { red: 'SPY', blue: 'SPY', green: 'SPY', yellow: 'SPY' };
   });
-  const [chartGroups, setChartGroups] = useState(() => {
+  
+  const [chartGroups, setChartGroups] = useState<Record<number, GroupColor>>(() => {
     const saved = localStorage.getItem('chartGroups');
     return saved ? JSON.parse(saved) : {};
   });
-  const [maximizedId, setMaximizedId] = useState(null);
-  const [drawings, setDrawings] = useState({}); // { ticker: { rays: [], rects: [] } }
-  const [chartTimeframes, setChartTimeframes] = useState({}); // { chartId: timeframe }
-  const [manualStepMinutes, setManualStepMinutes] = useState(null);
-  const [panelSizes, setPanelSizes] = useState({
+  
+  const [maximizedId, setMaximizedId] = useState<number | null>(null);
+  const [drawings, setDrawings] = useState<AllDrawings>({}); 
+  const [chartTimeframes, setChartTimeframes] = useState<Record<number, Timeframe>>({}); 
+  const [manualStepMinutes, setManualStepMinutes] = useState<number | null>(null);
+  
+  const [panelSizes, setPanelSizes] = useState<Record<string, number[]>>({
     '2v': [50, 50],
     '2h': [50, 50],
     '3': [33.3, 33.3, 33.4],
     '4': [50, 50, 50, 50]
   });
-  const [activeGutter, setActiveGutter] = useState(null);
-  const dragInfo = useRef({ active: false, mode: null, index: null });
-  const workspaceRef = useRef();
-
   
-  const playbackRef = useRef();
+  const [activeGutter, setActiveGutter] = useState<number | null>(null);
+  const dragInfo = useRef<{ active: boolean; mode: 'v' | 'h' | null; index: number | null }>({ active: false, mode: null, index: null });
+  const workspaceRef = useRef<HTMLElement>(null);
+  const playbackRef = useRef<ReturnType<typeof setInterval> | undefined>();
 
-  // Timeframe → minutes mapping
-  const TF_MINUTES = { '1min': 1, '5min': 5, '15min': 15, '30min': 30, '1H': 60, '1D': 1440 };
+  const TF_MINUTES: Record<string, number> = { '1min': 1, '5min': 5, '15min': 15, '30min': 30, '1H': 60, '1D': 1440 };
 
-  // Compute the minimum step size from all active chart timeframes
   const minStepMinutes = Object.values(chartTimeframes).length > 0
     ? Object.values(chartTimeframes).reduce((min, tf) => Math.min(min, TF_MINUTES[tf] || 1), 1440)
-    : 1; // default to 1 minute if no charts yet
+    : 1;
 
   const activeStepMinutes = manualStepMinutes || minStepMinutes;
 
-
-  // 1. Check OPFS on load
   useEffect(() => {
     checkLocalDatabase();
   }, []);
 
-  // Save global settings to localStorage
   useEffect(() => {
     localStorage.setItem('lastUsedDate', selectedDate);
   }, [selectedDate]);
@@ -72,7 +70,6 @@ export default function App() {
     localStorage.setItem('lastUsedTicker', sessionTicker);
   }, [sessionTicker]);
 
-  // Persist group settings to localStorage
   useEffect(() => {
     localStorage.setItem('chartGroups', JSON.stringify(chartGroups));
   }, [chartGroups]);
@@ -104,7 +101,6 @@ export default function App() {
       const t = await fetchTickers();
       if (t.length > 0) {
         setTickers(t);
-        // Set default ticker only if current one is invalid
         setSessionTicker(prev => {
           if (t.includes(prev)) return prev;
           return t.includes('SPY') ? 'SPY' : t[0];
@@ -121,9 +117,8 @@ export default function App() {
     }
   }
 
-  // 2. Handle File Upload
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
     
     try {
@@ -139,15 +134,13 @@ export default function App() {
     }
   }
 
-  // 3. Load market data when date or tickers change (only if session started)
   useEffect(() => {
     if (tickers.length > 0 && isDbLoaded && isSessionStarted) {
       loadMarketData();
     }
   }, [selectedDate, entryTime, tickers, isDbLoaded, isSessionStarted]);
 
-  // Helper: Converts ET user input to UTC string to match masterData
-  const getUtcTimeFromEt = (dateStr, etTimeStr) => {
+  const getUtcTimeFromEt = (dateStr: string, etTimeStr: string) => {
     const probeDate = new Date(`${dateStr}T14:00:00Z`);
     const nyHour = new Intl.DateTimeFormat('en-US', { 
       timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' 
@@ -161,38 +154,34 @@ export default function App() {
 
   async function loadMarketData() {
     setIsLoading(true);
-    const data = await fetchMarketData(tickers[0], selectedDate);
-    setMasterData(data);
+    const data = await fetchMarketData(tickers[0], selectedDate, 1); // added daysBack
+    setMasterData(data as RawBar[]);
     
     if (data.length > 0) {
       const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
-      const startBar = data.find(d => d.time >= targetTimeStr) || data[data.length - 1];
-      setCurrentTime(startBar ? startBar.time : null);
+      const startBar = data.find((d: any) => d.time >= targetTimeStr) || data[data.length - 1];
+      setCurrentTime(startBar ? (startBar as any).time : null);
     } else {
       setCurrentTime(null);
     }
     setIsLoading(false);
   }
 
-  // 4. Unified Replay Engine — step size driven by minimum timeframe across all charts
-  const advanceTime = (prev, stepMinutes) => {
+  const advanceTime = (prev: string | null, stepMinutes: number) => {
     if (!prev || masterData.length === 0) return prev;
     const prevMs = new Date(prev.replace(' ', 'T') + 'Z').getTime();
     const targetMs = prevMs + stepMinutes * 60000;
-    // Find the nearest bar at or after the target time
     const targetStr = new Date(targetMs).toISOString().replace('T', ' ').slice(0, 19);
     const nextBar = masterData.find(d => d.time >= targetStr);
     if (nextBar && nextBar.time !== prev) return nextBar.time;
-    // If no bar found ahead, we've reached the end
     return null;
   };
 
-  const rewindTime = (prev, stepMinutes) => {
+  const rewindTime = (prev: string | null, stepMinutes: number) => {
     if (!prev || masterData.length === 0) return prev;
     const prevMs = new Date(prev.replace(' ', 'T') + 'Z').getTime();
     const targetMs = prevMs - stepMinutes * 60000;
     const targetStr = new Date(targetMs).toISOString().replace('T', ' ').slice(0, 19);
-    // Find the nearest bar at or before the target time
     let best = null;
     for (let i = masterData.length - 1; i >= 0; i--) {
       if (masterData[i].time <= targetStr) {
@@ -221,9 +210,8 @@ export default function App() {
     return () => clearInterval(playbackRef.current);
   }, [isPlaying, playbackSpeed, masterData, activeStepMinutes]);
 
-
-  // --- Handlers ---
   const togglePlay = () => setIsPlaying(!isPlaying);
+  
   const resetToOpen = () => {
     const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
     const startBar = masterData.find(d => d.time >= targetTimeStr) || masterData[masterData.length - 1];
@@ -231,7 +219,7 @@ export default function App() {
     setIsPlaying(false);
   };
 
-   const stepForward = () => {
+  const stepForward = () => {
     const next = advanceTime(currentTime, activeStepMinutes);
     if (next) setCurrentTime(next);
   };
@@ -241,10 +229,9 @@ export default function App() {
     if (prev) setCurrentTime(prev);
   };
 
-
-  const formatDisplayTime = (isoStr) => {
+  const formatDisplayTime = (isoStr: string | null) => {
     if (!isoStr) return '--:--:--';
-    const tz = getTzForTicker(tickers[0]);
+    const tz = getTzForTicker(tickers[0] || 'SPY');
     const label = getTzLabel(tz);
 
     const date = new Date(isoStr.replace(' ', 'T') + 'Z');
@@ -257,7 +244,7 @@ export default function App() {
     }) + ` ${label}`;
   };
   
-  const handleUpdateDrawings = (ticker, type, items) => {
+  const handleUpdateDrawings = (ticker: string, type: 'rays' | 'rects', items: any[]) => {
     setDrawings(prev => ({
       ...prev,
       [ticker]: {
@@ -267,18 +254,19 @@ export default function App() {
     }));
   };
 
-  const handlePointerDown = (mode, index, e) => {
+  const handlePointerDown = (mode: 'v' | 'h', index: number, e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    e.target.setPointerCapture(e.pointerId);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     dragInfo.current = { active: true, mode, index };
     setActiveGutter(index);
   };
 
-  const handlePointerMove = (e) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragInfo.current.active || !workspaceRef.current) return;
     
     const rect = workspaceRef.current.getBoundingClientRect();
     const { mode, index } = dragInfo.current;
+    if (index === null) return;
     
     let percent;
     if (mode === 'v') {
@@ -288,7 +276,9 @@ export default function App() {
     }
     
     setPanelSizes(prev => {
-      const currentSizes = [...prev[layoutMode]];
+      const currentSizes = [...(prev[layoutMode] || [])];
+      if (currentSizes.length < index + 2) return prev;
+      
       const combinedPercent = currentSizes[index] + currentSizes[index + 1];
       
       let relativeStart = 0;
@@ -312,46 +302,42 @@ export default function App() {
     setActiveGutter(null);
   };
 
-  const handleTimeframeChange = (chartId, tf) => {
+  const handleTimeframeChange = (chartId: number, tf: Timeframe) => {
     setChartTimeframes(prev => ({
       ...prev,
       [chartId]: tf
     }));
   };
 
-  function handleTickerChange(chartId, newTicker) {
+  function handleTickerChange(chartId: number, newTicker: string) {
     const group = chartGroups[chartId] || 'none';
     if (group !== 'none') {
       setGroupTickers(prev => ({ ...prev, [group]: newTicker }));
     }
   }
 
-  function handleGroupChange(chartId, newGroup) {
+  function handleGroupChange(chartId: number, newGroup: GroupColor) {
     setChartGroups(prev => ({ ...prev, [chartId]: newGroup }));
   }
 
   return (
     <div className="app-container">
       
-      {/* --- SIDEBAR (Minimal Icon Dock) --- */}
+      {/* --- SIDEBAR --- */}
       <aside className="sidebar">
-        {/* App Logo */}
         <div className="logo" title="Market Rewind">
           <Activity size={24} color="var(--accent-green)" />
         </div>
 
-        {/* Database Status */}
         <div className={`status-badge ${isDbLoaded ? 'status-online' : ''}`} title={dbStatus} style={{ padding: '6px', borderRadius: '50%' }}>
           <Database size={16} />
         </div>
 
-        {/* Upload DB */}
         <label className="upload-zone" title="Load market_data.db" style={{ padding: '8px', cursor: 'pointer', border: 'none' }}>
           <UploadCloud size={20} className="file-icon" />
           <input type="file" accept=".db,.sqlite" onChange={handleFileUpload} style={{ display: 'none' }} />
         </label>
 
-        {/* Date Selector (Hidden Input overlaid on Icon) */}
         <div style={{ position: 'relative', width: '24px', height: '24px', cursor: 'pointer' }} title="Target Date">
           <CalendarIcon size={20} style={{ position: 'absolute', top: 2, left: 2, color: 'var(--text-secondary)' }} />
           <input 
@@ -363,7 +349,6 @@ export default function App() {
           />
         </div>
 
-        {/* Reset Session */}
         {isSessionStarted && (
           <button className="btn-icon" onClick={() => setIsSessionStarted(false)} title="Reset Session">
             <RotateCcw size={18} color="var(--accent-red)" />
@@ -372,7 +357,6 @@ export default function App() {
 
         <div style={{ flex: 1 }}></div>
 
-        {/* Layout Grid (Single Column) */}
         <div className="layout-selector" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 4px', marginBottom: 'auto', alignItems: 'center' }}>
           {[
             { id: '1', class: 'l1' },
@@ -402,7 +386,6 @@ export default function App() {
 
         </div>
 
-        {/* Links */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
           <a href="https://github.com/emadprograms/market-rewind/releases/tag/latest-data" target="_blank" rel="noopener noreferrer" title="Latest Market Data">
             <HardDrive size={16} color="var(--text-secondary)" />
@@ -448,7 +431,7 @@ export default function App() {
                     </div>
                    <div>
                      <label style={{fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px'}}>
-                       Start Time ({getTzLabel(getTzForTicker(tickers[0]))})
+                       Start Time ({getTzLabel(getTzForTicker(tickers[0] || 'SPY'))})
                      </label>
                      <input type="time" value={entryTime} onChange={(e) => setEntryTime(e.target.value)} style={{fontSize: '1rem', padding: '10px'}} />
                    </div>
@@ -465,7 +448,7 @@ export default function App() {
               
               const charts = Array.from({ length: gridCount }).map((_, i) => {
                 let initialTicker = sessionTicker;
-                let initialTf = '5min';
+                let initialTf: Timeframe = '5min';
                 let initialEth = false;
 
                 if (gridCount === 2) {
@@ -486,21 +469,19 @@ export default function App() {
                 }
 
                 const sizes = panelSizes[layoutMode] || [100 / gridCount];
-                const style = {};
+                const style: React.CSSProperties = {};
                 if (maximizedId === i) {
-                  // FORCE absolute expansion via inline styles to override any CSS specificity or container collapse
                   style.position = 'absolute';
                   style.top = '0';
                   style.left = '0';
                   style.width = '100%';
                   style.height = '100%';
-                  style.zIndex = '9999';
+                  style.zIndex = 9999;
                 } else if (!maximizedId) {
                   const size = sizes[i] !== undefined ? sizes[i] : (100 / gridCount);
                   if (layoutMode.endsWith('v')) style.width = `${size}%`;
                   if (layoutMode.endsWith('h')) style.height = `${size}%`;
                 } else {
-                  // Hide charts that are not the maximized one
                   style.display = 'none';
                 }
 
@@ -517,12 +498,11 @@ export default function App() {
                     globalTime={currentTime}
                     isMaximized={maximizedId === i}
                     onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
-                    gridCount={gridCount}
                     allDrawings={drawings}
                     onUpdateDrawings={handleUpdateDrawings}
                     onTimeframeChange={handleTimeframeChange}
                     groupColor={chartGroups[i] || 'none'}
-                    groupTicker={groupTickers[chartGroups[i]]}
+                    groupTicker={groupTickers[chartGroups[i]] as string}
                     onGroupChange={(newGroup) => handleGroupChange(i, newGroup)}
                     onTickerChange={(newTicker) => handleTickerChange(i, newTicker)}
                     style={style}
@@ -533,7 +513,7 @@ export default function App() {
               const isResizable = ['2v', '2h', '3v', '3h'].includes(layoutMode);
               
               if (!maximizedId && isResizable) {
-                const res = [];
+                const res: React.ReactNode[] = [];
                 const gutterMode = layoutMode.endsWith('v') ? 'v' : 'h';
                 charts.forEach((chart, idx) => {
                   res.push(chart);

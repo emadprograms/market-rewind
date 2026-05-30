@@ -1,14 +1,12 @@
-/**
- * Resamples 1-minute market data into larger timeframes.
- * @param {Array} data - Array of 1m OHLCV objects.
- * @param {string} timeframe - Target timeframe (e.g., '5min', '15min', '1H', '1D').
- */
-export function resampleData(data, timeframe) {
+import type { RawBar, Timeframe } from '../types';
+
+export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
   if (!data || data.length === 0) return [];
   if (timeframe === '1min') return data;
 
-  const resampled = [];
-  const tfMap = {
+  const resampled: RawBar[] = [];
+  const tfMap: Record<Timeframe, number> = {
+    '1min': 1,
     '5min': 5,
     '15min': 15,
     '30min': 30,
@@ -17,24 +15,20 @@ export function resampleData(data, timeframe) {
   };
 
   const durationMin = tfMap[timeframe] || 1;
-  let currentBucket = null;
+  let currentBucket: RawBar | null = null;
 
   data.forEach((bar) => {
     const date = new Date(bar.time.replace(' ', 'T') + 'Z');
     const timestamp = date.getTime();
     
-    let bucketTimeStr;
+    let bucketTimeStr: string;
     
     if (timeframe === '1D') {
-      // For daily candles, bucket by calendar date and use noon UTC.
-      // Using midnight UTC causes the chart to display the previous day
-      // when rendering in ET (UTC-4/5). Noon UTC stays on the same date in all US timezones.
       const yyyy = date.getUTCFullYear();
       const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
       const dd = String(date.getUTCDate()).padStart(2, '0');
       bucketTimeStr = `${yyyy}-${mm}-${dd} 12:00:00`;
     } else {
-      // For intraday, group into duration-sized buckets
       const bucketStartMs = Math.floor(timestamp / (durationMin * 60000)) * (durationMin * 60000);
       const bucketDate = new Date(bucketStartMs);
       

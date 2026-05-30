@@ -1,12 +1,25 @@
-class TradeRenderer {
-    constructor(data, badgeRef) {
+import type { 
+    IChartApi, 
+    ISeriesApi, 
+    ISeriesPrimitive, 
+    ISeriesPrimitivePaneRenderer, 
+    ISeriesPrimitivePaneView,
+    Time
+} from 'lightweight-charts';
+import type { ActiveTrade } from '../types';
+
+class TradeRenderer implements ISeriesPrimitivePaneRenderer {
+    _data: any;
+    _badgeRef: React.RefObject<HTMLDivElement> | null;
+
+    constructor(data: any, badgeRef: React.RefObject<HTMLDivElement> | null) {
         this._data = data;
         this._badgeRef = badgeRef;
     }
 
-    draw(target) {
+    draw(target: any) {
         try {
-            target.useMediaCoordinateSpace(scope => {
+            target.useMediaCoordinateSpace((scope: any) => {
                 const ctx = scope.context;
                 if (!this._data) return;
 
@@ -18,19 +31,16 @@ class TradeRenderer {
                 ctx.save();
                 ctx.globalAlpha = 0.8;
 
-                // Entry Line: Color based on type, thicker, with gap
                 const entryColor = type === 'long' ? '#26a69a' : '#ef5350';
                 ctx.strokeStyle = entryColor;
-                ctx.lineWidth = 2; // Thicker line
+                ctx.lineWidth = 2; 
 
-                // Calculate gap based on actual DOM positions relative to the canvas
                 let badgeStart = rightEdge;
                 let badgeEnd = rightEdge;
-                const gapPadding = 6; // pixels of space between the line and the badge
+                const gapPadding = 6; 
 
                 if (this._badgeRef && this._badgeRef.current) {
                     const badgeRect = this._badgeRef.current.getBoundingClientRect();
-                    // NATIVE FIX: The context always holds a reference to its canvas element!
                     const canvasRect = scope.context.canvas.getBoundingClientRect();
                     
                     badgeStart = badgeRect.left - canvasRect.left - gapPadding;
@@ -38,12 +48,10 @@ class TradeRenderer {
                 }
 
                 ctx.beginPath();
-                // Line segment 1: 0 to badgeStart
                 ctx.moveTo(0, yEntry);
                 ctx.lineTo(Math.max(0, badgeStart), yEntry);
                 ctx.stroke();
 
-                // Line segment 2: badgeEnd to rightEdge
                 if (badgeEnd < rightEdge) {
                     ctx.beginPath();
                     ctx.moveTo(badgeEnd, yEntry);
@@ -51,8 +59,7 @@ class TradeRenderer {
                     ctx.stroke();
                 }
 
-                // SL & TP Lines
-                const drawLine = (y, color, label) => {
+                const drawLine = (y: number, color: string, label: string) => {
                     if (y === null || y === undefined || isNaN(y)) return;
                     ctx.strokeStyle = color;
                     ctx.lineWidth = 1;
@@ -62,7 +69,6 @@ class TradeRenderer {
                     ctx.lineTo(rightEdge, y);
                     ctx.stroke();
 
-                    // Label - Only draw if label is provided
                     if (label) {
                         ctx.fillStyle = color;
                         ctx.font = 'bold 10px Inter, sans-serif';
@@ -71,9 +77,7 @@ class TradeRenderer {
                     }
                 };
 
-                // SL Line
                 drawLine(ySL, '#ef5350', 'SL');
-                // TP Line
                 drawLine(yTP, '#26a69a', 'TP');
 
                 ctx.restore();
@@ -84,16 +88,18 @@ class TradeRenderer {
     }
 }
 
-class TradePaneView {
-    constructor(plugin) {
+class TradePaneView implements ISeriesPrimitivePaneView {
+    _plugin: TradePlugin;
+
+    constructor(plugin: TradePlugin) {
         this._plugin = plugin;
     }
 
-    zOrder() {
+    zOrder(): 'top' | 'bottom' | 'normal' {
         return 'top';
     }
 
-    renderer() {
+    renderer(): ISeriesPrimitivePaneRenderer {
         try {
             const data = this._plugin._getViewData();
             return new TradeRenderer(data, this._plugin._badgeRef);
@@ -104,7 +110,14 @@ class TradePaneView {
     }
 }
 
-export class TradePlugin {
+export class TradePlugin implements ISeriesPrimitive<Time> {
+    _chart: IChartApi | null;
+    _series: ISeriesApi<"Candlestick"> | null;
+    _paneViews: TradePaneView[];
+    _requestUpdate: () => void;
+    _trade: ActiveTrade | null;
+    _badgeRef: React.RefObject<HTMLDivElement> | null;
+
     constructor() {
         this._chart = null;
         this._series = null;
@@ -114,19 +127,17 @@ export class TradePlugin {
         this._badgeRef = null;
     }
 
-    setTrade(trade) {
+    setTrade(trade: ActiveTrade | null) {
         this._trade = trade;
         this._requestUpdate();
-        // Force a secondary redraw after React commits the DOM
-        // This ensures badgeRef.current is available so the gap can be calculated
         setTimeout(() => this._requestUpdate(), 0);
     }
 
-    setBadgeRef(ref) {
+    setBadgeRef(ref: React.RefObject<HTMLDivElement>) {
         this._badgeRef = ref;
     }
 
-    attached({ chart, series, requestUpdate }) {
+    attached({ chart, series, requestUpdate }: any) {
         this._chart = chart;
         this._series = series;
         if (requestUpdate) {
@@ -143,7 +154,7 @@ export class TradePlugin {
         this._requestUpdate();
     }
 
-    paneViews() {
+    paneViews(): readonly ISeriesPrimitivePaneView[] {
         return this._paneViews;
     }
 
@@ -160,10 +171,9 @@ export class TradePlugin {
             if (entryPrice === undefined) return null;
 
             const yEntry = this._series.priceToCoordinate(entryPrice);
-            const ySL = this._series.priceToCoordinate(slPrice);
-            const yTP = this._series.priceToCoordinate(tpPrice);
+            const ySL = slPrice ? this._series.priceToCoordinate(slPrice) : null;
+            const yTP = tpPrice ? this._series.priceToCoordinate(tpPrice) : null;
 
-            // Update the HTML badge position directly to bypass React render cycle
             if (this._badgeRef && this._badgeRef.current) {
                 const badge = this._badgeRef.current;
                 if (yEntry === null) {

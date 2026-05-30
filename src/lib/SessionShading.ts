@@ -1,12 +1,14 @@
-import { getTzForTicker } from './timezones';
+import type { 
+    IChartApi, 
+    ISeriesApi, 
+    ISeriesPrimitive, 
+    ISeriesPrimitivePaneRenderer, 
+    ISeriesPrimitivePaneView,
+    Time
+} from 'lightweight-charts';
+import type { Timeframe } from '../types';
 
-/**
- * DETERMINISTIC SESSION CHECK: Using Intl.DateTimeFormat for robust DST handling.
- * - PRE: 04:00 - 09:30 ET
- * - RTH: 09:30 - 16:00 ET
- * - POST: 16:00 - 20:00 ET
- */
-export function getSessionType(timestamp) {
+export function getSessionType(timestamp: number): 'PRE' | 'RTH' | 'POST' | 'OTHER' {
   const date = new Date(timestamp * 1000);
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
@@ -16,8 +18,8 @@ export function getSessionType(timestamp) {
   });
   
   const parts = formatter.formatToParts(date);
-  const hour = parseInt(parts.find(p => p.type === 'hour').value);
-  const minute = parseInt(parts.find(p => p.type === 'minute').value);
+  const hour = parseInt(parts.find(p => p.type === 'hour')!.value);
+  const minute = parseInt(parts.find(p => p.type === 'minute')!.value);
   const totalMinutes = hour * 60 + minute;
   
   if (totalMinutes >= 240 && totalMinutes < 570) return 'PRE';
@@ -26,16 +28,15 @@ export function getSessionType(timestamp) {
   return 'OTHER';
 }
 
-/**
- * LIGHTWEIGHT CHARTS PLUGIN: Session Shading
- */
-class SessionShadingRenderer {
-  constructor(data) {
+class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
+  _data: any;
+
+  constructor(data: any) {
     this._data = data;
   }
 
-  draw(target) {
-    target.useMediaCoordinateSpace(scope => {
+  draw(target: any) {
+    target.useMediaCoordinateSpace((scope: any) => {
       const ctx = scope.context;
       if (!this._data || this._data.visibleRange === null) return;
       
@@ -48,15 +49,15 @@ class SessionShadingRenderer {
           const bar = bars[i];
           if (!bar) continue;
           
-          const type = getSessionType(bar.time);
+          const type = getSessionType(bar.time as number);
           if (type === 'PRE') {
-              ctx.fillStyle = 'rgba(255, 210, 0, 0.07)'; // Warm Yellow
+              ctx.fillStyle = 'rgba(255, 210, 0, 0.07)'; 
           } else if (type === 'POST') {
-              ctx.fillStyle = 'rgba(0, 130, 255, 0.07)'; // Cool Blue
+              ctx.fillStyle = 'rgba(0, 130, 255, 0.07)'; 
           } else if (type === 'OTHER') {
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'; // Very subtle for late night
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'; 
           } else {
-              continue; // RTH
+              continue; 
           }
 
           const x = bar.x;
@@ -70,33 +71,42 @@ class SessionShadingRenderer {
   }
 }
 
-class SessionShadingPaneView {
-  constructor(plugin) {
+class SessionShadingPaneView implements ISeriesPrimitivePaneView {
+  _plugin: SessionShadingPlugin;
+
+  constructor(plugin: SessionShadingPlugin) {
     this._plugin = plugin;
   }
 
-  zOrder() {
+  zOrder(): 'bottom' | 'normal' | 'top' {
     return 'bottom';
   }
 
-  renderer() {
+  renderer(): ISeriesPrimitivePaneRenderer {
     return new SessionShadingRenderer(this._plugin._getViewData());
   }
 }
 
-export class SessionShadingPlugin {
-  constructor(timeframe, isET) {
+export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
+  _timeframe: Timeframe;
+  _isET: boolean;
+  _chart: IChartApi | null;
+  _series: ISeriesApi<"Candlestick"> | null;
+  _paneViews: SessionShadingPaneView[];
+  _requestUpdate: () => void;
+
+  constructor(timeframe: Timeframe, isET: boolean) {
     this._timeframe = timeframe;
     this._isET = isET;
     this._chart = null;
     this._series = null;
     this._paneViews = [new SessionShadingPaneView(this)];
     this._requestUpdate = () => {
-        if (this._chart) this._chart.applyOptions({}); // Trigger re-render
+        if (this._chart) this._chart.applyOptions({}); 
     };
   }
 
-  attached({ chart, series, requestUpdate }) {
+  attached({ chart, series, requestUpdate }: any) {
     this._chart = chart;
     this._series = series;
     if (requestUpdate) {
@@ -113,7 +123,7 @@ export class SessionShadingPlugin {
     this._requestUpdate();
   }
 
-  paneViews() {
+  paneViews(): readonly ISeriesPrimitivePaneView[] {
     return this._paneViews;
   }
 
@@ -127,15 +137,15 @@ export class SessionShadingPlugin {
     const data = this._series.data();
     
     return {
-        bars: data.map(d => ({
+        bars: data.map((d: any) => ({
             time: d.time,
             x: timeScale.timeToCoordinate(d.time),
             width: timeScale.options().barSpacing || 6
         })),
         timeframe: this._timeframe,
         visibleRange: {
-            from: Math.max(0, Math.floor(visibleRange.from)),
-            to: Math.min(data.length, Math.ceil(visibleRange.to))
+            from: Math.max(0, Math.floor(visibleRange.from as number)),
+            to: Math.min(data.length, Math.ceil(visibleRange.to as number))
         }
     };
   }
