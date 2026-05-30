@@ -36,7 +36,7 @@ export function useChartData({
   onTimeframeChange,
   id,
 }: UseChartDataParams) {
-  const [ticker, setTicker] = useState<string>(initialTicker || tickers[0]);
+  const [ticker, setTicker] = useState<string>(initialTicker);
   const [localMasterData, setLocalMasterData] = useState<RawBar[]>([]);
   const [timeframe, setTimeframe] = useState<Timeframe>(initialTf || '1D');
   const [showEth, setShowEth] = useState<boolean>(initialEth || false);
