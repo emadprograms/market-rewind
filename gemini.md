@@ -43,6 +43,7 @@ The top-level `App` component was converted to TypeScript, fully typing the unif
 *   **No Global State:** Retained the prop-drilling architecture (ChartUnit passing handlers to children) to maintain the existing mental model of the application.
 *   **Circular References Handled:** Solved circular dependencies between `useChartLifecycle` and `useTradeManager` through careful mapping of `MutableRefObject` inputs (e.g., `tradePluginRef`).
 *   **Compilation:** Eliminated `any` types where viable to ensure build safety. Project compiles and serves strictly over Vite using `npm run build`.
+*   **Global PnL Aggregation**: Implemented a synchronization pattern where individual `ChartUnit`s report their Realized and Unrealized PnL to the `App` component, which aggregates them in the bottom replay bar for a portfolio-wide view.
 
 ## Testing & Quality Assurance
 A rigorous test suite was implemented using **Vitest** and **React Testing Library** to ensure the stability of the refactored architecture.

@@ -117,6 +117,7 @@ export interface ChartUnitProps {
   allDrawings: AllDrawings;
   onUpdateDrawings: (ticker: string, type: 'rays' | 'rects', items: RayDrawing[] | RectDrawing[]) => void;
   onTimeframeChange: (id: number, tf: Timeframe) => void;
+  onPnLUpdate: (id: number, realized: number, unrealized: number) => void;
   groupColor: GroupColor;
   groupTicker?: string;
   onGroupChange?: (color: GroupColor) => void;

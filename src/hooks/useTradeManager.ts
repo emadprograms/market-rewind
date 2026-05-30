@@ -17,9 +17,20 @@ export function useTradeManager({
   tradePluginRef,
 }: UseTradeManagerParams) {
   const [activeTrade, setActiveTrade] = useState<ActiveTrade | null>(null);
+  const [realizedPnL, setRealizedPnL] = useState(0);
   const [tradeSize, setTradeSize] = useState(1);
   const [dragTarget, setDragTarget] = useState<'sl' | 'tp' | null>(null);
   const tradeBadgeRef = useRef<HTMLDivElement>(null);
+
+  // Calculate Unrealized PnL based on current price
+  const unrealizedPnL = React.useMemo(() => {
+    if (!activeTrade || !chartData || chartData.length === 0) return 0;
+    const currentPrice = chartData[chartData.length - 1].close;
+    const pnlPerUnit = activeTrade.type === 'long' 
+      ? currentPrice - activeTrade.entryPrice 
+      : activeTrade.entryPrice - currentPrice;
+    return pnlPerUnit * activeTrade.size;
+  }, [activeTrade, chartData]);
 
   const placeOrder = useCallback((type: TradeType) => {
     try {
@@ -52,6 +63,15 @@ export function useTradeManager({
             size: newSize,
           };
         } else {
+          // Calculate PnL for the amount being closed
+          const closedSize = Math.min(prevTrade.size, tradeSize);
+          const pnlPerUnit = prevTrade.type === 'long' 
+            ? currentPrice - prevTrade.entryPrice 
+            : prevTrade.entryPrice - currentPrice;
+          const closedPnL = pnlPerUnit * closedSize;
+          
+          setRealizedPnL(prev => prev + closedPnL);
+
           const netSize = prevTrade.size - tradeSize;
 
           if (netSize > 0) {
@@ -157,5 +177,7 @@ export function useTradeManager({
     setTradeSize,
     tradeBadgeRef,
     placeOrder,
+    realizedPnL,
+    unrealizedPnL,
   };
 }

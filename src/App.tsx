@@ -37,13 +37,26 @@ export default function App() {
   const [drawings, setDrawings] = useState<AllDrawings>({}); 
   const [chartTimeframes, setChartTimeframes] = useState<Record<number, Timeframe>>({}); 
   const [manualStepMinutes, setManualStepMinutes] = useState<number | null>(null);
-  
+  const [globalPnL, setGlobalPnL] = useState<Record<number, { r: number; u: number }>>({});
+
   const [panelSizes, setPanelSizes] = useState<Record<string, number[]>>({
     '2v': [50, 50],
     '2h': [50, 50],
     '3': [33.3, 33.3, 33.4],
     '4': [50, 50, 50, 50]
   });
+  
+  const totalRealized = Object.values(globalPnL).reduce((acc, curr) => acc + curr.r, 0);
+  const totalUnrealized = Object.values(globalPnL).reduce((acc, curr) => acc + curr.u, 0);
+
+  const handlePnLUpdate = useCallback((id: number, r: number, u: number) => {
+    setGlobalPnL(prev => ({
+      ...prev,
+      [id]: { r, u }
+    }));
+  }, []);
+
+  const minStepMinutes = Object.values(chartTimeframes).length > 0
   
   const [activeGutter, setActiveGutter] = useState<number | null>(null);
   const dragInfo = useRef<{ active: boolean; mode: 'v' | 'h' | null; index: number | null }>({ active: false, mode: null, index: null });
@@ -501,6 +514,7 @@ export default function App() {
                     allDrawings={drawings}
                     onUpdateDrawings={handleUpdateDrawings}
                     onTimeframeChange={handleTimeframeChange}
+                    onPnLUpdate={handlePnLUpdate}
                     groupColor={chartGroups[i] || 'none'}
                     groupTicker={groupTickers[chartGroups[i]] as string}
                     onGroupChange={(newGroup) => handleGroupChange(i, newGroup)}
@@ -543,6 +557,25 @@ export default function App() {
 
         <div className="playback-bar" style={{ paddingLeft: '16px' }}>
           
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px', 
+            fontSize: '0.75rem', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+            marginRight: '20px', paddingRight: '20px', borderRight: '1px solid rgba(255,255,255,0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>R:</span>
+              <span style={{ color: totalRealized >= 0 ? '#26a69a' : '#ef5350' }}>
+                {totalRealized >= 0 ? '+' : ''}{totalRealized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>U:</span>
+              <span style={{ color: totalUnrealized >= 0 ? '#26a69a' : '#ef5350' }}>
+                {totalUnrealized >= 0 ? '+' : ''}{totalUnrealized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+
           <div className="time-display">
             {formatDisplayTime(currentTime)}
           </div>

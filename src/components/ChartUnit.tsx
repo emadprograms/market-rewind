@@ -24,6 +24,7 @@ export default function ChartUnit({
   allDrawings = {},
   onUpdateDrawings,
   onTimeframeChange,
+  onPnLUpdate,
   groupColor = 'none',
   groupTicker,
   onGroupChange,
@@ -99,6 +100,11 @@ export default function ChartUnit({
     priceSeriesRef, 
     tradePluginRef: chart.tradePluginRef 
   });
+
+  // Sync PnL to App
+  React.useEffect(() => {
+    onPnLUpdate(id, trade.realizedPnL, trade.unrealizedPnL);
+  }, [trade.realizedPnL, trade.unrealizedPnL, id, onPnLUpdate]);
 
   const currentPrice = data.chartData[data.chartData.length - 1]?.close ?? 0;
 
