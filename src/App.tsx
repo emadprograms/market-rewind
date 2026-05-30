@@ -56,8 +56,6 @@ export default function App() {
     }));
   }, []);
 
-  const minStepMinutes = Object.values(chartTimeframes).length > 0
-  
   const [activeGutter, setActiveGutter] = useState<number | null>(null);
   const dragInfo = useRef<{ active: boolean; mode: 'v' | 'h' | null; index: number | null }>({ active: false, mode: null, index: null });
   const workspaceRef = useRef<HTMLElement>(null);
