@@ -1,0 +1,63 @@
+name: Dev Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Session duration (e.g. 1h, 30m, 4h)'
+        required: false
+        default: '2h'
+        type: string
+
+jobs:
+  dev-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.master_pat_token }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Gemini CLI
+        run: npm install -g @google/gemini-cli
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install infisicalsdk
+
+      - name: Start VS Code Tunnel
+        env:
+          # Unset CI so Gemini CLI runs in full interactive mode (with logo)
+          CI: ""
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
+        run: |
+          # Persist env vars for interactive shell sessions in the tunnel
+          echo "export GEMINI_API_KEY='$GEMINI_API_KEY'" >> ~/.bashrc
+          echo "export GEMINI_CLI_TRUST_WORKSPACE='$GEMINI_CLI_TRUST_WORKSPACE'" >> ~/.bashrc
+          
+          echo "Downloading VS Code CLI..."
+          curl -fsSL "https://update.code.visualstudio.com/latest/cli-linux-x64/stable" -o vscode_cli.tar.gz
+
+          echo "Extracting..."
+          tar -xzf vscode_cli.tar.gz
+
+          echo "Starting Tunnel..."
+          timeout ${{ github.event.inputs.duration }} ./code tunnel --accept-server-license-terms --name dev-env \
+            --install-extension GitHub.github-vscode-theme \
+            --install-extension saoudrizwan.claude-dev
