@@ -43,3 +43,14 @@ The top-level `App` component was converted to TypeScript, fully typing the unif
 *   **No Global State:** Retained the prop-drilling architecture (ChartUnit passing handlers to children) to maintain the existing mental model of the application.
 *   **Circular References Handled:** Solved circular dependencies between `useChartLifecycle` and `useTradeManager` through careful mapping of `MutableRefObject` inputs (e.g., `tradePluginRef`).
 *   **Compilation:** Eliminated `any` types where viable to ensure build safety. Project compiles and serves strictly over Vite using `npm run build`.
+
+## Testing & Quality Assurance
+A rigorous test suite was implemented using **Vitest** and **React Testing Library** to ensure the stability of the refactored architecture.
+
+### Testing Tiers
+*   **Unit Testing**: Validates core utilities including the `resampleData` logic and `getTzForTicker` mapping.
+*   **Hook Testing**: Rigorously tests `useTradeManager` for financial accuracy, focusing on cumulative entry prices, partial closes, and position flipping.
+*   **Stress Testing**: Pushes the system to its boundaries, testing midnight UTC transitions, raw data gaps, floating-point precision in P&L, and the ref-handshake between lifecycle and trade hooks.
+
+The project has undergone a full Technical Integrity Audit and is currently rated as **Stable**.
+
