@@ -7,7 +7,9 @@ import type {
     Time,
     SeriesPrimitivePaneViewZOrder,
     SeriesPrimitivePaneRendererScope,
-    ISeriesPrimitiveAttachedParams
+    ISeriesPrimitiveAttachedParams,
+    ITimeScaleApi,
+    CandlestickData
 } from 'lightweight-charts';
 import type { Timeframe } from '../types';
 
@@ -31,14 +33,10 @@ export function getSessionType(timestamp: number): 'PRE' | 'RTH' | 'POST' | 'OTH
   return 'OTHER';
 }
 
-interface ShadingBar {
-    time: number;
-    x: number | null;
-    width: number;
-}
-
 interface ShadingViewData {
-    bars: ShadingBar[];
+    bars: readonly CandlestickData<Time>[];
+    timeScale: ITimeScaleApi<Time>;
+    barSpacing: number;
     timeframe: Timeframe;
     visibleRange: {
         from: number;
@@ -58,16 +56,20 @@ class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
       const ctx = scope.context;
       if (!this._data || this._data.visibleRange === null) return;
       
-      const { bars, timeframe, visibleRange } = this._data;
+      const { bars, timeframe, visibleRange, timeScale, barSpacing } = this._data;
       if (timeframe === '1D') return;
 
       ctx.save();
       
       for (let i = visibleRange.from; i < visibleRange.to; i++) {
           const bar = bars[i];
-          if (!bar || bar.x === null) continue;
+          if (!bar) continue;
           
-          const type = getSessionType(bar.time);
+          const time = bar.time as number;
+          const x = timeScale.timeToCoordinate(bar.time);
+          if (x === null) continue;
+
+          const type = getSessionType(time);
           if (type === 'PRE') {
               ctx.fillStyle = 'rgba(255, 210, 0, 0.07)'; 
           } else if (type === 'POST') {
@@ -78,10 +80,8 @@ class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
               continue; 
           }
 
-          const x = bar.x;
-          const width = bar.width;
-          const halfWidth = width / 2;
-          ctx.fillRect(Math.round(x - halfWidth), 0, Math.ceil(width), scope.mediaSize.height);
+          const halfWidth = barSpacing / 2;
+          ctx.fillRect(Math.round(x - halfWidth), 0, Math.ceil(barSpacing), scope.mediaSize.height);
       }
       
       ctx.restore();
@@ -161,11 +161,9 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     const data = this._series.data();
     
     return {
-        bars: data.map((d) => ({
-            time: d.time as number,
-            x: timeScale.timeToCoordinate(d.time),
-            width: timeScale.options().barSpacing || 6
-        })),
+        bars: data,
+        timeScale: timeScale,
+        barSpacing: timeScale.options().barSpacing || 6,
         timeframe: this._timeframe,
         visibleRange: {
             from: Math.max(0, Math.floor(visibleRange.from)),
