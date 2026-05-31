@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v7.6 - Trade Execution Feature & Plugin Fix)
+## Project State: COMPLETED (v7.7 - Chart Header Refactor & UI Polish)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -24,7 +24,7 @@ Market Rewind is a zero-read, local-first market replay tool.
         - **4-Chart**: `5m`, `1H`, `1D` + `5m SPY` context chart.
         - **Force-Remount**: Charts now use a composite key `${layoutMode}-${i}` to ensure defaults are re-applied instantly upon layout switch.
     - **Grouped Symbol Linking System**: Replaced the global "Link" toggle with a multi-group synchronization system (Red, Blue, Green, Yellow). 
-        - **Group Picker**: Colored circles in each chart header allow assigning charts to specific sync groups.
+        - **Compact Group Selector**: Repositioned to the right-aligned action zone of each chart header. Utilizes a color-aware dropdown palette instead of a static dot cluster.
         - **Visual Indicators**: Chart cards display a colored top border corresponding to their active group.
         - **Persistence**: Group assignments and group-specific tickers are persisted via `localStorage`.
     - **Resizable Chart Panels**: 
@@ -73,12 +73,11 @@ Market Rewind is a zero-read, local-first market replay tool.
 
 
     - **Live Price Line (1D)**: Dynamic dashed yellow line indicator for extended hours / incomplete daily candles.
-    - **Header Action Bar**:
-        - **ETH Toggle**: Extended trading hours visibility.
-        - **VP Toggle**: Visible range volume profile visibility.
-        - **RAY Button**: Click to enter Horizontal Ray drawing mode (matches `Alt+J`).
-        - **RECT Button**: Click to enter Rectangle drawing mode (matches `Alt+Shift+R`).
-        - **CLEAR Button**: Tablet-friendly trash icon to clear all drawings for the current ticker.
+    - **Polished Header Architecture** (v7.7):
+        - **Zone A (Navigation)**: Ticker and Timeframe selects prioritized on the left.
+        - **Zone B (Settings)**: Icon-only gear dropdown centralizing **Analysis** (ETH/VP toggles), **Drawing Tools** (RAY/RECT with keyboard shortcut hints), and **Danger Zone** (Clear Drawings).
+        - **Zone C (Actions)**: Right-aligned zone containing the **Group Selector** and **Maximize/Minimize** button.
+        - **High-Density CSS**: Optimized gaps and flex behavior for perfect scaling in 4-chart grid modes.
     - **Scroll to End UI**: Floating "return to latest" button appears on hover when scrolled away from the most recent data point. Click action binds to `scrollToRealTime()` to enforce proper right-margin padding.
 
 
@@ -155,7 +154,7 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Required Secrets**: `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`.
 
 ---
-*Last Update: 2026-05-30*
+*Last Update: 2026-05-31*
 # Market Rewind - TypeScript Conversion & Modularization
 
 ## Overview
