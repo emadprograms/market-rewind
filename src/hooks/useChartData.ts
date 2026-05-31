@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import type { ChartBar, GroupColor, RawBar, Timeframe } from '../types';
 import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
@@ -46,9 +46,17 @@ export function useChartData({
   const pendingHistoryPrependRef = useRef<{ oldFirstTime: number | null; oldLogicalRange: any } | null>(null);
 
   const dataTimeframeRef = useRef(timeframe);
+  const isFirstRender = useRef(true);
 
   // Group-to-Ticker Sync
   useEffect(() => {
+    // If this is the first render, we respect the initialTicker passed from session config
+    // and skip the group sync until a user actually changes a group or ticker later.
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
     if (groupColor !== 'none' && groupTicker && groupTicker !== ticker) {
       setTicker(groupTicker);
     }

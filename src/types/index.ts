@@ -1,3 +1,4 @@
+import React from 'react';
 import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 
 // --- Market Data ---

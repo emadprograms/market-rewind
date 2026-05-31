@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
 import { fetchTickers, fetchMarketData, loadDatabaseFromFile, initDB } from './lib/db';
@@ -24,13 +24,29 @@ export default function App() {
   const [sessionTicker, setSessionTicker] = useState<string>(() => localStorage.getItem('lastUsedTicker') || 'SPY');
   
   const [groupTickers, setGroupTickers] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('groupTickers');
-    return saved ? JSON.parse(saved) : { red: 'SPY', blue: 'SPY', green: 'SPY', yellow: 'SPY' };
+    try {
+      const saved = localStorage.getItem('groupTickers');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse groupTickers from localStorage', e);
+    }
+    return { red: 'SPY', blue: 'SPY', green: 'SPY', yellow: 'SPY' };
   });
   
   const [chartGroups, setChartGroups] = useState<Record<number, GroupColor>>(() => {
-    const saved = localStorage.getItem('chartGroups');
-    return saved ? JSON.parse(saved) : {};
+    try {
+      const saved = localStorage.getItem('chartGroups');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse chartGroups from localStorage', e);
+    }
+    return {};
   });
   
   const [maximizedId, setMaximizedId] = useState<number | null>(null);

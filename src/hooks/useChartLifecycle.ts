@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createChart, IChartApi, ISeriesApi, MouseEventParams, Time } from 'lightweight-charts';
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe } from '../types';
 import { getTzForTicker } from '../lib/timezones';
