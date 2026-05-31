@@ -2,7 +2,7 @@
 
 ## 1. Problem Statement
 The Grouped Symbol Linking System currently suffers from several critical behavioral and logical flaws:
-1. **Ticker Snap on Join:** Changing a chart's group (e.g., 'none' $ightarrow$ 'red') forces the chart to immediately snap to that group's current ticker.
+1. **Ticker Snap on Join (The "Inverted" Problem):** While we recently stopped charts from snapping to group tickers on join, we lost the intuitive behavior where a chart *should* adopt an existing group's ticker if that group is already occupied.
 2. **The "One-Render-Later" Snap:** Even with basic guards, the chart often snaps to the group ticker on the second render cycle after joining.
 3. **Keyboard Sync Leak:** Ticker changes via keyboard shortcuts (`A-Z`) update the local chart but fail to notify the group, causing desynchronization.
 4. **The "Revert Race Condition":** Over-aggressive sync effects can fight with manual user input, causing tickers to flicker or revert.
@@ -21,13 +21,14 @@ In `src/hooks/useWorkspace.ts`, `groupTickers` are updated but never deleted. Th
 
 ## 3. Proposed Solution
 
-### 3.1 Deterministic Sync in `useChartData.ts`
-We will implement a "Double-Anchor" system to ensure joining a group is a purely visual action.
+### 3.1 Deterministic "Smart-Sync" in `useChartData.ts`
+We will implement a system that restores the intuitive auto-sync behavior when joining an existing group, while maintaining protection against race conditions.
 
 **The Logic:**
 - Use `prevGroupColorRef` to detect when a user joins/leaves a group.
-- Use `prevGroupTickerRef` to anchor the group's ticker at the moment of joining.
-- **The Sync Rule:** A chart only updates its ticker if `groupColor` is stable, is not 'none', and the `groupTicker` has changed *relative to the anchor* saved when joining.
+- Use `prevGroupTickerRef` to anchor the group's ticker.
+- **The Smart-Join Rule:** When joining a group, if the group already has a ticker and it's different from the chart's current ticker, we perform an immediate sync. This ensures the group stays unified.
+- **The Sync Rule:** A chart only updates its ticker if `groupColor` is stable, is not 'none', and the `groupTicker` has changed *relative to the anchor*.
 - **Dependency Array:** Omit `ticker` from dependencies to prevent the "Revert Race Condition."
 
 ### 3.2 Unified Update Pattern in `ChartUnit.tsx`
@@ -40,12 +41,12 @@ Centralize all ticker changes to ensure 100% sync parity between dropdowns and k
 Ensure groups are ephemeral and reset when empty.
 
 - **The Rule:** Whenever `handleGroupChange` is called, check if the group just left (`oldGroup`) still has any members.
-- If the count is 0 $ightarrow$ remove that group's ticker from `groupTickers`.
+- If the count is 0 $ightarrow$ remove that group's ticker from `groupTickers`.
 
 ## 4. Implementation Steps
 
 ### Step 1: Modify `src/hooks/useChartData.ts`
-Implement the double-anchor sync logic.
+Implement the smart-join sync logic.
 ```typescript
   const prevGroupColorRef = useRef(groupColor);
   const prevGroupTickerRef = useRef(groupTicker);
@@ -59,7 +60,14 @@ Implement the double-anchor sync logic.
     // 1. Handle Group Change (Joining/Leaving)
     if (groupColor !== prevGroupColorRef.current) {
       prevGroupColorRef.current = groupColor;
-      prevGroupTickerRef.current = groupTicker; // Anchor the ticker at moment of joining
+      
+      // Smart Join: If joining an existing group with a different ticker, adopt it immediately.
+      if (groupColor !== 'none' && groupTicker && groupTicker !== ticker) {
+        setTicker(groupTicker);
+        prevGroupTickerRef.current = groupTicker; // Anchor to the new group ticker
+      } else {
+        prevGroupTickerRef.current = groupTicker; // Anchor at moment of joining
+      }
       return; 
     }
 
@@ -68,70 +76,34 @@ Implement the double-anchor sync logic.
       setTicker(groupTicker);
       prevGroupTickerRef.current = groupTicker; // Update anchor
     }
-  }, [groupColor, groupTicker]); // NO 'ticker' dependency to avoid race conditions
+  }, [groupColor, groupTicker]); // Omit 'ticker' to avoid revert race conditions
 ```
 
 ### Step 2: Modify `src/components/ChartUnit.tsx`
-Unify the ticker update paths.
-1. **Implement Unified Handler:**
-   ```typescript
-   const handleTickerUpdate = useCallback((newTicker: string) => {
-     data.setTicker(newTicker);
-     if (onTickerChange) {
-       onTickerChange(newTicker);
-     }
-   }, [data, onTickerChange]);
-   ```
-2. **Wire to ChartHeader:** Pass `handleTickerUpdate` to `ChartHeader`'s `onTickerChange` prop.
-3. **Wire to Keyboard:** Update the keyboard action `onSubmit` to call `handleTickerUpdate(val.toUpperCase())`.
+(Already implemented in v7.8 - ensuring it remains correct)
 
 ### Step 3: Modify `src/hooks/useWorkspace.ts`
-Implement the "Last Member" cleanup logic.
-- Update `handleGroupChange`:
-  ```typescript
-  const handleGroupChange = useCallback((chartId: number, newGroup: GroupColor) => {
-    setChartGroups(prev => {
-      const oldGroup = prev[chartId];
-      const next = { ...prev, [chartId]: newGroup };
-      
-      // Check if the old group is now empty
-      if (oldGroup && oldGroup !== 'none' && oldGroup !== newGroup) {
-        const isNowEmpty = Object.values(next).every(g => g !== oldGroup);
-        if (isNowEmpty) {
-          setGroupTickers(gt => {
-            const { [oldGroup]: _, ...rest } = gt;
-            return rest;
-          });
-        }
-      }
-      return next;
-    });
-  }, []);
-  ```
+(Already implemented in v7.8 - ensuring it remains correct)
 
 ## 5. Verification Plan
 
-### 5.1 Test: Joining a Group (The "No Snap" Test)
-- **Setup:** Chart A (Green, SPY), Chart B (None, AAPL).
+### 5.1 Test: Joining an OCCUPIED Group (Smart Join)
+- **Setup:** Chart A (Green, AMD). Chart B (None, SPY).
 - **Action:** Change Chart B to Green.
-- **Expected:** Chart B stays AAPL (No snap on join, no one-render-later snap).
+- **Expected:** Chart B automatically changes to AMD.
 
-### 5.2 Test: Remote Sync (The "Group" Test)
-- **Setup:** Chart A (Green, SPY), Chart B (Green, SPY).
-- **Action:** Change Chart A to 'TSLA' via dropdown.
-- **Expected:** Chart B automatically changes to 'TSLA'.
+### 5.2 Test: Joining an EMPTY Group (Anchor Join)
+- **Setup:** Red Group is empty (blank slate). Chart A is SPY.
+- **Action:** Change Chart A to Red.
+- **Expected:** Chart A stays SPY (It becomes the leader of the Red group).
 
-### 5.3 Test: Keyboard Sync (The "Leak" Test)
-- **Setup:** Chart A (Green, SPY), Chart B (Green, SPY).
-- **Action:** Change Chart A to 'TSLA' using keyboard shortcuts.
-- **Expected:** Chart B automatically changes to 'TSLA'.
+### 5.3 Test: Remote Sync
+- **Setup:** Chart A (Green, AMD), Chart B (Green, AMD).
+- **Action:** Change Chart A to TSLA.
+- **Expected:** Chart B automatically changes to TSLA.
 
-### 5.4 Test: Group Cleanup (The "Blank Slate" Test)
-- **Setup:** Red Group is 'AAPL'. Chart A is Red.
+### 5.4 Test: Group Cleanup
+- **Setup:** Blue Group is MSFT. Chart A is Blue.
 - **Action:** Change Chart A to 'none'.
-- **Action:** Change Chart A back to Red.
-- **Expected:** Chart A does not snap to 'AAPL' (Red group was wiped when it became empty).
-
-### 5.5 Test: Race Condition (The "Revert" Test)
-- **Action:** Rapidly change tickers via dropdown.
-- **Expected:** No flickering or reverting to previous tickers.
+- **Action:** Change Chart A back to Blue.
+- **Expected:** Chart A stays SPY (or whatever its current ticker is) because Blue group was wiped when it became empty.

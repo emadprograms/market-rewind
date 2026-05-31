@@ -61,7 +61,14 @@ export function useChartData({
     // 1. Handle Group Change (Joining/Leaving)
     if (groupColor !== prevGroupColorRef.current) {
       prevGroupColorRef.current = groupColor;
-      prevGroupTickerRef.current = groupTicker; // Anchor the ticker at moment of joining
+      
+      // Smart Join: If joining an existing group with a different ticker, adopt it immediately.
+      if (groupColor !== 'none' && groupTicker && groupTicker !== ticker) {
+        setTicker(groupTicker);
+        prevGroupTickerRef.current = groupTicker; // Anchor to the new group ticker
+      } else {
+        prevGroupTickerRef.current = groupTicker; // Anchor at moment of joining
+      }
       return; 
     }
 

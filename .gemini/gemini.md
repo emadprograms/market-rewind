@@ -25,7 +25,8 @@ Market Rewind is a zero-read, local-first market replay tool.
         - **Force-Remount**: Charts now use a composite key `${layoutMode}-${i}` to ensure defaults are re-applied instantly upon layout switch.
     - **Grouped Symbol Linking System**: Replaced the global "Link" toggle with a multi-group synchronization system (Red, Blue, Green, Yellow). 
         - **Compact Group Selector**: Repositioned to the right-aligned action zone of each chart header. Utilizes a color-aware dropdown palette instead of a static dot cluster.
-        - **Deterministic Synchronization**: Implemented a double-anchor system that prevents "ticker snapping" when joining a group, while maintaining real-time sync for existing members.
+        - **Smart Joining**: Intuitive "follow the leader" behavior. Joining an occupied group automatically adopts that group's ticker, while joining an empty group allows the chart to become the new leader.
+        - **Deterministic Synchronization**: Uses a double-anchor system (`prevGroupColorRef`, `prevGroupTickerRef`) to prevent race conditions and "one-render-later" snaps during group transitions.
         - **Unified Update Path**: Ticker changes via both the UI dropdown and keyboard shortcuts (`A-Z`) are routed through a single handler to ensure 100% group synchronization.
         - **Ephemeral Groups**: Groups are dynamic; when the last chart leaves a group, that group's ticker memory is wiped, ensuring a blank slate for the next user.
         - **Visual Indicators**: Chart cards display a colored top border corresponding to their active group.
