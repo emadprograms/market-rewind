@@ -22,7 +22,6 @@ describe('Refactor Integration Stress Tests', () => {
         chartData: [],
         localMasterData: [],
         isReplayMode: false,
-        globalTime: '',
         isLoadingHistory: false,
         pendingHistoryPrependRef: { current: null },
         isDrawingMode: false,

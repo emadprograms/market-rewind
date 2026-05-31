@@ -4,7 +4,12 @@ import type {
     ISeriesPrimitive, 
     ISeriesPrimitivePaneRenderer, 
     ISeriesPrimitivePaneView,
-    Time
+    Time,
+    SeriesPrimitivePaneViewZOrder,
+    SeriesPrimitivePaneRendererScope,
+    ISeriesPrimitiveAttachedParams,
+    ITimeScaleApi,
+    CandlestickData
 } from 'lightweight-charts';
 import type { Timeframe } from '../types';
 
@@ -28,25 +33,40 @@ export function getSessionType(timestamp: number): 'PRE' | 'RTH' | 'POST' | 'OTH
   return 'OTHER';
 }
 
-class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
-  _data: any;
+interface ShadedBar {
+    time: Time;
+    x: number | null;
+    type: 'PRE' | 'RTH' | 'POST' | 'OTHER';
+}
 
-  constructor(data: any) {
+interface ShadingViewData {
+    bars: ShadedBar[];
+    barSpacing: number;
+    timeframe: Timeframe;
+}
+
+class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
+  _data: ShadingViewData | null;
+
+  constructor(data: ShadingViewData | null) {
     this._data = data;
   }
 
-  draw(target: any) {
-    target.useMediaCoordinateSpace((scope: any) => {
+  draw(target: SeriesPrimitivePaneRendererScope) {
+    target.useMediaCoordinateSpace((scope) => {
       const ctx = scope.context;
       if (!this._data || !this._data.bars || this._data.bars.length === 0) return;
       
-      const { bars, timeframe } = this._data;
+      const { bars, timeframe, barSpacing } = this._data;
       if (timeframe === '1D') return;
 
       ctx.save();
       
       for (const bar of bars) {
           const type = bar.type;
+          const x = bar.x;
+          if (x === null) continue;
+
           if (type === 'PRE') {
               ctx.fillStyle = 'rgba(255, 210, 0, 0.07)'; 
           } else if (type === 'POST') {
@@ -57,10 +77,8 @@ class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
               continue; 
           }
 
-          const x = bar.x;
-          const width = bar.width;
-          const halfWidth = width / 2;
-          ctx.fillRect(Math.round(x - halfWidth), 0, Math.ceil(width), scope.mediaSize.height);
+          const halfWidth = barSpacing / 2;
+          ctx.fillRect(Math.round(x - halfWidth), 0, Math.ceil(barSpacing), scope.mediaSize.height);
       }
       
       ctx.restore();
@@ -75,7 +93,7 @@ class SessionShadingPaneView implements ISeriesPrimitivePaneView {
     this._plugin = plugin;
   }
 
-  zOrder(): 'bottom' | 'normal' | 'top' {
+  zOrder(): SeriesPrimitivePaneViewZOrder {
     return 'bottom';
   }
 
@@ -92,7 +110,7 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
   _paneViews: SessionShadingPaneView[];
   _requestUpdate: () => void;
   
-  _cache: any = null;
+  _cache: ShadingViewData | null = null;
   _lastLogicalRange: { from: number; to: number } = { from: -1, to: -1 };
   _lastWidth: number = 0;
   _lastBarSpacing: number = 0;
@@ -108,9 +126,15 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     };
   }
 
-  attached({ chart, series, requestUpdate }: any) {
+  public setConfig(timeframe: Timeframe, isET: boolean) {
+    this._timeframe = timeframe;
+    this._isET = isET;
+    this.updateAllViews();
+  }
+
+  attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
     this._chart = chart;
-    this._series = series;
+    this._series = series as ISeriesApi<"Candlestick">;
     if (requestUpdate) {
         this._requestUpdate = requestUpdate;
     }
@@ -131,7 +155,7 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     return this._paneViews;
   }
 
-  _getViewData() {
+  _getViewData(): ShadingViewData | null {
     if (!this._isET || this._timeframe === '1D' || !this._series || !this._chart) return null;
 
     const timeScale = this._chart.timeScale();
@@ -154,7 +178,7 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     const fromIndex = Math.max(0, Math.floor(visibleRange.from ?? 0));
     const toIndex = Math.min(data.length, Math.ceil(visibleRange.to ?? 0));
     
-    const bars = [];
+    const bars: ShadedBar[] = [];
     
     for (let i = fromIndex; i < toIndex; i++) {
         const d = data[i];
@@ -162,13 +186,13 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
         bars.push({
             time: d.time,
             x: timeScale.timeToCoordinate(d.time),
-            width: barSpacing,
             type: getSessionType(d.time as number)
         });
     }
     
     this._cache = {
         bars,
+        barSpacing,
         timeframe: this._timeframe
     };
     this._lastLogicalRange = { from: visibleRange.from ?? 0, to: visibleRange.to ?? 0 };
@@ -178,4 +202,3 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     return this._cache;
   }
 }
-

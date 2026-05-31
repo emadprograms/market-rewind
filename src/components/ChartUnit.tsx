@@ -12,7 +12,6 @@ import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 
 export default function ChartUnit({ 
   id, 
-  globalTime, 
   selectedDate,
   isReplayMode, 
   tickers, 
@@ -44,7 +43,6 @@ export default function ChartUnit({
     initialEth, 
     selectedDate, 
     isReplayMode, 
-    globalTime, 
     groupColor, 
     groupTicker, 
     tickers, 
@@ -76,7 +74,6 @@ export default function ChartUnit({
     chartData: data.chartData,
     localMasterData: data.localMasterData,
     isReplayMode,
-    globalTime,
     isLoadingHistory: data.isLoadingHistory,
     pendingHistoryPrependRef: data.pendingHistoryPrependRef,
     isDrawingMode: keyboard.isDrawingMode,

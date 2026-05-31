@@ -4,23 +4,43 @@ import type {
     ISeriesPrimitive, 
     ISeriesPrimitivePaneRenderer, 
     ISeriesPrimitivePaneView,
-    Time
+    Time,
+    SeriesPrimitivePaneViewZOrder,
+    SeriesPrimitivePaneRendererScope,
+    ISeriesPrimitiveAttachedParams
 } from 'lightweight-charts';
 import type { RawBar } from '../types';
 
-class VolumeProfileRenderer implements ISeriesPrimitivePaneRenderer {
-    _data: any;
+interface VPBin {
+    y: number;
+    width: number;
+    isPOC: boolean;
+}
 
-    constructor(data: any) {
+interface VPRenderData {
+    bins: VPBin[];
+    viewportWidth: number;
+    boxHeight: number;
+}
+
+interface VPVisibleRange {
+    from: number;
+    to: number;
+}
+
+class VolumeProfileRenderer implements ISeriesPrimitivePaneRenderer {
+    _data: VPRenderData | null;
+
+    constructor(data: VPRenderData | null) {
         this._data = data;
     }
 
-    draw(target: any) {
-        target.useMediaCoordinateSpace((scope: any) => {
+    draw(target: SeriesPrimitivePaneRendererScope) {
+        target.useMediaCoordinateSpace((scope) => {
             const ctx = scope.context;
             if (!this._data || !this._data.bins || this._data.bins.length === 0) return;
             
-            const { bins, viewportWidth, boxHeight } = this._data;
+            const { bins, boxHeight } = this._data;
 
             ctx.save();
             ctx.globalAlpha = 0.85;
@@ -65,7 +85,7 @@ class VolumeProfilePaneView implements ISeriesPrimitivePaneView {
         this._plugin = plugin;
     }
 
-    zOrder(): 'bottom' | 'normal' | 'top' {
+    zOrder(): SeriesPrimitivePaneViewZOrder {
         return 'bottom'; 
     }
 
@@ -80,8 +100,8 @@ export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
     _paneViews: VolumeProfilePaneView[];
     _requestUpdate: () => void;
     _masterData: RawBar[];
-    _vpDataCache: any;
-    _lastLogicalRange: { from: number; to: number };
+    _vpDataCache: VPRenderData | null;
+    _lastLogicalRange: VPVisibleRange;
     _lastWidth: number;
     _enabled: boolean;
     _resizeHandler: () => void;
@@ -111,9 +131,9 @@ export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
         this._invalidateCache();
     }
 
-    attached({ chart, series, requestUpdate }: any) {
+    attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
         this._chart = chart;
-        this._series = series;
+        this._series = series as ISeriesApi<"Candlestick">;
         if (requestUpdate) {
             this._requestUpdate = requestUpdate;
         }
@@ -140,7 +160,7 @@ export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
         this._requestUpdate();
     }
 
-    _getViewData() {
+    _getViewData(): VPRenderData | null {
         if (!this._enabled || !this._chart || !this._series || this._masterData.length === 0) return null;
 
         try {
@@ -203,7 +223,7 @@ export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
             if (maxVol === 0) return null;
 
             const maxBarWidthPixels = viewportWidth * 0.25;
-            const renderBins = [];
+            const renderBins: VPBin[] = [];
 
             const yTop = this._series!.priceToCoordinate(maxPrice);
             const yBottom = this._series!.priceToCoordinate(minPrice);
@@ -233,7 +253,7 @@ export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
                 boxHeight
             };
             
-            this._lastLogicalRange = { from: visibleRange.from as number, to: visibleRange.to as number };
+            this._lastLogicalRange = { from: visibleRange.from ?? 0, to: visibleRange.to ?? 0 };
             this._lastWidth = viewportWidth;
 
             return this._vpDataCache;

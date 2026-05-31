@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { createChart, IChartApi, ISeriesApi, MouseEventParams, Time } from 'lightweight-charts';
-import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe } from '../types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createChart, IChartApi, ISeriesApi, MouseEventParams, Time, TickMarkType, IPriceLine, CandlestickData } from 'lightweight-charts';
+import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
 import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
 import { VolumeProfilePlugin } from '../lib/VolumeProfilePlugin';
 import { HorizontalRayPlugin } from '../lib/HorizontalRayPlugin';
 import { RectanglePlugin } from '../lib/RectanglePlugin';
 import { TradePlugin } from '../lib/TradePlugin';
+import { usePlaybackStore } from '../store/usePlaybackStore';
 
 interface UseChartLifecycleParams {
   chartContainerRef: React.RefObject<HTMLDivElement>;
@@ -17,9 +18,8 @@ interface UseChartLifecycleParams {
   chartData: ChartBar[];
   localMasterData: RawBar[];
   isReplayMode: boolean;
-  globalTime: string | null;
   isLoadingHistory: boolean;
-  pendingHistoryPrependRef: React.MutableRefObject<{ oldFirstTime: number | null; oldLogicalRange: any } | null>;
+  pendingHistoryPrependRef: React.MutableRefObject<HistoryPrependState | null>;
   isDrawingMode: boolean;
   drawType: DrawType;
   rectAnchor: RectPoint | null;
@@ -43,7 +43,6 @@ export function useChartLifecycle({
   chartData,
   localMasterData,
   isReplayMode,
-  globalTime,
   isLoadingHistory,
   pendingHistoryPrependRef,
   isDrawingMode,
@@ -59,6 +58,7 @@ export function useChartLifecycle({
   chartRef,
   priceSeriesRef,
 }: UseChartLifecycleParams) {
+  const globalTime = usePlaybackStore((state) => state.currentTime);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const tradePluginRef = useRef<TradePlugin | null>(null);
 
@@ -72,7 +72,7 @@ export function useChartLifecycle({
   
   const lastDataCountRef = useRef(0);
   const lastBarSpacingRef = useRef<number | null>(null);
-  const priceLineRef = useRef<any>(null);
+  const priceLineRef = useRef<IPriceLine | null>(null);
   const lastTickerRef = useRef(ticker);
   const lastTfRef = useRef(timeframe);
   const lastEthRef = useRef(showEth);
@@ -111,8 +111,8 @@ export function useChartLifecycle({
       },
       crosshair: { mode: 0 },
       localization: {
-        timeFormatter: (time: any) => {
-          const date = new Date(time * 1000);
+        timeFormatter: (time: Time) => {
+          const date = new Date((time as number) * 1000);
           if (timeframe === '1D') {
             return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' });
           }
@@ -125,8 +125,8 @@ export function useChartLifecycle({
         secondsVisible: false,
         shiftVisibleRangeOnNewBar: false,
         rightOffset: 15,
-        tickMarkFormatter: (time: any, tickMarkType: any) => {
-          const date = new Date(time * 1000);
+        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType) => {
+          const date = new Date((time as number) * 1000);
           if (tickMarkType <= 2) return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric' });
           return date.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
         }
@@ -330,8 +330,8 @@ export function useChartLifecycle({
     const tz = getTzForTicker(ticker);
     chartRef.current.applyOptions({
       localization: {
-        timeFormatter: (time: any) => {
-          const date = new Date(time * 1000);
+        timeFormatter: (time: Time) => {
+          const date = new Date((time as number) * 1000);
           if (timeframe === '1D') {
             return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' });
           }
@@ -340,8 +340,8 @@ export function useChartLifecycle({
       },
       timeScale: {
         timeVisible: timeframe !== '1D',
-        tickMarkFormatter: (time: any, tickMarkType: any) => {
-          const date = new Date(time * 1000);
+        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType) => {
+          const date = new Date((time as number) * 1000);
           if (tickMarkType <= 2) return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric' });
           return date.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
         }
@@ -477,9 +477,7 @@ export function useChartLifecycle({
     if (shadingPluginRef.current) {
         const tz = getTzForTicker(ticker);
         const isET = tz === 'America/New_York';
-        (shadingPluginRef.current as any)._timeframe = timeframe;
-        (shadingPluginRef.current as any)._isET = isET && showEth;
-        shadingPluginRef.current.updateAllViews();
+        shadingPluginRef.current.setConfig(timeframe, isET && showEth);
     }
   }, [ticker, timeframe, showEth]);
 
@@ -488,12 +486,11 @@ export function useChartLifecycle({
     if (!priceSeriesRef.current) return;
 
     if (timeframe === '1D' && globalTime && localMasterData.length > 0) {
-      const gtMs = new Date(globalTime).getTime();
       let lastPrice = null;
 
       for (let i = localMasterData.length - 1; i >= 0; i--) {
-        const barMs = new Date(localMasterData[i].time).getTime();
-        if (barMs <= gtMs) {
+        const barMs = new Date(localMasterData[i].time.replace(' ', 'T') + 'Z').getTime();
+        if (barMs <= globalTime) {
           lastPrice = localMasterData[i].close;
           break;
         }

@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import type { IChartApi, ISeriesApi } from 'lightweight-charts';
-import type { ChartBar, GroupColor, RawBar, Timeframe } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import type { IChartApi, ISeriesApi, LogicalRange, CandlestickData } from 'lightweight-charts';
+import type { ChartBar, GroupColor, RawBar, Timeframe, HistoryPrependState } from '../types';
 import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
 import { resampleData } from '../lib/resampling';
+import { usePlaybackStore } from '../store/usePlaybackStore';
 
 interface UseChartDataParams {
   initialTicker: string;
@@ -10,7 +11,6 @@ interface UseChartDataParams {
   initialEth: boolean;
   selectedDate: string;
   isReplayMode: boolean;
-  globalTime: string | null;
   groupColor: GroupColor;
   groupTicker?: string;
   tickers: string[];
@@ -27,7 +27,6 @@ export function useChartData({
   initialEth,
   selectedDate,
   isReplayMode,
-  globalTime,
   groupColor,
   groupTicker,
   tickers,
@@ -41,14 +40,24 @@ export function useChartData({
   const [timeframe, setTimeframe] = useState<Timeframe>(initialTf || '1D');
   const [showEth, setShowEth] = useState<boolean>(initialEth || false);
 
+  const globalTime = usePlaybackStore((state) => state.currentTime);
+
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const earliestLoadedDateRef = useRef<string | null>(null);
-  const pendingHistoryPrependRef = useRef<{ oldFirstTime: number | null; oldLogicalRange: any } | null>(null);
+  const pendingHistoryPrependRef = useRef<HistoryPrependState | null>(null);
 
   const dataTimeframeRef = useRef(timeframe);
+  const isFirstRender = useRef(true);
 
   // Group-to-Ticker Sync
   useEffect(() => {
+    // If this is the first render, we respect the initialTicker passed from session config
+    // and skip the group sync until a user actually changes a group or ticker later.
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
     if (groupColor !== 'none' && groupTicker && groupTicker !== ticker) {
       setTicker(groupTicker);
     }
@@ -93,14 +102,14 @@ export function useChartData({
     
     const timeScale = chartRef.current.timeScale();
     
-    const onVisibleLogicalRangeChanged = async (newLogicalRange: any) => {
+    const onVisibleLogicalRangeChanged = async (newLogicalRange: LogicalRange | null) => {
       if (!newLogicalRange) return;
       
       if (newLogicalRange.from < 100 && !isLoadingHistory && earliestLoadedDateRef.current) {
         setIsLoadingHistory(true);
         try {
           const oldLogicalRange = timeScale.getVisibleLogicalRange();
-          const currentChartBars = priceSeriesRef.current ? priceSeriesRef.current.data() : [];
+          const currentChartBars = priceSeriesRef.current ? (priceSeriesRef.current.data() as CandlestickData[]) : [];
           
           const chunk = await fetchHistoricalChunk(ticker, earliestLoadedDateRef.current, 30);
           
@@ -110,7 +119,7 @@ export function useChartData({
             let newData = [...chunk, ...localMasterData];
             
             pendingHistoryPrependRef.current = {
-                oldFirstTime: currentChartBars.length > 0 ? (currentChartBars[0] as any).time : null,
+                oldFirstTime: currentChartBars.length > 0 ? (currentChartBars[0].time as number) : null,
                 oldLogicalRange: oldLogicalRange
             };
             
@@ -134,8 +143,7 @@ export function useChartData({
     let filtered = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
     
     if (isReplayMode && globalTime) {
-      const gt = new Date(globalTime).getTime();
-      filtered = filtered.filter(d => new Date(d.time).getTime() <= gt);
+      filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
     }
     
     return resampleData(filtered, timeframe);

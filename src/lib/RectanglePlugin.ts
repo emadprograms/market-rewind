@@ -4,7 +4,11 @@ import type {
     ISeriesPrimitive, 
     ISeriesPrimitivePaneRenderer, 
     ISeriesPrimitivePaneView, 
-    Time 
+    Time,
+    SeriesPrimitivePaneViewZOrder,
+    SeriesPrimitivePaneRendererScope,
+    ISeriesPrimitiveAttachedParams,
+    ITimeScaleApi
 } from 'lightweight-charts';
 
 export interface Rectangle {
@@ -12,15 +16,26 @@ export interface Rectangle {
     p2: { price: number; time: string };
 }
 
-class RectangleRenderer implements ISeriesPrimitivePaneRenderer {
-    _data: any;
+interface RectCoords {
+    x1: number | null;
+    y1: number;
+    x2: number | null;
+    y2: number;
+}
 
-    constructor(data: any) {
+interface RectRenderData {
+    rects: RectCoords[];
+}
+
+class RectangleRenderer implements ISeriesPrimitivePaneRenderer {
+    _data: RectRenderData | null;
+
+    constructor(data: RectRenderData | null) {
         this._data = data;
     }
 
-    draw(target: any) {
-        target.useMediaCoordinateSpace((scope: any) => {
+    draw(target: SeriesPrimitivePaneRendererScope) {
+        target.useMediaCoordinateSpace((scope) => {
             const ctx = scope.context;
             if (!this._data || !this._data.rects || this._data.rects.length === 0) return;
 
@@ -35,8 +50,6 @@ class RectangleRenderer implements ISeriesPrimitivePaneRenderer {
                 let xStart = x1 === null ? -100 : x1;
                 let xEnd = x2 === null ? scope.mediaSize.width + 100 : x2;
                 
-                if (y1 === null || y2 === null) continue;
-
                 if (Math.abs(xStart - xEnd) < 1) {
                     xStart -= 3;
                     xEnd += 3;
@@ -65,7 +78,7 @@ class RectanglePaneView implements ISeriesPrimitivePaneView {
         this._plugin = plugin;
     }
 
-    zOrder(): 'top' | 'bottom' | 'normal' {
+    zOrder(): SeriesPrimitivePaneViewZOrder {
         return 'bottom';
     }
 
@@ -94,9 +107,9 @@ export class RectanglePlugin implements ISeriesPrimitive<Time> {
         this._requestUpdate();
     }
 
-    attached({ chart, series, requestUpdate }: any) {
+    attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
         this._chart = chart;
-        this._series = series;
+        this._series = series as ISeriesApi<"Candlestick">;
         if (requestUpdate) {
             this._requestUpdate = requestUpdate;
         }
@@ -115,7 +128,7 @@ export class RectanglePlugin implements ISeriesPrimitive<Time> {
         return this._paneViews;
     }
 
-    _getViewData() {
+    _getViewData(): RectRenderData | null {
         if (!this._chart || !this._series || this._rects.length === 0) return null;
 
         const timeScale = this._chart.timeScale();
@@ -131,13 +144,13 @@ export class RectanglePlugin implements ISeriesPrimitive<Time> {
             if (x1 === null) x1 = this._getClosestX(rect.p1.time, timeScale);
             if (x2 === null) x2 = this._getClosestX(rect.p2.time, timeScale);
 
-            return { x1, y1, x2, y2 };
-        }).filter(r => r !== null);
+            return { x1, y1, x2, y2 } as RectCoords;
+        }).filter((r): r is RectCoords => r !== null);
 
         return { rects: renderRects };
     }
 
-    _getClosestX(targetTime: string, timeScale: any): number | null {
+    _getClosestX(targetTime: string, timeScale: ITimeScaleApi<Time>): number | null {
         const data = this._series!.data();
         if (!data || data.length === 0) return null;
         
