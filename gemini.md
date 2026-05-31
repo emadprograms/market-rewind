@@ -36,11 +36,17 @@ All `lightweight-charts` plugin implementations were converted from JavaScript t
 *   `VolumeProfilePlugin.ts`
 *   `db.ts`, `resampling.ts`, `timezones.ts` were strictly typed.
 
-### 5. Application Orchestration (`src/App.tsx`)
-The top-level `App` component was converted to TypeScript, fully typing the unified replay engine, layout grid mapping, and persistent state logic. Added robust `localStorage` error handling and safety guards to prevent crashes from malformed persistent data. Integrated `ErrorBoundary` wrapping for all active replay charts to ensure application-wide stability.
+### 5. State Management (`src/store/`)
+Implemented **Zustand** for high-performance playback synchronization:
+*   `usePlaybackStore.ts`: Centralizes simulation state (currentTime, isPaused, playbackSpeed). This eliminates the global re-render bottleneck by allowing components to "Pull" state updates surgically.
+
+### 6. Application Orchestration (`src/App.tsx`)
+The top-level `App` component was converted to TypeScript, fully typing the unified replay engine, layout grid mapping, and persistent state logic. Added robust `localStorage` error handling and safety guards to prevent crashes from malformed persistent data. Integrated `ErrorBoundary` wrapping for all active replay charts to ensure application-wide stability. Eliminated the centralized "Push" model for playback updates, reducing `App.tsx` to a layout shell and offloading simulation logic to specialized components (`PlaybackBar`, `PlaybackManager`).
 
 ## Key Technical Decisions
-*   **No Global State:** Retained the prop-drilling architecture (ChartUnit passing handlers to children) to maintain the existing mental model of the application.
+*   **Hybrid State Architecture:** Maintained props-down architecture for static configuration (tickers, timeframes) while adopting **Zustand** specifically for high-frequency playback updates. This "Pull" model ensures that 1Hz simulation ticks only trigger re-renders in subscribing components (Replay Bar, Chart Hooks), protecting the expensive Layout Grid from unnecessary updates.
+*   **Autonomous Clock Engine:** Decoupled the playback timer from the React component lifecycle by encapsulating it in a store-driven `PlaybackManager`. This ensures consistent tick rates across multiple chart instances regardless of UI complexity.
+*   **Unix-Precision Timing:** Standardized on Unix timestamps (milliseconds) for the internal simulation clock. This avoids redundant string-to-date parsing during high-speed playback (2x-10x) and ensures perfect alignment across resampled timeframes.
 *   **Circular References Handled:** Solved circular dependencies between `useChartLifecycle` and `useTradeManager` through careful mapping of `MutableRefObject` inputs (e.g., `tradePluginRef`).
 *   **Compilation:** Eliminated `any` types where viable to ensure build safety. Project compiles and serves strictly over Vite using `npm run build`.
 *   **Global PnL Aggregation**: Implemented a synchronization pattern where individual `ChartUnit`s report their Realized and Unrealized PnL to the `App` component, which aggregates them in the bottom replay bar for a portfolio-wide view.

@@ -106,7 +106,6 @@ export type DrawType = 'ray' | 'rect';
 
 export interface ChartUnitProps {
   id: number;
-  globalTime: string | null;
   selectedDate: string;
   isReplayMode: boolean;
   tickers: string[];

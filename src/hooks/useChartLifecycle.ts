@@ -7,6 +7,7 @@ import { VolumeProfilePlugin } from '../lib/VolumeProfilePlugin';
 import { HorizontalRayPlugin } from '../lib/HorizontalRayPlugin';
 import { RectanglePlugin } from '../lib/RectanglePlugin';
 import { TradePlugin } from '../lib/TradePlugin';
+import { usePlaybackStore } from '../store/usePlaybackStore';
 
 interface UseChartLifecycleParams {
   chartContainerRef: React.RefObject<HTMLDivElement>;
@@ -17,7 +18,6 @@ interface UseChartLifecycleParams {
   chartData: ChartBar[];
   localMasterData: RawBar[];
   isReplayMode: boolean;
-  globalTime: string | null;
   isLoadingHistory: boolean;
   pendingHistoryPrependRef: React.MutableRefObject<{ oldFirstTime: number | null; oldLogicalRange: any } | null>;
   isDrawingMode: boolean;
@@ -43,7 +43,6 @@ export function useChartLifecycle({
   chartData,
   localMasterData,
   isReplayMode,
-  globalTime,
   isLoadingHistory,
   pendingHistoryPrependRef,
   isDrawingMode,
@@ -59,6 +58,7 @@ export function useChartLifecycle({
   chartRef,
   priceSeriesRef,
 }: UseChartLifecycleParams) {
+  const globalTime = usePlaybackStore((state) => state.currentTime);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const tradePluginRef = useRef<TradePlugin | null>(null);
 
@@ -485,12 +485,11 @@ export function useChartLifecycle({
     if (!priceSeriesRef.current) return;
 
     if (timeframe === '1D' && globalTime && localMasterData.length > 0) {
-      const gtMs = new Date(globalTime).getTime();
       let lastPrice = null;
 
       for (let i = localMasterData.length - 1; i >= 0; i--) {
-        const barMs = new Date(localMasterData[i].time).getTime();
-        if (barMs <= gtMs) {
+        const barMs = new Date(localMasterData[i].time.replace(' ', 'T') + 'Z').getTime();
+        if (barMs <= globalTime) {
           lastPrice = localMasterData[i].close;
           break;
         }

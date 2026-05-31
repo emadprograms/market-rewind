@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink } from 'lucide-react';
+import { Play, Activity, HardDrive, Database, UploadCloud, ExternalLink } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
 import ErrorBoundary from './components/ErrorBoundary';
+import { PlaybackBar } from './components/PlaybackBar';
+import { PlaybackManager } from './components/PlaybackManager';
+import { usePlaybackStore } from './store/usePlaybackStore';
 import { fetchTickers, fetchMarketData, loadDatabaseFromFile, initDB } from './lib/db';
 import { getTzForTicker, getTzLabel } from './lib/timezones';
 import type { Timeframe, RawBar, AllDrawings, GroupColor } from './types';
@@ -12,10 +15,6 @@ export default function App() {
   // --- Global State ---
   const [tickers, setTickers] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('lastUsedDate') || TODAY);
-  const [masterData, setMasterData] = useState<RawBar[]>([]);
-  const [currentTime, setCurrentTime] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [layoutMode, setLayoutMode] = useState('2v');
   const [isLoading, setIsLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('Checking storage...');
@@ -23,6 +22,13 @@ export default function App() {
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [entryTime, setEntryTime] = useState('09:20');
   const [sessionTicker, setSessionTicker] = useState<string>(() => localStorage.getItem('lastUsedTicker') || 'SPY');
+
+  // --- Playback Store ---
+  const masterData = usePlaybackStore((state) => state.masterData);
+  const setMasterData = usePlaybackStore((state) => state.setMasterData);
+  const setCurrentTime = usePlaybackStore((state) => state.setCurrentTime);
+  const setPaused = usePlaybackStore((state) => state.setPaused);
+  const setStepMinutes = usePlaybackStore((state) => state.setStepMinutes);
   
   const [groupTickers, setGroupTickers] = useState<Record<string, string>>(() => {
     try {
@@ -188,90 +194,28 @@ export default function App() {
     if (data.length > 0) {
       const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
       const startBar = data.find((d: any) => d.time >= targetTimeStr) || data[data.length - 1];
-      setCurrentTime(startBar ? (startBar as any).time : null);
+      if (startBar) {
+        setCurrentTime(new Date(startBar.time.replace(' ', 'T') + 'Z').getTime());
+      }
     } else {
       setCurrentTime(null);
     }
     setIsLoading(false);
   }
 
-  const advanceTime = (prev: string | null, stepMinutes: number) => {
-    if (!prev || masterData.length === 0) return prev;
-    const prevMs = new Date(prev.replace(' ', 'T') + 'Z').getTime();
-    const targetMs = prevMs + stepMinutes * 60000;
-    const targetStr = new Date(targetMs).toISOString().replace('T', ' ').slice(0, 19);
-    const nextBar = masterData.find(d => d.time >= targetStr);
-    if (nextBar && nextBar.time !== prev) return nextBar.time;
-    return null;
-  };
-
-  const rewindTime = (prev: string | null, stepMinutes: number) => {
-    if (!prev || masterData.length === 0) return prev;
-    const prevMs = new Date(prev.replace(' ', 'T') + 'Z').getTime();
-    const targetMs = prevMs - stepMinutes * 60000;
-    const targetStr = new Date(targetMs).toISOString().replace('T', ' ').slice(0, 19);
-    let best = null;
-    for (let i = masterData.length - 1; i >= 0; i--) {
-      if (masterData[i].time <= targetStr) {
-        best = masterData[i].time;
-        break;
-      }
+  const handleResetToOpen = () => {
+    const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
+    const startBar = masterData.find(d => d.time >= targetTimeStr) || masterData[masterData.length - 1];
+    if (startBar) {
+      setCurrentTime(new Date(startBar.time.replace(' ', 'T') + 'Z').getTime());
     }
-    return best || masterData[0].time;
+    setPaused(true);
   };
 
   useEffect(() => {
-    if (isPlaying && masterData.length > 0) {
-      playbackRef.current = setInterval(() => {
-        setCurrentTime((prev) => {
-          const next = advanceTime(prev, activeStepMinutes);
-          if (next === null) {
-            setIsPlaying(false);
-            return prev;
-          }
-          return next;
-        });
-      }, 1000 / playbackSpeed);
-    } else {
-      clearInterval(playbackRef.current);
-    }
-    return () => clearInterval(playbackRef.current);
-  }, [isPlaying, playbackSpeed, masterData, activeStepMinutes]);
+    setStepMinutes(activeStepMinutes);
+  }, [activeStepMinutes, setStepMinutes]);
 
-  const togglePlay = () => setIsPlaying(!isPlaying);
-  
-  const resetToOpen = () => {
-    const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
-    const startBar = masterData.find(d => d.time >= targetTimeStr) || masterData[masterData.length - 1];
-    if (startBar) setCurrentTime(startBar.time);
-    setIsPlaying(false);
-  };
-
-  const stepForward = () => {
-    const next = advanceTime(currentTime, activeStepMinutes);
-    if (next) setCurrentTime(next);
-  };
- 
-  const stepBackward = () => {
-    const prev = rewindTime(currentTime, activeStepMinutes);
-    if (prev) setCurrentTime(prev);
-  };
-
-  const formatDisplayTime = (isoStr: string | null) => {
-    if (!isoStr) return '--:--:--';
-    const tz = getTzForTicker(sessionTicker);
-    const label = getTzLabel(tz);
-
-    const date = new Date(isoStr.replace(' ', 'T') + 'Z');
-    return date.toLocaleString('en-US', { 
-      timeZone: tz,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    }) + ` ${label}`;
-  };
-  
   const handleUpdateDrawings = (ticker: string, type: 'rays' | 'rects', items: any[]) => {
     setDrawings(prev => ({
       ...prev,
@@ -523,7 +467,6 @@ export default function App() {
                       initialEth={initialEth}
                       selectedDate={selectedDate} 
                       isReplayMode={isSessionStarted}
-                      globalTime={currentTime}
                       isMaximized={maximizedId === i}
                       onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
                       allDrawings={drawings}
@@ -571,70 +514,15 @@ export default function App() {
           )}
         </main>
 
-        <div className="playback-bar" style={{ paddingLeft: '16px' }}>
-          
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '12px', 
-            fontSize: '0.75rem', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-            marginRight: '20px', paddingRight: '20px', borderRight: '1px solid rgba(255,255,255,0.1)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>R:</span>
-              <span style={{ color: totalRealized >= 0 ? '#26a69a' : '#ef5350' }}>
-                {totalRealized >= 0 ? '+' : ''}{totalRealized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>U:</span>
-              <span style={{ color: totalUnrealized >= 0 ? '#26a69a' : '#ef5350' }}>
-                {totalUnrealized >= 0 ? '+' : ''}{totalUnrealized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-          </div>
-
-          <div className="time-display">
-            {formatDisplayTime(currentTime)}
-          </div>
-
-          <div className="playback-controls">
-            <button className="btn-icon" onClick={stepBackward}><SkipBack size={20} /></button>
-            <button className="btn-primary" onClick={togglePlay} disabled={!isDbLoaded || masterData.length === 0}>
-              {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-              {isPlaying ? 'PAUSE' : 'PLAY'}
-            </button>
-            <button className="btn-icon" onClick={stepForward}><SkipForward size={20} /></button>
-            <button className="btn-icon" onClick={resetToOpen} title="Reset to Market Open"><RotateCcw size={20} /></button>
-          </div>
-
-           <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-            <span style={{fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em'}}>STEP</span>
-            <select 
-              value={manualStepMinutes === null ? 'auto' : manualStepMinutes.toString()} 
-              onChange={(e) => setManualStepMinutes(e.target.value === 'auto' ? null : parseInt(e.target.value))}
-              style={{width: 'auto', padding: '2px 4px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-green)', background: 'rgba(0,0,0,0.2)'}}
-            >
-              <option value="auto">Auto ({minStepMinutes >= 1440 ? '1D' : minStepMinutes >= 60 ? `${minStepMinutes / 60}H` : `${minStepMinutes}m`})</option>
-              <option value="1">1m</option>
-              <option value="5">5m</option>
-              <option value="15">15m</option>
-              <option value="30">30m</option>
-              <option value="60">1 H</option>
-              <option value="1440">1 D</option>
-            </select>
-          </div>
-
-
-          <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-            <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>SPEED</span>
-            <select value={playbackSpeed} onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))} style={{width: 'auto'}}>
-              <option value={0.5}>0.5x</option>
-              <option value={1}>1.0x</option>
-              <option value={2}>2.0x</option>
-              <option value={5}>5.0x</option>
-              <option value={10}>10.0x</option>
-            </select>
-          </div>
-        </div>
+        <PlaybackBar
+          totalRealized={totalRealized}
+          totalUnrealized={totalUnrealized}
+          isDbLoaded={isDbLoaded}
+          sessionTicker={sessionTicker}
+          onResetToOpen={handleResetToOpen}
+          minStepMinutes={minStepMinutes}
+        />
+        <PlaybackManager />
       </div>
     </div>
   );
