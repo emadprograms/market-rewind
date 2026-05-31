@@ -85,7 +85,9 @@ describe('useTradeManager', () => {
     });
 
     // Set size to 5 and place Short
-    rerender({ ...mockRefs, tradeSize: 5 });
+    act(() => {
+        result.current.setTradeSize(5);
+    });
     
     act(() => {
       result.current.placeOrder('short');

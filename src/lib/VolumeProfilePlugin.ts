@@ -151,16 +151,16 @@ export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
             const viewportWidth = timeScale.width();
 
             if (this._vpDataCache && 
-                Math.abs(this._lastLogicalRange.from - visibleRange.from!) < 0.5 && 
-                Math.abs(this._lastLogicalRange.to - visibleRange.to!) < 0.5 &&
+                Math.abs(this._lastLogicalRange.from - (visibleRange.from ?? 0)) < 0.5 && 
+                Math.abs(this._lastLogicalRange.to - (visibleRange.to ?? 0)) < 0.5 &&
                 this._lastWidth === viewportWidth
             ) {
                 return this._vpDataCache;
             }
 
             const data = this._masterData;
-            const fromIndex = Math.max(0, Math.floor(visibleRange.from!));
-            const toIndex = Math.min(data.length - 1, Math.ceil(visibleRange.to!));
+            const fromIndex = Math.max(0, Math.floor(visibleRange.from ?? 0));
+            const toIndex = Math.min(data.length - 1, Math.ceil(visibleRange.to ?? 0));
             
             if (toIndex <= fromIndex) return null;
 

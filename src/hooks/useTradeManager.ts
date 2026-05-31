@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ISeriesApi } from 'lightweight-charts';
 import type { ActiveTrade, ChartBar, TradeType } from '../types';
 import type { TradePlugin } from '../lib/TradePlugin';

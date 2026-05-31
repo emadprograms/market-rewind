@@ -36,10 +36,14 @@ describe('useTradeManager STRESS TESTS', () => {
   });
 
   it('should handle zero or negative trade size gracefully', () => {
-    const { result, rerender } = renderHook(
+    const { result } = renderHook(
         (props) => useTradeManager(props),
-        { initialProps: { ...mockRefs, tradeSize: 0 } }
+        { initialProps: mockRefs }
     );
+
+    act(() => {
+        result.current.setTradeSize(0);
+    });
 
     act(() => {
       result.current.placeOrder('long');

@@ -136,7 +136,6 @@ export function useChartLifecycle({
     });
 
     chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(() => {
-        setChartUpdateTick(t => t + 1);
         if (!chartRef.current) return;
         const ts = chartRef.current.timeScale();
         lastBarSpacingRef.current = ts.options().barSpacing;
@@ -146,7 +145,11 @@ export function useChartLifecycle({
             const bars = priceSeriesRef.current?.data() || [];
             if (bars.length > 0) {
                 const lastBarIndex = bars.length - 1;
-                setIsAtEnd(logicalRange.to >= lastBarIndex - 0.5);
+                const newAtEnd = logicalRange.to >= lastBarIndex - 0.5;
+                setIsAtEnd(prev => {
+                    if (prev !== newAtEnd) return newAtEnd;
+                    return prev;
+                });
             }
         }
     });

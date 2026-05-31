@@ -8,15 +8,15 @@ import type {
 } from 'lightweight-charts';
 import type { Timeframe } from '../types';
 
+const formatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  hour: 'numeric',
+  minute: 'numeric',
+  hour12: false
+});
+
 export function getSessionType(timestamp: number): 'PRE' | 'RTH' | 'POST' | 'OTHER' {
   const date = new Date(timestamp * 1000);
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    hour: 'numeric',
-    minute: 'numeric',
-    hour12: false
-  });
-  
   const parts = formatter.formatToParts(date);
   const hour = parseInt(parts.find(p => p.type === 'hour')!.value);
   const minute = parseInt(parts.find(p => p.type === 'minute')!.value);
@@ -38,18 +38,15 @@ class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
   draw(target: any) {
     target.useMediaCoordinateSpace((scope: any) => {
       const ctx = scope.context;
-      if (!this._data || this._data.visibleRange === null) return;
+      if (!this._data || !this._data.bars || this._data.bars.length === 0) return;
       
-      const { bars, timeframe, visibleRange } = this._data;
+      const { bars, timeframe } = this._data;
       if (timeframe === '1D') return;
 
       ctx.save();
       
-      for (let i = visibleRange.from; i < visibleRange.to; i++) {
-          const bar = bars[i];
-          if (!bar) continue;
-          
-          const type = getSessionType(bar.time as number);
+      for (const bar of bars) {
+          const type = bar.type;
           if (type === 'PRE') {
               ctx.fillStyle = 'rgba(255, 210, 0, 0.07)'; 
           } else if (type === 'POST') {
@@ -94,6 +91,11 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
   _series: ISeriesApi<"Candlestick"> | null;
   _paneViews: SessionShadingPaneView[];
   _requestUpdate: () => void;
+  
+  _cache: any = null;
+  _lastLogicalRange: { from: number; to: number } = { from: -1, to: -1 };
+  _lastWidth: number = 0;
+  _lastBarSpacing: number = 0;
 
   constructor(timeframe: Timeframe, isET: boolean) {
     this._timeframe = timeframe;
@@ -117,9 +119,11 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
   detached() {
     this._chart = null;
     this._series = null;
+    this._cache = null;
   }
 
   updateAllViews() {
+    this._cache = null;
     this._requestUpdate();
   }
 
@@ -134,19 +138,44 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     const visibleRange = timeScale.getVisibleLogicalRange();
     if (!visibleRange) return null;
 
+    const viewportWidth = timeScale.width();
+    const barSpacing = timeScale.options().barSpacing || 6;
+
+    if (this._cache && 
+        Math.abs(this._lastLogicalRange.from - (visibleRange.from ?? 0)) < 0.5 && 
+        Math.abs(this._lastLogicalRange.to - (visibleRange.to ?? 0)) < 0.5 &&
+        this._lastWidth === viewportWidth &&
+        this._lastBarSpacing === barSpacing
+    ) {
+        return this._cache;
+    }
+
     const data = this._series.data();
+    const fromIndex = Math.max(0, Math.floor(visibleRange.from ?? 0));
+    const toIndex = Math.min(data.length, Math.ceil(visibleRange.to ?? 0));
     
-    return {
-        bars: data.map((d: any) => ({
+    const bars = [];
+    
+    for (let i = fromIndex; i < toIndex; i++) {
+        const d = data[i];
+        if (!d) continue;
+        bars.push({
             time: d.time,
             x: timeScale.timeToCoordinate(d.time),
-            width: timeScale.options().barSpacing || 6
-        })),
-        timeframe: this._timeframe,
-        visibleRange: {
-            from: Math.max(0, Math.floor(visibleRange.from as number)),
-            to: Math.min(data.length, Math.ceil(visibleRange.to as number))
-        }
+            width: barSpacing,
+            type: getSessionType(d.time as number)
+        });
+    }
+    
+    this._cache = {
+        bars,
+        timeframe: this._timeframe
     };
+    this._lastLogicalRange = { from: visibleRange.from ?? 0, to: visibleRange.to ?? 0 };
+    this._lastWidth = viewportWidth;
+    this._lastBarSpacing = barSpacing;
+
+    return this._cache;
   }
 }
+
