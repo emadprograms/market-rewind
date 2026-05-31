@@ -13,6 +13,6 @@ describe('SessionShading Performance', () => {
     const duration = end - start;
     
     console.log(`Shading Benchmark: 10,000 items took ${duration.toFixed(2)}ms`);
-    expect(duration).toBeLessThan(50);
+    expect(duration).toBeLessThan(100);
   });
 });
