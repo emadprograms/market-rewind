@@ -15,17 +15,15 @@ import type { Timeframe } from '../types';
 
 const formatter = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York',
-  hour: 'numeric',
-  minute: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
   hour12: false
 });
 
 export function getSessionType(timestamp: number): 'PRE' | 'RTH' | 'POST' | 'OTHER' {
   const date = new Date(timestamp * 1000);
-  const parts = formatter.formatToParts(date);
-  const hour = parseInt(parts.find(p => p.type === 'hour')!.value);
-  const minute = parseInt(parts.find(p => p.type === 'minute')!.value);
-  const totalMinutes = hour * 60 + minute;
+  const [hourStr, minuteStr] = formatter.format(date).split(':');
+  const totalMinutes = parseInt(hourStr, 10) * 60 + parseInt(minuteStr, 10);
   
   if (totalMinutes >= 240 && totalMinutes < 570) return 'PRE';
   if (totalMinutes >= 570 && totalMinutes < 960) return 'RTH';
