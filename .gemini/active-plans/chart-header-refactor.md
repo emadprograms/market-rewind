@@ -30,19 +30,19 @@ The header will be divided into three distinct zones:
 **Zone A: Primary Controls (Always Visible)**
 - Ticker Select
 - Timeframe Select
-- **Group Selector (Dropdown)**: Replaces the dot cluster with a compact, labeled dropdown.
 
 **Zone B: Unified Settings Menu (Icon-Only Dropdown)**
-A single, gear-icon triggered menu containing three categorized sections:
+A single, icon-triggered menu containing three categorized sections:
 1.  **Analysis**: ETH Toggle, Volume Profile (VP) Toggle.
 2.  **Tools**: Horizontal Ray, Rectangle (with shortcut hints).
 3.  **Danger Zone**: Clear All Drawings (visually distinct).
 
-**Zone C: Window Actions (Right Aligned)**
+**Zone C: Window & Action Controls (Right Aligned)**
+- **Group Selector (Dropdown)**: Compact, labeled dropdown with dynamic color borders.
 - Maximize/Minimize Button
 
 ### 3.2 Visual Blueprint
-`[ Ticker ▾ ] [ Timeframe ▾ ] [ Group ▾ ] [ ⚙️ ▾ ] ... [ Max/Min ]`
+`[ Ticker ▾ ] [ Timeframe ▾ ] [ ⚙️ ▾ ] ... [ Group ▾ ] [ Max/Min ]`
 
 ## 4. Implementation Detail
 

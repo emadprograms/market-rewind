@@ -145,63 +145,6 @@ export function ChartHeader({
           )}
         </div>
 
-        {/* REFACTORED GROUP PICKER (DROPDOWN) */}
-        <div className="custom-dropdown-container" ref={groupRef}>
-          <div 
-            className={`custom-select ${isGroupOpen ? 'active' : ''} ${groupColor !== 'none' ? 'group-active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsGroupOpen(!isGroupOpen);
-            }}
-            style={{
-              // @ts-ignore
-              '--group-color': groupColor !== 'none' ? BORDER_COLORS[groupColor] : 'transparent',
-              // @ts-ignore
-              '--group-rgb': groupColor !== 'none' ? GROUP_RGB[groupColor] : '0,0,0'
-            }}
-          >
-            <div 
-              style={{ 
-                width: '8px', 
-                height: '8px', 
-                borderRadius: '50%', 
-                backgroundColor: groupColor !== 'none' ? BORDER_COLORS[groupColor] : '#555' 
-              }} 
-            />
-            <span style={{fontWeight: '600'}}>Group</span>
-            <ChevronDown size={14} className="text-secondary" />
-          </div>
-
-          {isGroupOpen && (
-            <div className="dropdown-menu" style={{minWidth: '120px'}}>
-              <div className="dropdown-items">
-                {(['red', 'blue', 'green', 'yellow', 'none'] as GroupColor[]).map(color => (
-                  <div 
-                    key={color} 
-                    className={`dropdown-item ${color === groupColor ? 'selected' : ''}`}
-                    onClick={() => {
-                      onGroupChange && onGroupChange(color);
-                      setIsGroupOpen(false);
-                    }}
-                  >
-                    <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                      <div 
-                        style={{ 
-                          width: '10px', 
-                          height: '10px', 
-                          borderRadius: '50%', 
-                          backgroundColor: color === 'none' ? '#555' : BORDER_COLORS[color as Exclude<GroupColor, 'none'>] 
-                        }} 
-                      />
-                      <span>{color.charAt(0).toUpperCase() + color.slice(1)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* ZONE B: SETTINGS DROPDOWN (ICON ONLY) */}
         <div className="custom-dropdown-container" ref={settingsRef}>
           <div 
@@ -304,13 +247,71 @@ export function ChartHeader({
         </div>
       </div>
       
-      {/* ZONE C: WINDOW ACTIONS */}
-      <div className="chart-actions">
+      {/* ZONE C: WINDOW & ACTION CONTROLS */}
+      <div className="chart-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {/* REFACTORED GROUP PICKER (DROPDOWN) - MOVED TO RIGHT */}
+        <div className="custom-dropdown-container" ref={groupRef}>
+          <div 
+            className={`custom-select ${isGroupOpen ? 'active' : ''} ${groupColor !== 'none' ? 'group-active' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsGroupOpen(!isGroupOpen);
+            }}
+            style={{
+              // @ts-ignore
+              '--group-color': groupColor !== 'none' ? BORDER_COLORS[groupColor] : 'transparent',
+              // @ts-ignore
+              '--group-rgb': groupColor !== 'none' ? GROUP_RGB[groupColor] : '0,0,0'
+            }}
+          >
+            <div 
+              style={{ 
+                width: '8px', 
+                height: '8px', 
+                borderRadius: '50%', 
+                backgroundColor: groupColor !== 'none' ? BORDER_COLORS[groupColor] : '#555' 
+              }} 
+            />
+            <span style={{fontWeight: '600'}}>Group</span>
+            <ChevronDown size={14} className="text-secondary" />
+          </div>
+
+          {isGroupOpen && (
+            <div className="dropdown-menu" style={{minWidth: '120px', left: 'auto', right: 0}}>
+              <div className="dropdown-items">
+                {(['red', 'blue', 'green', 'yellow', 'none'] as GroupColor[]).map(color => (
+                  <div 
+                    key={color} 
+                    className={`dropdown-item ${color === groupColor ? 'selected' : ''}`}
+                    onClick={() => {
+                      onGroupChange && onGroupChange(color);
+                      setIsGroupOpen(false);
+                    }}
+                  >
+                    <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                      <div 
+                        style={{ 
+                          width: '10px', 
+                          height: '10px', 
+                          borderRadius: '50%', 
+                          backgroundColor: color === 'none' ? '#555' : BORDER_COLORS[color as Exclude<GroupColor, 'none'>] 
+                        }} 
+                      />
+                      <span>{color.charAt(0).toUpperCase() + color.slice(1)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
          <button className="btn-icon" onClick={onToggleMaximize} title={isMaximized ? "Minimize" : "Maximize"}>
            {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
          </button>
       </div>
     </div>
+
 
   );
 }
