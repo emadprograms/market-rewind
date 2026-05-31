@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v7.7 - Chart Header Refactor & UI Polish)
+## Project State: COMPLETED (v7.8 - Group Sync Stabilization)
 
 Market Rewind is a zero-read, local-first market replay tool.
 

@@ -36,14 +36,6 @@ export default function ChartUnit({
 
   const [showVP, setShowVP] = React.useState(false);
 
-  // Unified Ticker Updater
-  const handleTickerUpdate = React.useCallback((newTicker: string) => {
-    data.setTicker(newTicker);
-    if (onTickerChange) {
-      onTickerChange(newTicker);
-    }
-  }, [data, onTickerChange]);
-
   // 1. Data management
   const data = useChartData({ 
     initialTicker, 
@@ -60,6 +52,14 @@ export default function ChartUnit({
     onTickerChange, 
     id 
   });
+
+  // Unified Ticker Updater
+  const handleTickerUpdate = React.useCallback((newTicker: string) => {
+    data.setTicker(newTicker);
+    if (onTickerChange) {
+      onTickerChange(newTicker);
+    }
+  }, [data, onTickerChange]);
 
 
   // 2. Keyboard & Drawing state
