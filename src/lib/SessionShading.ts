@@ -4,7 +4,10 @@ import type {
     ISeriesPrimitive, 
     ISeriesPrimitivePaneRenderer, 
     ISeriesPrimitivePaneView,
-    Time
+    Time,
+    SeriesPrimitivePaneViewZOrder,
+    SeriesPrimitivePaneRendererScope,
+    ISeriesPrimitiveAttachedParams
 } from 'lightweight-charts';
 import type { Timeframe } from '../types';
 
@@ -28,15 +31,30 @@ export function getSessionType(timestamp: number): 'PRE' | 'RTH' | 'POST' | 'OTH
   return 'OTHER';
 }
 
-class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
-  _data: any;
+interface ShadingBar {
+    time: number;
+    x: number | null;
+    width: number;
+}
 
-  constructor(data: any) {
+interface ShadingViewData {
+    bars: ShadingBar[];
+    timeframe: Timeframe;
+    visibleRange: {
+        from: number;
+        to: number;
+    };
+}
+
+class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
+  _data: ShadingViewData | null;
+
+  constructor(data: ShadingViewData | null) {
     this._data = data;
   }
 
-  draw(target: any) {
-    target.useMediaCoordinateSpace((scope: any) => {
+  draw(target: SeriesPrimitivePaneRendererScope) {
+    target.useMediaCoordinateSpace((scope) => {
       const ctx = scope.context;
       if (!this._data || this._data.visibleRange === null) return;
       
@@ -47,9 +65,9 @@ class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
       
       for (let i = visibleRange.from; i < visibleRange.to; i++) {
           const bar = bars[i];
-          if (!bar) continue;
+          if (!bar || bar.x === null) continue;
           
-          const type = getSessionType(bar.time as number);
+          const type = getSessionType(bar.time);
           if (type === 'PRE') {
               ctx.fillStyle = 'rgba(255, 210, 0, 0.07)'; 
           } else if (type === 'POST') {
@@ -78,7 +96,7 @@ class SessionShadingPaneView implements ISeriesPrimitivePaneView {
     this._plugin = plugin;
   }
 
-  zOrder(): 'bottom' | 'normal' | 'top' {
+  zOrder(): SeriesPrimitivePaneViewZOrder {
     return 'bottom';
   }
 
@@ -106,9 +124,15 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     };
   }
 
-  attached({ chart, series, requestUpdate }: any) {
+  public setConfig(timeframe: Timeframe, isET: boolean) {
+    this._timeframe = timeframe;
+    this._isET = isET;
+    this.updateAllViews();
+  }
+
+  attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
     this._chart = chart;
-    this._series = series;
+    this._series = series as ISeriesApi<"Candlestick">;
     if (requestUpdate) {
         this._requestUpdate = requestUpdate;
     }
@@ -127,7 +151,7 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     return this._paneViews;
   }
 
-  _getViewData() {
+  _getViewData(): ShadingViewData | null {
     if (!this._isET || this._timeframe === '1D' || !this._series || !this._chart) return null;
 
     const timeScale = this._chart.timeScale();
@@ -137,15 +161,15 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     const data = this._series.data();
     
     return {
-        bars: data.map((d: any) => ({
-            time: d.time,
+        bars: data.map((d) => ({
+            time: d.time as number,
             x: timeScale.timeToCoordinate(d.time),
             width: timeScale.options().barSpacing || 6
         })),
         timeframe: this._timeframe,
         visibleRange: {
-            from: Math.max(0, Math.floor(visibleRange.from as number)),
-            to: Math.min(data.length, Math.ceil(visibleRange.to as number))
+            from: Math.max(0, Math.floor(visibleRange.from)),
+            to: Math.min(data.length, Math.ceil(visibleRange.to))
         }
     };
   }

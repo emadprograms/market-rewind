@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { IChartApi, ISeriesApi } from 'lightweight-charts';
-import type { ChartBar, GroupColor, RawBar, Timeframe } from '../types';
+import type { IChartApi, ISeriesApi, LogicalRange, CandlestickData } from 'lightweight-charts';
+import type { ChartBar, GroupColor, RawBar, Timeframe, HistoryPrependState } from '../types';
 import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
 import { resampleData } from '../lib/resampling';
 import { usePlaybackStore } from '../store/usePlaybackStore';
@@ -44,7 +44,7 @@ export function useChartData({
 
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const earliestLoadedDateRef = useRef<string | null>(null);
-  const pendingHistoryPrependRef = useRef<{ oldFirstTime: number | null; oldLogicalRange: any } | null>(null);
+  const pendingHistoryPrependRef = useRef<HistoryPrependState | null>(null);
 
   const dataTimeframeRef = useRef(timeframe);
   const isFirstRender = useRef(true);
@@ -102,14 +102,14 @@ export function useChartData({
     
     const timeScale = chartRef.current.timeScale();
     
-    const onVisibleLogicalRangeChanged = async (newLogicalRange: any) => {
+    const onVisibleLogicalRangeChanged = async (newLogicalRange: LogicalRange | null) => {
       if (!newLogicalRange) return;
       
       if (newLogicalRange.from < 100 && !isLoadingHistory && earliestLoadedDateRef.current) {
         setIsLoadingHistory(true);
         try {
           const oldLogicalRange = timeScale.getVisibleLogicalRange();
-          const currentChartBars = priceSeriesRef.current ? priceSeriesRef.current.data() : [];
+          const currentChartBars = priceSeriesRef.current ? (priceSeriesRef.current.data() as CandlestickData[]) : [];
           
           const chunk = await fetchHistoricalChunk(ticker, earliestLoadedDateRef.current, 30);
           
@@ -119,7 +119,7 @@ export function useChartData({
             let newData = [...chunk, ...localMasterData];
             
             pendingHistoryPrependRef.current = {
-                oldFirstTime: currentChartBars.length > 0 ? (currentChartBars[0] as any).time : null,
+                oldFirstTime: currentChartBars.length > 0 ? (currentChartBars[0].time as number) : null,
                 oldLogicalRange: oldLogicalRange
             };
             

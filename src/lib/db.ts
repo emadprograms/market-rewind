@@ -1,9 +1,9 @@
 import initSqlJs from "sql.js";
-import type { Database } from "sql.js";
+import type { Database, SqlJsStatic } from "sql.js";
 import type { RawBar } from "../types";
 
 let dbInstance: Database | null = null;
-let SQL: any = null;
+let SQL: SqlJsStatic | null = null;
 
 async function getSqlJs() {
   if (SQL) return SQL;

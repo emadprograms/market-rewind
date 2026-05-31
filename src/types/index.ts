@@ -1,7 +1,12 @@
 import React from 'react';
-import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, Time, LogicalRange } from 'lightweight-charts';
 
 // --- Market Data ---
+
+export interface HistoryPrependState {
+  oldFirstTime: number | null;
+  oldLogicalRange: LogicalRange | null;
+}
 
 /** Raw 1-minute bar from the database */
 export interface RawBar {

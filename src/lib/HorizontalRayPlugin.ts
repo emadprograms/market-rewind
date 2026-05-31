@@ -4,7 +4,11 @@ import type {
     ISeriesPrimitive, 
     ISeriesPrimitivePaneRenderer, 
     ISeriesPrimitivePaneView, 
-    Time 
+    Time,
+    SeriesPrimitivePaneViewZOrder,
+    SeriesPrimitivePaneRendererScope,
+    ISeriesPrimitiveAttachedParams,
+    ITimeScaleApi
 } from 'lightweight-charts';
 
 export interface HorizontalRay {
@@ -12,15 +16,24 @@ export interface HorizontalRay {
     time: string;
 }
 
-class HorizontalRayRenderer implements ISeriesPrimitivePaneRenderer {
-    _data: any;
+interface RayPoint {
+    x: number | null;
+    y: number;
+}
 
-    constructor(data: any) {
+interface RayRenderData {
+    rays: RayPoint[];
+}
+
+class HorizontalRayRenderer implements ISeriesPrimitivePaneRenderer {
+    _data: RayRenderData | null;
+
+    constructor(data: RayRenderData | null) {
         this._data = data;
     }
 
-    draw(target: any) {
-        target.useMediaCoordinateSpace((scope: any) => {
+    draw(target: SeriesPrimitivePaneRendererScope) {
+        target.useMediaCoordinateSpace((scope) => {
             const ctx = scope.context;
             if (!this._data || !this._data.rays || this._data.rays.length === 0) return;
 
@@ -33,7 +46,7 @@ class HorizontalRayRenderer implements ISeriesPrimitivePaneRenderer {
             const rightEdge = scope.mediaSize.width;
 
             for (const ray of this._data.rays) {
-                if (ray.x === null || ray.y === null) continue;
+                if (ray.x === null) continue;
                 
                 ctx.beginPath();
                 ctx.moveTo(ray.x, ray.y);
@@ -53,7 +66,7 @@ class HorizontalRayPaneView implements ISeriesPrimitivePaneView {
         this._plugin = plugin;
     }
 
-    zOrder(): 'top' | 'bottom' | 'normal' {
+    zOrder(): SeriesPrimitivePaneViewZOrder {
         return 'top';
     }
 
@@ -82,9 +95,9 @@ export class HorizontalRayPlugin implements ISeriesPrimitive<Time> {
         this._requestUpdate();
     }
 
-    attached({ chart, series, requestUpdate }: any) {
+    attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
         this._chart = chart;
-        this._series = series;
+        this._series = series as ISeriesApi<"Candlestick">;
         if (requestUpdate) {
             this._requestUpdate = requestUpdate;
         }
@@ -103,7 +116,7 @@ export class HorizontalRayPlugin implements ISeriesPrimitive<Time> {
         return this._paneViews;
     }
 
-    _getViewData() {
+    _getViewData(): RayRenderData | null {
         if (!this._chart || !this._series || this._rays.length === 0) return null;
 
         const timeScale = this._chart.timeScale();
@@ -119,15 +132,15 @@ export class HorizontalRayPlugin implements ISeriesPrimitive<Time> {
                 x = this._getClosestX(ray.time, timeScale);
             }
 
-            return { x, y };
-        }).filter(r => r !== null);
+            return { x, y } as RayPoint;
+        }).filter((r): r is RayPoint => r !== null);
 
         return {
             rays: renderRays
         };
     }
 
-    _getClosestX(targetTime: string, timeScale: any): number | null {
+    _getClosestX(targetTime: string, timeScale: ITimeScaleApi<Time>): number | null {
         const data = this._series!.data();
         if (!data || data.length === 0) return null;
         

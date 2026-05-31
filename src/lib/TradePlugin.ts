@@ -5,29 +5,37 @@ import type {
     ISeriesPrimitive, 
     ISeriesPrimitivePaneRenderer, 
     ISeriesPrimitivePaneView,
-    Time
+    Time,
+    SeriesPrimitivePaneViewZOrder,
+    SeriesPrimitivePaneRendererScope,
+    ISeriesPrimitiveAttachedParams
 } from 'lightweight-charts';
-import type { ActiveTrade } from '../types';
+import type { ActiveTrade, TradeType } from '../types';
+
+interface TradeRenderData {
+    yEntry: number;
+    ySL: number | null;
+    yTP: number | null;
+    type: TradeType;
+}
 
 class TradeRenderer implements ISeriesPrimitivePaneRenderer {
-    _data: any;
+    _data: TradeRenderData | null;
     _badgeRef: React.RefObject<HTMLDivElement> | null;
 
-    constructor(data: any, badgeRef: React.RefObject<HTMLDivElement> | null) {
+    constructor(data: TradeRenderData | null, badgeRef: React.RefObject<HTMLDivElement> | null) {
         this._data = data;
         this._badgeRef = badgeRef;
     }
 
-    draw(target: any) {
+    draw(target: SeriesPrimitivePaneRendererScope) {
         try {
-            target.useMediaCoordinateSpace((scope: any) => {
+            target.useMediaCoordinateSpace((scope) => {
                 const ctx = scope.context;
                 if (!this._data) return;
 
                 const { yEntry, ySL, yTP, type } = this._data;
                 const rightEdge = scope.mediaSize.width;
-
-                if (yEntry === null || yEntry === undefined) return;
 
                 ctx.save();
                 ctx.globalAlpha = 0.8;
@@ -60,8 +68,8 @@ class TradeRenderer implements ISeriesPrimitivePaneRenderer {
                     ctx.stroke();
                 }
 
-                const drawLine = (y: number, color: string, label: string) => {
-                    if (y === null || y === undefined || isNaN(y)) return;
+                const drawLine = (y: number | null, color: string, label: string) => {
+                    if (y === null || isNaN(y)) return;
                     ctx.strokeStyle = color;
                     ctx.lineWidth = 1;
                     ctx.setLineDash([4, 4]);
@@ -96,7 +104,7 @@ class TradePaneView implements ISeriesPrimitivePaneView {
         this._plugin = plugin;
     }
 
-    zOrder(): 'top' | 'bottom' | 'normal' {
+    zOrder(): SeriesPrimitivePaneViewZOrder {
         return 'top';
     }
 
@@ -138,9 +146,9 @@ export class TradePlugin implements ISeriesPrimitive<Time> {
         this._badgeRef = ref;
     }
 
-    attached({ chart, series, requestUpdate }: any) {
+    attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
         this._chart = chart;
-        this._series = series;
+        this._series = series as ISeriesApi<"Candlestick">;
         if (requestUpdate) {
             this._requestUpdate = requestUpdate;
         }
@@ -159,7 +167,7 @@ export class TradePlugin implements ISeriesPrimitive<Time> {
         return this._paneViews;
     }
 
-    _getViewData() {
+    _getViewData(): TradeRenderData | null {
         try {
             if (!this._trade || !this._series) {
                 if (this._badgeRef && this._badgeRef.current) {
@@ -169,7 +177,6 @@ export class TradePlugin implements ISeriesPrimitive<Time> {
             }
 
             const { entryPrice, slPrice, tpPrice, type } = this._trade;
-            if (entryPrice === undefined) return null;
 
             const yEntry = this._series.priceToCoordinate(entryPrice);
             const ySL = slPrice ? this._series.priceToCoordinate(slPrice) : null;
