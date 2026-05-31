@@ -195,7 +195,23 @@ All `lightweight-charts` plugin implementations were converted from JavaScript t
 *   `db.ts`, `resampling.ts`, `timezones.ts` were strictly typed.
 
 ### 5. Application Orchestration (`src/App.tsx`)
-The top-level `App` component was converted to TypeScript, fully typing the unified replay engine, layout grid mapping, and persistent state logic.
+The `App` component was refactored from a "God Component" into a layered architecture to improve maintainability and performance.
+
+#### Refactored Architecture:
+- **Logic Layer (Custom Hooks)**:
+    - `useDatabase.ts`: DB initialization, metadata, and file upload.
+    - `useSession.ts`: Session config, time logic, and persistence.
+    - `useWorkspace.ts`: Layouts, panel sizes, resize logic, and grouping.
+    - `usePortfolio.ts`: Global PnL aggregation.
+    - `useDrawings.ts`: Persistent chart annotations.
+    - `useMarketSimulator.ts`: Data loading and replay synchronization.
+- **Component Layer (Specialized UI)**:
+    - `Sidebar.tsx`: Navigation, status, and utility links.
+    - `SessionConfig.tsx`: Pre-flight configuration card.
+    - `ChartWorkspace.tsx`: Dynamic grid, resizable gutters, and `ChartUnit` mapping.
+- **Orchestration Layer (`App.tsx`)**:
+    - Acts as a lean state machine (Loading -> Config -> Active).
+    - Reduced from 440 lines to ~130 lines of declarative code.
 
 ## Key Technical Decisions
 *   **No Global State:** Retained the prop-drilling architecture (ChartUnit passing handlers to children) to maintain the existing mental model of the application.
