@@ -120,7 +120,22 @@ export function useWorkspace() {
   }, [chartGroups]);
 
   const handleGroupChange = useCallback((chartId: number, newGroup: GroupColor) => {
-    setChartGroups(prev => ({ ...prev, [chartId]: newGroup }));
+    setChartGroups(prev => {
+      const oldGroup = prev[chartId];
+      const next = { ...prev, [chartId]: newGroup };
+      
+      // Check if the old group is now empty
+      if (oldGroup && oldGroup !== 'none' && oldGroup !== newGroup) {
+        const isNowEmpty = Object.values(next).every(g => g !== oldGroup);
+        if (isNowEmpty) {
+          setGroupTickers(gt => {
+            const { [oldGroup]: _, ...rest } = gt;
+            return rest;
+          });
+        }
+      }
+      return next;
+    });
   }, []);
 
   const handleTimeframeChange = useCallback((chartId: number, tf: Timeframe) => {

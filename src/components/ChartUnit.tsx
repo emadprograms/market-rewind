@@ -36,6 +36,14 @@ export default function ChartUnit({
 
   const [showVP, setShowVP] = React.useState(false);
 
+  // Unified Ticker Updater
+  const handleTickerUpdate = React.useCallback((newTicker: string) => {
+    data.setTicker(newTicker);
+    if (onTickerChange) {
+      onTickerChange(newTicker);
+    }
+  }, [data, onTickerChange]);
+
   // 1. Data management
   const data = useChartData({ 
     initialTicker, 
@@ -52,6 +60,7 @@ export default function ChartUnit({
     onTickerChange, 
     id 
   });
+
 
   // 2. Keyboard & Drawing state
   const keyboard = useKeyboardShortcuts({ 
@@ -140,7 +149,7 @@ export default function ChartUnit({
         tickers={tickers}
         groupColor={groupColor}
         onGroupChange={onGroupChange}
-        onTickerChange={onTickerChange}
+        onTickerChange={handleTickerUpdate}
         onUpdateDrawings={onUpdateDrawings}
         isMaximized={isMaximized}
         onToggleMaximize={onToggleMaximize}
@@ -200,7 +209,7 @@ export default function ChartUnit({
                   data.setTimeframe(newTf as any);
                 }
               } else if (keyboard.keyboardAction.type === 'ticker') {
-                data.setTicker(val.toUpperCase());
+                handleTickerUpdate(val.toUpperCase());
               }
 
               keyboard.updateKeyboardAction({ active: false, value: '' });

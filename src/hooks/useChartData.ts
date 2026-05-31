@@ -48,18 +48,27 @@ export function useChartData({
 
   const dataTimeframeRef = useRef(timeframe);
   const isFirstRender = useRef(true);
+  const prevGroupColorRef = useRef(groupColor);
+  const prevGroupTickerRef = useRef(groupTicker);
 
   // Group-to-Ticker Sync
   useEffect(() => {
-    // If this is the first render, we respect the initialTicker passed from session config
-    // and skip the group sync until a user actually changes a group or ticker later.
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
 
-    if (groupColor !== 'none' && groupTicker && groupTicker !== ticker) {
+    // 1. Handle Group Change (Joining/Leaving)
+    if (groupColor !== prevGroupColorRef.current) {
+      prevGroupColorRef.current = groupColor;
+      prevGroupTickerRef.current = groupTicker; // Anchor the ticker at moment of joining
+      return; 
+    }
+
+    // 2. Sync only if the group ticker has changed since we joined or last synced
+    if (groupColor !== 'none' && groupTicker && groupTicker !== prevGroupTickerRef.current) {
       setTicker(groupTicker);
+      prevGroupTickerRef.current = groupTicker; // Update anchor
     }
   }, [groupColor, groupTicker]);
 
