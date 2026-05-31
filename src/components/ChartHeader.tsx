@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Maximize2, Minimize2, Search, ChevronDown, Clock, Minus, Square, Trash2 } from 'lucide-react';
+import { Maximize2, Minimize2, Search, ChevronDown, Clock, Minus, Square, Trash2, Settings } from 'lucide-react';
 import { BORDER_COLORS, DrawType, GroupColor, Timeframe } from '../types';
 
 interface ChartHeaderProps {
@@ -31,15 +31,19 @@ export function ChartHeader({
 }: ChartHeaderProps) {
   const [isTickerOpen, setIsTickerOpen] = useState(false);
   const [isTfOpen, setIsTfOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tickerSearch, setTickerSearch] = useState('');
 
   const tickerRef = useRef<HTMLDivElement>(null);
   const tfRef = useRef<HTMLDivElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (tickerRef.current && !tickerRef.current.contains(e.target as Node)) setIsTickerOpen(false);
-      if (tfRef.current && !tfRef.current.contains(e.target as Node)) setIsTfOpen(false);
+      const target = e.target as Node;
+      if (tickerRef.current && !tickerRef.current.contains(target)) setIsTickerOpen(false);
+      if (tfRef.current && !tfRef.current.contains(target)) setIsTfOpen(false);
+      if (settingsRef.current && !settingsRef.current.contains(target)) setIsSettingsOpen(false);
     };
     window.addEventListener('mousedown', handleClick);
     return () => window.removeEventListener('mousedown', handleClick);
@@ -51,7 +55,7 @@ export function ChartHeader({
     <div className="chart-header">
       <div className="chart-controls">
         
-        {/* CUSTOM TICKER SELECT */}
+        {/* ZONE A: PRIMARY CONTROLS */}
         <div className="custom-dropdown-container" ref={tickerRef}>
           <div 
             className={`custom-select ${isTickerOpen ? 'active' : ''}`} 
@@ -98,7 +102,6 @@ export function ChartHeader({
           )}
         </div>
 
-        {/* CUSTOM TIMEFRAME SELECT */}
         <div className="custom-dropdown-container" ref={tfRef}>
           <div 
             className={`custom-select ${isTfOpen ? 'active' : ''}`} 
@@ -132,7 +135,6 @@ export function ChartHeader({
           )}
         </div>
 
-        {/* GROUP PICKER */}
         <div className="group-picker" title="Assign to Group">
           {(['red', 'blue', 'green', 'yellow', 'none'] as GroupColor[]).map(color => (
             <div
@@ -144,83 +146,116 @@ export function ChartHeader({
           ))}
         </div>
 
-        {/* PREMIUM ETH TOGGLE */}
-        <div className="switch-container" onClick={() => setShowEth(!showEth)}>
-          <div className={`switch-track ${showEth ? 'active' : ''}`}>
-            <div className="switch-thumb" />
+        {/* ZONE B: SETTINGS DROPDOWN */}
+        <div className="custom-dropdown-container" ref={settingsRef}>
+          <div 
+            className={`custom-select ${isSettingsOpen ? 'active' : ''} ${isDrawingMode ? 'active-drawing' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsSettingsOpen(!isSettingsOpen);
+            }}
+            title="Settings & Tools"
+          >
+            <Settings size={14} className={isSettingsOpen ? 'text-primary' : 'text-secondary'} />
+            <span style={{fontWeight: '600'}}>Settings</span>
+            <ChevronDown size={14} className="text-secondary" />
           </div>
-          <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>ETH</span>
-        </div>
 
-        {/* VOLUME PROFILE TOGGLE */}
-        <div className="switch-container" onClick={() => setShowVP(!showVP)} title="Volume Profile">
-          <div className={`switch-track ${showVP ? 'active' : ''}`}>
-            <div className="switch-thumb" />
-          </div>
-          <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>VP</span>
-        </div>
+          {isSettingsOpen && (
+            <div className="dropdown-menu" style={{minWidth: '200px'}}>
+              <div className="dropdown-section">
+                <div className="dropdown-section-label">Analysis</div>
+                <div 
+                  className={`dropdown-item ${showEth ? 'active' : ''}`}
+                  onClick={() => setShowEth(!showEth)}
+                >
+                  <span>Extended Hours (ETH)</span>
+                  <div className={`switch-track ${showEth ? 'active' : ''}`} style={{zoom: 0.8}}>
+                    <div className="switch-thumb" />
+                  </div>
+                </div>
+                <div 
+                  className={`dropdown-item ${showVP ? 'active' : ''}`}
+                  onClick={() => setShowVP(!showVP)}
+                >
+                  <span>Volume Profile (VP)</span>
+                  <div className={`switch-track ${showVP ? 'active' : ''}`} style={{zoom: 0.8}}>
+                    <div className="switch-thumb" />
+                  </div>
+                </div>
+              </div>
 
-        {/* HORIZONTAL RAY DRAWING */}
-        <div 
-          className="switch-container" 
-          onClick={() => {
-            if (isDrawingMode && drawType === 'ray') {
-              setIsDrawingMode(false);
-            } else {
-              setIsDrawingMode(true);
-              setDrawType('ray');
-            }
-          }}
-          title="Horizontal Ray (Alt+J)"
-        >
-          <div className={`switch-track ${isDrawingMode && drawType === 'ray' ? 'active' : ''}`} style={{ width: '28px' }}>
-            <Minus size={14} style={{ margin: 'auto' }} />
-          </div>
-          <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>RAY</span>
-        </div>
+              <div className="dropdown-divider" />
 
-        {/* RECTANGLE DRAWING */}
-        <div 
-          className="switch-container" 
-          onClick={() => {
-            if (isDrawingMode && drawType === 'rect') {
-              setIsDrawingMode(false);
-            } else {
-              setIsDrawingMode(true);
-              setDrawType('rect');
-            }
-          }}
-          title="Rectangle (Alt+Shift+R)"
-        >
-          <div className={`switch-track ${isDrawingMode && drawType === 'rect' ? 'active' : ''}`} style={{ width: '28px' }}>
-            <Square size={12} style={{ margin: 'auto' }} />
-          </div>
-          <span style={{fontWeight: '600', letterSpacing: '0.05em'}}>RECT</span>
-        </div>
+              <div className="dropdown-section">
+                <div className="dropdown-section-label">Tools</div>
+                <div 
+                  className={`dropdown-item ${isDrawingMode && drawType === 'ray' ? 'active' : ''}`}
+                  onClick={() => {
+                    if (isDrawingMode && drawType === 'ray') {
+                      setIsDrawingMode(false);
+                    } else {
+                      setIsDrawingMode(true);
+                      setDrawType('ray');
+                    }
+                  }}
+                >
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <Minus size={14} />
+                    <span>Horizontal Ray</span>
+                  </div>
+                  <span className="shortcut-hint">Alt+J</span>
+                </div>
+                <div 
+                  className={`dropdown-item ${isDrawingMode && drawType === 'rect' ? 'active' : ''}`}
+                  onClick={() => {
+                    if (isDrawingMode && drawType === 'rect') {
+                      setIsDrawingMode(false);
+                    } else {
+                      setIsDrawingMode(true);
+                      setDrawType('rect');
+                    }
+                  }}
+                >
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <Square size={12} />
+                    <span>Rectangle</span>
+                  </div>
+                  <span className="shortcut-hint">Alt+Shift+R</span>
+                </div>
+              </div>
 
-        {/* CLEAR DRAWINGS */}
-        <div 
-          className="switch-container" 
-          onClick={() => {
-            if (window.confirm('Clear all drawings for ' + ticker + '?')) {
-              onUpdateDrawings(ticker, 'rays', []);
-              onUpdateDrawings(ticker, 'rects', []);
-            }
-          }}
-          title="Clear All Drawings"
-        >
-          <div className="switch-track" style={{ width: '28px', background: 'rgba(239, 83, 80, 0.1)' }}>
-            <Trash2 size={14} color="var(--accent-red)" style={{ margin: 'auto' }} />
-          </div>
-          <span style={{fontWeight: '600', letterSpacing: '0.05em', color: 'var(--accent-red)'}}>CLEAR</span>
+              <div className="dropdown-divider" />
+
+              <div className="dropdown-section">
+                <div 
+                  className="dropdown-item danger"
+                  onClick={() => {
+                    if (window.confirm('Clear all drawings for ' + ticker + '?')) {
+                      onUpdateDrawings(ticker, 'rays', []);
+                      onUpdateDrawings(ticker, 'rects', []);
+                      setIsSettingsOpen(false);
+                    }
+                  }}
+                >
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <Trash2 size={14} />
+                    <span>Clear All Drawings</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
+      {/* ZONE C: WINDOW ACTIONS */}
       <div className="chart-actions">
          <button className="btn-icon" onClick={onToggleMaximize} title={isMaximized ? "Minimize" : "Maximize"}>
            {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
          </button>
       </div>
     </div>
+
   );
 }
