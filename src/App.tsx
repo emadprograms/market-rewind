@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, Calendar as CalendarIcon, Activity, HardDrive, Database, UploadCloud, ExternalLink } from 'lucide-react';
 import ChartUnit from './components/ChartUnit';
+import ErrorBoundary from './components/ErrorBoundary';
 import { fetchTickers, fetchMarketData, loadDatabaseFromFile, initDB } from './lib/db';
 import { getTzForTicker, getTzLabel } from './lib/timezones';
 import type { Timeframe, RawBar, AllDrawings, GroupColor } from './types';
@@ -513,28 +514,29 @@ export default function App() {
                 }
 
                 return (
-                  <ChartUnit 
-                    key={`${layoutMode}-${i}`} 
-                    id={i} 
-                    tickers={tickers} 
-                    initialTicker={initialTicker}
-                    initialTf={initialTf}
-                    initialEth={initialEth}
-                    selectedDate={selectedDate} 
-                    isReplayMode={isSessionStarted}
-                    globalTime={currentTime}
-                    isMaximized={maximizedId === i}
-                    onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
-                    allDrawings={drawings}
-                    onUpdateDrawings={handleUpdateDrawings}
-                    onTimeframeChange={handleTimeframeChange}
-                    onPnLUpdate={handlePnLUpdate}
-                    groupColor={chartGroups[i] || 'none'}
-                    groupTicker={groupTickers[chartGroups[i]] as string}
-                    onGroupChange={(newGroup) => handleGroupChange(i, newGroup)}
-                    onTickerChange={(newTicker) => handleTickerChange(i, newTicker)}
-                    style={style}
-                  />
+                  <ErrorBoundary key={`${layoutMode}-${i}`}>
+                    <ChartUnit 
+                      id={i} 
+                      tickers={tickers} 
+                      initialTicker={initialTicker}
+                      initialTf={initialTf}
+                      initialEth={initialEth}
+                      selectedDate={selectedDate} 
+                      isReplayMode={isSessionStarted}
+                      globalTime={currentTime}
+                      isMaximized={maximizedId === i}
+                      onToggleMaximize={() => setMaximizedId(maximizedId === i ? null : i)}
+                      allDrawings={drawings}
+                      onUpdateDrawings={handleUpdateDrawings}
+                      onTimeframeChange={handleTimeframeChange}
+                      onPnLUpdate={handlePnLUpdate}
+                      groupColor={chartGroups[i] || 'none'}
+                      groupTicker={groupTickers[chartGroups[i]] as string}
+                      onGroupChange={(newGroup) => handleGroupChange(i, newGroup)}
+                      onTickerChange={(newTicker) => handleTickerChange(i, newTicker)}
+                      style={style}
+                    />
+                  </ErrorBoundary>
                 );
               });
 

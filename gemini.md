@@ -17,7 +17,6 @@ Extracted the core business logic into 4 specialized hooks:
 *   `useTradeManager.ts`: Manages trade state, P&L, and canvas-based trade line dragging.
 *   `useKeyboardShortcuts.ts`: Manages input state and drawing triggers.
 *   `useChartLifecycle.ts`: Owns the `lightweight-charts` instance, plugins, and handles render updates.
-
 ### 3. UI Components (`src/components/`)
 Created atomic UI components that form the visual structure of the chart layout:
 *   `ChartHeader.tsx`: Contains controls for tickers, timeframes, display toggles, drawing mode, and layout maximization.
@@ -25,6 +24,7 @@ Created atomic UI components that form the visual structure of the chart layout:
 *   `TradeControls.tsx`: Provides the Buy/Sell and trade size inputs.
 *   `TradeBadge.tsx`: Displays live P&L and trade exit mechanisms.
 *   `DrawingStatus.tsx`: Shows keyboard shortcuts and active drawing instructions.
+*   `ErrorBoundary.tsx`: A specialized class component that wraps `ChartUnit` instances to isolate runtime failures and provide a recovery mechanism.
 *   `ChartUnit.tsx`: Re-written as a lean layout orchestrator that stitches together the hooks and UI components.
 
 ### 4. Plugins & Utilities (`src/lib/`)
@@ -37,7 +37,7 @@ All `lightweight-charts` plugin implementations were converted from JavaScript t
 *   `db.ts`, `resampling.ts`, `timezones.ts` were strictly typed.
 
 ### 5. Application Orchestration (`src/App.tsx`)
-The top-level `App` component was converted to TypeScript, fully typing the unified replay engine, layout grid mapping, and persistent state logic. Added robust `localStorage` error handling and safety guards to prevent crashes from malformed persistent data.
+The top-level `App` component was converted to TypeScript, fully typing the unified replay engine, layout grid mapping, and persistent state logic. Added robust `localStorage` error handling and safety guards to prevent crashes from malformed persistent data. Integrated `ErrorBoundary` wrapping for all active replay charts to ensure application-wide stability.
 
 ## Key Technical Decisions
 *   **No Global State:** Retained the prop-drilling architecture (ChartUnit passing handlers to children) to maintain the existing mental model of the application.
@@ -46,6 +46,8 @@ The top-level `App` component was converted to TypeScript, fully typing the unif
 *   **Global PnL Aggregation**: Implemented a synchronization pattern where individual `ChartUnit`s report their Realized and Unrealized PnL to the `App` component, which aggregates them in the bottom replay bar for a portfolio-wide view.
 *   **Mount-Phase Guards**: Implemented `isFirstRender` refs in synchronization hooks to prevent state-fighting between session initialization and group-wide ticker updates. This ensures user-selected starting parameters are respected on boot.
 *   **React Namespace Reliability**: Standardized React imports across all hooks and components to ensure compatibility with modern bundlers and prevent runtime reference errors.
+*   **Component-Level Fault Tolerance**: Implemented React Error Boundaries around complex child components (`ChartUnit`). This prevents a single data or rendering error from crashing the entire application, allowing users to "Retry" specific components while maintaining the overall session state.
+
 
 ## Testing & Quality Assurance
 A rigorous test suite was implemented using **Vitest** and **React Testing Library** to ensure the stability of the refactored architecture.
