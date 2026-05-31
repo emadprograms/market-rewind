@@ -31,6 +31,19 @@ describe('ChartHeader', () => {
     render(<ChartHeader {...defaultProps} />);
     expect(screen.getByText('AAPL')).toBeInTheDocument();
     expect(screen.getByText('5m')).toBeInTheDocument();
+    expect(screen.getByText('Group')).toBeInTheDocument();
+  });
+
+  it('opens group dropdown and selects a color', () => {
+    render(<ChartHeader {...defaultProps} />);
+    const groupBtn = screen.getByText('Group');
+    fireEvent.click(groupBtn);
+
+    expect(screen.getByText('Red')).toBeInTheDocument();
+    expect(screen.getByText('Blue')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Red'));
+    expect(defaultProps.onGroupChange).toHaveBeenCalledWith('red');
   });
 
   it('opens settings dropdown when clicking Settings button', () => {
