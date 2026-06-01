@@ -41,6 +41,9 @@ export default function ChartUnit({
   const selectedId = useWorkspaceStore((state) => state.selectedId);
   const isSelected = selectedId === id.toString();
 
+  // Derive group color from store for real-time visual updates
+  const groupColorFromStore = useWorkspaceStore((state) => state.groups[id.toString()] || 'none');
+
   const [showVP, setShowVP] = React.useState(false);
 
   // 1. Data management
@@ -134,6 +137,8 @@ export default function ChartUnit({
     blue: '#42a5f5',
     green: '#26a69a',
     yellow: '#ffca28',
+    purple: '#ab47bc',
+    orange: '#ff9800',
   };
 
   return (
@@ -142,7 +147,7 @@ export default function ChartUnit({
       className={`chart-card ${isMaximized ? 'is-maximized' : ''} ${isSelected ? 'is-selected' : ''}`} 
       style={{
         ...mergedStyle,
-        borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,
+        borderTop: groupColorFromStore !== 'none' && BORDER_COLORS[groupColorFromStore] ? `3px solid ${BORDER_COLORS[groupColorFromStore]}` : undefined,
       }}
       onClick={() => setSelectedId(id.toString())}
     >
