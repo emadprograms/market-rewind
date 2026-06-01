@@ -43,6 +43,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   setGroup: (id, group) => {
+    const allowedGroups: GroupColor[] = ['none', 'red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+    if (!allowedGroups.includes(group)) {
+      console.warn(`Invalid group color provided: ${group}. Reverting to 'none'.`);
+      set((state) => ({
+        groups: { ...state.groups, [id]: 'none' },
+      }));
+      return;
+    }
+
     set((state) => ({
       groups: { ...state.groups, [id]: group },
     }));
