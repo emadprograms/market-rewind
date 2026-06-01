@@ -7,14 +7,13 @@ import { ChartHeader } from './ChartHeader';
 import { ChartCanvas } from './ChartCanvas';
 import { TradeControls } from './TradeControls';
 import { DrawingStatus } from './DrawingStatus';
+import { useWorkspaceStore } from '../store/useWorkspaceStore';
 import type { ChartUnitProps } from '../types';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { parseInput } from '../lib/parsing';
 
 export default function ChartUnit({ 
   id, 
-  isSelected = false,
-  onSelect,
   selectedDate,
   isReplayMode, 
   tickers, 
@@ -37,6 +36,10 @@ export default function ChartUnit({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const priceSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+
+  const setSelectedId = useWorkspaceStore((state) => state.setSelectedId);
+  const selectedId = useWorkspaceStore((state) => state.selectedId);
+  const isSelected = selectedId === id.toString();
 
   const [showVP, setShowVP] = React.useState(false);
 
@@ -141,6 +144,7 @@ export default function ChartUnit({
         ...mergedStyle,
         borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,
       }}
+      onClick={() => setSelectedId(id.toString())}
     >
       <ChartHeader 
         ticker={data.ticker}
@@ -162,13 +166,11 @@ export default function ChartUnit({
         onUpdateDrawings={onUpdateDrawings}
         isMaximized={isMaximized}
         onToggleMaximize={onToggleMaximize}
-        onSelect={onSelect}
       />
       
       <div 
         className="chart-panes" 
         style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
-        onClick={() => onSelect?.()}
       >
         <ChartCanvas
           chartContainerRef={chartContainerRef}
