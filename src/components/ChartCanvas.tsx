@@ -4,13 +4,13 @@ import { TradeBadge } from './TradeBadge';
 import type { ActiveTrade } from '../types';
 
 interface ChartCanvasProps {
-  chartContainerRef: React.RefObject<HTMLDivElement>;
+  chartContainerRef: React.RefObject<HTMLDivElement | null>;
   isDrawingMode: boolean;
   isAtEnd: boolean;
   scrollToRealTime: () => void;
   activeTrade: ActiveTrade | null;
   currentPrice: number;
-  tradeBadgeRef: React.RefObject<HTMLDivElement>;
+  tradeBadgeRef: React.RefObject<HTMLDivElement | null>;
   onCloseTrade: () => void;
 }
 

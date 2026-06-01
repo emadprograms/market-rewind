@@ -6,13 +6,21 @@ import type {
     ISeriesPrimitivePaneView,
     Time,
     SeriesPrimitivePaneViewZOrder,
-    SeriesPrimitivePaneRendererScope,
-    ISeriesPrimitiveAttachedParams
+    SeriesAttachedParameter,
+    Coordinate
 } from 'lightweight-charts';
-import type { RawBar } from '../types';
+
+export interface VPDataBar {
+    time: Time;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+}
 
 interface VPBin {
-    y: number;
+    y: Coordinate;
     width: number;
     isPOC: boolean;
 }
@@ -35,8 +43,8 @@ class VolumeProfileRenderer implements ISeriesPrimitivePaneRenderer {
         this._data = data;
     }
 
-    draw(target: SeriesPrimitivePaneRendererScope) {
-        target.useMediaCoordinateSpace((scope) => {
+    draw(target: any) {
+        target.useMediaCoordinateSpace((scope: any) => {
             const ctx = scope.context;
             if (!this._data || !this._data.bins || this._data.bins.length === 0) return;
             
@@ -99,7 +107,7 @@ export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
     _series: ISeriesApi<"Candlestick"> | null;
     _paneViews: VolumeProfilePaneView[];
     _requestUpdate: () => void;
-    _masterData: RawBar[];
+    _masterData: VPDataBar[];
     _vpDataCache: VPRenderData | null;
     _lastLogicalRange: VPVisibleRange;
     _lastWidth: number;
@@ -126,17 +134,15 @@ export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
         this._invalidateCache();
     }
 
-    setData(data: RawBar[]) {
+    setData(data: VPDataBar[]) {
         this._masterData = data;
         this._invalidateCache();
     }
 
-    attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
-        this._chart = chart;
-        this._series = series as ISeriesApi<"Candlestick">;
-        if (requestUpdate) {
-            this._requestUpdate = requestUpdate;
-        }
+    attached({ chart, series, requestUpdate }: SeriesAttachedParameter<Time, "Candlestick">) {
+        this._chart = chart as IChartApi;
+        this._series = series;
+        this._requestUpdate = requestUpdate;
         
         window.addEventListener('resize', this._resizeHandler);
     }

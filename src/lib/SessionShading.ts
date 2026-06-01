@@ -6,10 +6,10 @@ import type {
     ISeriesPrimitivePaneView,
     Time,
     SeriesPrimitivePaneViewZOrder,
-    SeriesPrimitivePaneRendererScope,
-    ISeriesPrimitiveAttachedParams,
+    SeriesAttachedParameter,
     ITimeScaleApi,
-    CandlestickData
+    CandlestickData,
+    Coordinate
 } from 'lightweight-charts';
 import type { Timeframe } from '../types';
 
@@ -33,7 +33,7 @@ export function getSessionType(timestamp: number): 'PRE' | 'RTH' | 'POST' | 'OTH
 
 interface ShadedBar {
     time: Time;
-    x: number | null;
+    x: Coordinate | null;
     type: 'PRE' | 'RTH' | 'POST' | 'OTHER';
 }
 
@@ -50,8 +50,8 @@ class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
     this._data = data;
   }
 
-  draw(target: SeriesPrimitivePaneRendererScope) {
-    target.useMediaCoordinateSpace((scope) => {
+  draw(target: any) {
+    target.useMediaCoordinateSpace((scope: any) => {
       const ctx = scope.context;
       if (!this._data || !this._data.bars || this._data.bars.length === 0) return;
       
@@ -130,12 +130,10 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     this.updateAllViews();
   }
 
-  attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
-    this._chart = chart;
-    this._series = series as ISeriesApi<"Candlestick">;
-    if (requestUpdate) {
-        this._requestUpdate = requestUpdate;
-    }
+  attached({ chart, series, requestUpdate }: SeriesAttachedParameter<Time, "Candlestick">) {
+    this._chart = chart as IChartApi;
+    this._series = series;
+    this._requestUpdate = requestUpdate;
   }
 
   detached() {

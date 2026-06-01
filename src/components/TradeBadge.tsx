@@ -4,7 +4,7 @@ import type { ActiveTrade } from '../types';
 interface TradeBadgeProps {
   activeTrade: ActiveTrade;
   currentPrice: number;
-  tradeBadgeRef: React.RefObject<HTMLDivElement>;
+  tradeBadgeRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
 }
 

@@ -7,30 +7,30 @@ import type {
     ISeriesPrimitivePaneView,
     Time,
     SeriesPrimitivePaneViewZOrder,
-    SeriesPrimitivePaneRendererScope,
-    ISeriesPrimitiveAttachedParams
+    SeriesAttachedParameter,
+    Coordinate
 } from 'lightweight-charts';
 import type { ActiveTrade, TradeType } from '../types';
 
 interface TradeRenderData {
-    yEntry: number;
-    ySL: number | null;
-    yTP: number | null;
+    yEntry: Coordinate;
+    ySL: Coordinate | null;
+    yTP: Coordinate | null;
     type: TradeType;
 }
 
 class TradeRenderer implements ISeriesPrimitivePaneRenderer {
     _data: TradeRenderData | null;
-    _badgeRef: React.RefObject<HTMLDivElement> | null;
+    _badgeRef: React.RefObject<HTMLDivElement | null> | null;
 
-    constructor(data: TradeRenderData | null, badgeRef: React.RefObject<HTMLDivElement> | null) {
+    constructor(data: TradeRenderData | null, badgeRef: React.RefObject<HTMLDivElement | null> | null) {
         this._data = data;
         this._badgeRef = badgeRef;
     }
 
-    draw(target: SeriesPrimitivePaneRendererScope) {
+    draw(target: any) {
         try {
-            target.useMediaCoordinateSpace((scope) => {
+            target.useMediaCoordinateSpace((scope: any) => {
                 const ctx = scope.context;
                 if (!this._data) return;
 
@@ -68,7 +68,7 @@ class TradeRenderer implements ISeriesPrimitivePaneRenderer {
                     ctx.stroke();
                 }
 
-                const drawLine = (y: number | null, color: string, label: string) => {
+                const drawLine = (y: Coordinate | null, color: string, label: string) => {
                     if (y === null || isNaN(y)) return;
                     ctx.strokeStyle = color;
                     ctx.lineWidth = 1;
@@ -125,7 +125,7 @@ export class TradePlugin implements ISeriesPrimitive<Time> {
     _paneViews: TradePaneView[];
     _requestUpdate: () => void;
     _trade: ActiveTrade | null;
-    _badgeRef: React.RefObject<HTMLDivElement> | null;
+    _badgeRef: React.RefObject<HTMLDivElement | null> | null;
 
     constructor() {
         this._chart = null;
@@ -142,16 +142,14 @@ export class TradePlugin implements ISeriesPrimitive<Time> {
         setTimeout(() => this._requestUpdate(), 0);
     }
 
-    setBadgeRef(ref: React.RefObject<HTMLDivElement>) {
+    setBadgeRef(ref: React.RefObject<HTMLDivElement | null>) {
         this._badgeRef = ref;
     }
 
-    attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
-        this._chart = chart;
-        this._series = series as ISeriesApi<"Candlestick">;
-        if (requestUpdate) {
-            this._requestUpdate = requestUpdate;
-        }
+    attached({ chart, series, requestUpdate }: SeriesAttachedParameter<Time, "Candlestick">) {
+        this._chart = chart as IChartApi;
+        this._series = series;
+        this._requestUpdate = requestUpdate;
     }
 
     detached() {

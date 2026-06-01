@@ -15,11 +15,12 @@ interface ChartWorkspaceProps {
   drawings: AllDrawings;
   chartGroups: Record<number, GroupColor>;
   groupTickers: Record<string, string>;
-  workspaceRef: React.RefObject<HTMLElement>;
+  workspaceRef: React.RefObject<HTMLElement | null>;
   onToggleMaximize: (id: number) => void;
   onUpdateDrawings: (ticker: string, type: 'rays' | 'rects', items: any[]) => void;
   onPnLUpdate: (id: number, r: number, u: number) => void;
   onTickerChange: (chartId: number, newTicker: string) => void;
+  onTimeframeChange: (chartId: number, tf: Timeframe) => void;
   onGroupChange: (chartId: number, newGroup: GroupColor) => void;
   onPointerDown: (mode: 'v' | 'h', index: number, e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
@@ -43,6 +44,7 @@ export const ChartWorkspace: React.FC<ChartWorkspaceProps> = ({
   onUpdateDrawings,
   onPnLUpdate,
   onTickerChange,
+  onTimeframeChange,
   onGroupChange,
   onPointerDown,
   onPointerMove,
@@ -104,6 +106,7 @@ export const ChartWorkspace: React.FC<ChartWorkspaceProps> = ({
           allDrawings={drawings}
           onUpdateDrawings={onUpdateDrawings}
           onPnLUpdate={onPnLUpdate}
+          onTimeframeChange={onTimeframeChange}
           groupColor={chartGroups[i] || 'none'}
           groupTicker={groupTickers[chartGroups[i]] as string}
           onGroupChange={(newGroup) => onGroupChange(i, newGroup)}

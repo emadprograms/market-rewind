@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { DrawType, KeyboardAction, RayDrawing, RectDrawing, RectPoint } from '../types';
 
 interface UseKeyboardShortcutsParams {
-  chartContainerRef: React.RefObject<HTMLDivElement>;
+  chartContainerRef: React.RefObject<HTMLDivElement | null>;
   onUpdateDrawings: (ticker: string, type: 'rays' | 'rects', items: RayDrawing[] | RectDrawing[]) => void;
   ticker: string;
   setShowEth: React.Dispatch<React.SetStateAction<boolean>>;

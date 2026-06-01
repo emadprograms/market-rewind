@@ -5,7 +5,7 @@ import type { TradePlugin } from '../lib/TradePlugin';
 
 interface UseTradeManagerParams {
   chartData: ChartBar[];
-  chartContainerRef: React.RefObject<HTMLDivElement>;
+  chartContainerRef: React.RefObject<HTMLDivElement | null>;
   priceSeriesRef: React.MutableRefObject<ISeriesApi<'Candlestick'> | null>;
   tradePluginRef: React.MutableRefObject<TradePlugin | null>;
 }

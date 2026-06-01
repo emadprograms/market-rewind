@@ -6,19 +6,19 @@ import type {
     ISeriesPrimitivePaneView, 
     Time,
     SeriesPrimitivePaneViewZOrder,
-    SeriesPrimitivePaneRendererScope,
-    ISeriesPrimitiveAttachedParams,
-    ITimeScaleApi
+    SeriesAttachedParameter,
+    ITimeScaleApi,
+    Coordinate
 } from 'lightweight-charts';
 
 export interface HorizontalRay {
     price: number;
-    time: string;
+    time: Time;
 }
 
 interface RayPoint {
-    x: number | null;
-    y: number;
+    x: Coordinate | null;
+    y: Coordinate;
 }
 
 interface RayRenderData {
@@ -32,8 +32,8 @@ class HorizontalRayRenderer implements ISeriesPrimitivePaneRenderer {
         this._data = data;
     }
 
-    draw(target: SeriesPrimitivePaneRendererScope) {
-        target.useMediaCoordinateSpace((scope) => {
+    draw(target: any) {
+        target.useMediaCoordinateSpace((scope: any) => {
             const ctx = scope.context;
             if (!this._data || !this._data.rays || this._data.rays.length === 0) return;
 
@@ -95,12 +95,10 @@ export class HorizontalRayPlugin implements ISeriesPrimitive<Time> {
         this._requestUpdate();
     }
 
-    attached({ chart, series, requestUpdate }: ISeriesPrimitiveAttachedParams<Time>) {
-        this._chart = chart;
-        this._series = series as ISeriesApi<"Candlestick">;
-        if (requestUpdate) {
-            this._requestUpdate = requestUpdate;
-        }
+    attached({ chart, series, requestUpdate }: SeriesAttachedParameter<Time, "Candlestick">) {
+        this._chart = chart as IChartApi;
+        this._series = series;
+        this._requestUpdate = requestUpdate;
     }
 
     detached() {
@@ -127,7 +125,7 @@ export class HorizontalRayPlugin implements ISeriesPrimitive<Time> {
             const y = this._series!.priceToCoordinate(ray.price);
             if (y === null) return null;
 
-            let x = timeScale.timeToCoordinate(ray.time as Time);
+            let x = timeScale.timeToCoordinate(ray.time);
             if (x === null) {
                 x = this._getClosestX(ray.time, timeScale);
             }
@@ -140,20 +138,23 @@ export class HorizontalRayPlugin implements ISeriesPrimitive<Time> {
         };
     }
 
-    _getClosestX(targetTime: string, timeScale: ITimeScaleApi<Time>): number | null {
+    _getClosestX(targetTime: Time, timeScale: ITimeScaleApi<Time>): Coordinate | null {
         const data = this._series!.data();
         if (!data || data.length === 0) return null;
         
-        if (targetTime <= (data[0].time as string)) return -10000;
-        if (targetTime >= (data[data.length - 1].time as string)) return timeScale.timeToCoordinate(data[data.length - 1].time);
+        const firstTime = data[0].time;
+        const lastTime = data[data.length - 1].time;
+
+        if (targetTime <= firstTime) return -10000 as Coordinate;
+        if (targetTime >= lastTime) return timeScale.timeToCoordinate(lastTime);
 
         let left = 0;
         let right = data.length - 1;
         while (left <= right) {
             const mid = Math.floor((left + right) / 2);
-            if ((data[mid].time as string) === targetTime) {
+            if (data[mid].time === targetTime) {
                 return timeScale.timeToCoordinate(data[mid].time);
-            } else if ((data[mid].time as string) < targetTime) {
+            } else if (data[mid].time < targetTime) {
                 left = mid + 1;
             } else {
                 right = mid - 1;
@@ -162,8 +163,12 @@ export class HorizontalRayPlugin implements ISeriesPrimitive<Time> {
         
         let closestIdx = right;
         if (left < data.length && right >= 0) {
-            const diffLeft = Math.abs(new Date(data[left].time as string).getTime() - new Date(targetTime).getTime());
-            const diffRight = Math.abs(new Date(data[right].time as string).getTime() - new Date(targetTime).getTime());
+            const timeL = typeof data[left].time === 'number' ? data[left].time : new Date(data[left].time as string).getTime() / 1000;
+            const timeR = typeof data[right].time === 'number' ? data[right].time : new Date(data[right].time as string).getTime() / 1000;
+            const targetT = typeof targetTime === 'number' ? targetTime : new Date(targetTime as string).getTime() / 1000;
+
+            const diffLeft = Math.abs((timeL as number) - (targetT as number));
+            const diffRight = Math.abs((timeR as number) - (targetT as number));
             closestIdx = diffLeft < diffRight ? left : right;
         } else if (left < data.length) {
             closestIdx = left;

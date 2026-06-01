@@ -136,6 +136,7 @@ export default function App() {
             onUpdateDrawings={handleUpdateDrawings}
             onPnLUpdate={handlePnLUpdate}
             onTickerChange={handleTickerChange}
+            onTimeframeChange={handleTimeframeChange}
             onGroupChange={handleGroupChange}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}

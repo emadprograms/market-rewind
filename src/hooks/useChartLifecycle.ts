@@ -3,14 +3,14 @@ import { createChart, IChartApi, ISeriesApi, MouseEventParams, Time, TickMarkTyp
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
 import { getTzForTicker } from '../lib/timezones';
 import { SessionShadingPlugin } from '../lib/SessionShading';
-import { VolumeProfilePlugin } from '../lib/VolumeProfilePlugin';
+import { VolumeProfilePlugin, VPDataBar } from '../lib/VolumeProfilePlugin';
 import { HorizontalRayPlugin } from '../lib/HorizontalRayPlugin';
 import { RectanglePlugin } from '../lib/RectanglePlugin';
 import { TradePlugin } from '../lib/TradePlugin';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 
 interface UseChartLifecycleParams {
-  chartContainerRef: React.RefObject<HTMLDivElement>;
+  chartContainerRef: React.RefObject<HTMLDivElement | null>;
   ticker: string;
   timeframe: Timeframe;
   showEth: boolean;
@@ -29,7 +29,7 @@ interface UseChartLifecycleParams {
   drawings: TickerDrawings;
   onUpdateDrawings: (ticker: string, type: 'rays' | 'rects', items: RayDrawing[] | RectDrawing[]) => void;
   activeTrade: ActiveTrade | null;
-  tradeBadgeRef: React.RefObject<HTMLDivElement>;
+  tradeBadgeRef: React.RefObject<HTMLDivElement | null>;
   chartRef: React.MutableRefObject<IChartApi | null>;
   priceSeriesRef: React.MutableRefObject<ISeriesApi<'Candlestick'> | null>;
 }
@@ -298,7 +298,7 @@ export function useChartLifecycle({
           const left = Math.min(xStart, xEnd);
           const right = Math.max(xStart, xEnd);
 
-          if (param.point.y >= top - 5 && param.point.y <= bottom + 5 &&
+          if (param.point && param.point.y >= top - 5 && param.point.y <= bottom + 5 &&
               param.point.x >= left - 5 && param.point.x <= right + 5) {
               rectToDelete = idx;
           }
@@ -376,7 +376,7 @@ export function useChartLifecycle({
   // 3. Update Chart Data
   useEffect(() => {
     if (priceSeriesRef.current && volumeSeriesRef.current && chartRef.current && chartData.length > 0) {
-      const formatted = chartData.map(d => {
+      const formatted: VPDataBar[] = chartData.map(d => {
         const isoString = d.time.replace(' ', 'T') + 'Z';
         return {
           time: Math.floor(new Date(isoString).getTime() / 1000) as Time,
