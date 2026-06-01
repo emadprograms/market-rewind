@@ -4,6 +4,7 @@ import type { ChartBar, GroupColor, RawBar, Timeframe, HistoryPrependState } fro
 import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
 import { resampleData } from '../lib/resampling';
 import { usePlaybackStore } from '../store/usePlaybackStore';
+import { useWorkspaceStore } from '../store/useWorkspaceStore';
 
 interface UseChartDataParams {
   initialTicker: string;
@@ -35,7 +36,28 @@ export function useChartData({
   onTimeframeChange,
   id,
 }: UseChartDataParams) {
-  const [ticker, setTicker] = useState<string>(initialTicker);
+  const chartId = id.toString();
+  
+  // Derive ticker atomically from Workspace Store
+  const ticker = useWorkspaceStore((state) => {
+    const group = state.groups[chartId] || 'none';
+    if (group !== 'none' && state.groupTickers[group]) {
+      return state.groupTickers[group];
+    }
+    return state.tickers[chartId] || initialTicker;
+  });
+
+  const setTicker = (newTicker: string) => {
+    const state = useWorkspaceStore.getState();
+    const group = state.groups[chartId] || 'none';
+    
+    state.setTicker(chartId, newTicker);
+    
+    if (group !== 'none') {
+      state.setGroupTicker(group, newTicker);
+    }
+  };
+
   const [localMasterData, setLocalMasterData] = useState<RawBar[]>([]);
   const [timeframe, setTimeframe] = useState<Timeframe>(initialTf || '1D');
   const [showEth, setShowEth] = useState<boolean>(initialEth || false);
@@ -48,31 +70,6 @@ export function useChartData({
 
   const dataTimeframeRef = useRef(timeframe);
   const isFirstRender = useRef(true);
-  const prevGroupColorRef = useRef(groupColor);
-  const prevGroupTickerRef = useRef(groupTicker);
-
-  // Group-to-Ticker Sync
-  useEffect(() => {
-    // 1. Handle Group Change (Joining/Leaving)
-    if (groupColor !== prevGroupColorRef.current) {
-      prevGroupColorRef.current = groupColor;
-      
-      // Smart Join: If joining an existing group with a different ticker, adopt it immediately.
-      if (groupColor !== 'none' && groupTicker && groupTicker !== ticker) {
-        setTicker(groupTicker);
-        prevGroupTickerRef.current = groupTicker; // Anchor to the new group ticker
-      } else {
-        prevGroupTickerRef.current = groupTicker; // Anchor at moment of joining
-      }
-      return; 
-    }
-
-    // 2. Sync only if the group ticker has changed since we joined or last synced
-    if (groupColor !== 'none' && groupTicker && groupTicker !== prevGroupTickerRef.current) {
-      setTicker(groupTicker);
-      prevGroupTickerRef.current = groupTicker; // Update anchor
-    }
-  }, [groupColor, groupTicker]);
 
   // Report timeframe to parent
   useEffect(() => {
