@@ -388,6 +388,11 @@ body {
   animation: dropdownIn 0.15s ease-out;
 }
 
+.dropdown-items {
+  overflow-y: auto;
+  flex: 1;
+}
+
 .dropdown-section {
   padding: 4px 0;
 }
