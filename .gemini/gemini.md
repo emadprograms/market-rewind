@@ -79,7 +79,7 @@ Market Rewind is a zero-read, local-first market replay tool.
     - **Live Price Line (1D)**: Dynamic dashed yellow line indicator for extended hours / incomplete daily candles.
     - **Polished Header Architecture** (v7.7):
         - **Zone A (Navigation)**: Ticker and Timeframe selects prioritized on the left.
-        - **Zone B (Settings)**: Icon-only gear dropdown centralizing **Analysis** (ETH/VP toggles), **Drawing Tools** (RAY/RECT with keyboard shortcut hints), and **Danger Zone** (Clear Drawings).
+        - **Zone B (Settings)**: Icon-only gear dropdown centralizing **Analysis** (ETH/VP toggles), **Drawing Tools** (RAY/RECT with keyboard shortcut hints), and **Danger Zone** (Clear Drawings). **Behavior**: Menu auto-closes immediately upon selecting any option to minimize UI clutter.
         - **Zone C (Actions)**: Right-aligned zone containing the **Group Selector** and **Maximize/Minimize** button.
         - **High-Density CSS**: Optimized gaps and flex behavior for perfect scaling in 4-chart grid modes.
     - **Scroll to End UI**: Floating "return to latest" button appears on hover when scrolled away from the most recent data point. Click action binds to `scrollToRealTime()` to enforce proper right-margin padding.

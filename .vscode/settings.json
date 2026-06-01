@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "npm install": true
+    },
+    "terminal.integrated.env.windows": {
+        "PATH": "${env:PATH};C:\\Program Files\\nodejs;C:\\Users\\Administrator\\AppData\\Roaming\\npm"
+    }
+}

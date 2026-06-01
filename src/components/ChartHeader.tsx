@@ -165,7 +165,10 @@ export function ChartHeader({
                 <div className="dropdown-section-label">Analysis</div>
                 <div 
                   className={`dropdown-item ${showEth ? 'active' : ''}`}
-                  onClick={() => setShowEth(!showEth)}
+                  onClick={() => {
+                    setShowEth(!showEth);
+                    setIsSettingsOpen(false);
+                  }}
                 >
                   <span>Extended Hours (ETH)</span>
                   <div className={`switch-track ${showEth ? 'active' : ''}`} style={{zoom: 0.8}}>
@@ -174,7 +177,10 @@ export function ChartHeader({
                 </div>
                 <div 
                   className={`dropdown-item ${showVP ? 'active' : ''}`}
-                  onClick={() => setShowVP(!showVP)}
+                  onClick={() => {
+                    setShowVP(!showVP);
+                    setIsSettingsOpen(false);
+                  }}
                 >
                   <span>Volume Profile (VP)</span>
                   <div className={`switch-track ${showVP ? 'active' : ''}`} style={{zoom: 0.8}}>
@@ -196,6 +202,7 @@ export function ChartHeader({
                       setIsDrawingMode(true);
                       setDrawType('ray');
                     }
+                    setIsSettingsOpen(false);
                   }}
                 >
                   <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
@@ -213,6 +220,7 @@ export function ChartHeader({
                       setIsDrawingMode(true);
                       setDrawType('rect');
                     }
+                    setIsSettingsOpen(false);
                   }}
                 >
                   <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
