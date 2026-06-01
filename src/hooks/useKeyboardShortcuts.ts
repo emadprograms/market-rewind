@@ -6,6 +6,7 @@ interface UseKeyboardShortcutsParams {
   onUpdateDrawings: (ticker: string, type: 'rays' | 'rects', items: RayDrawing[] | RectDrawing[]) => void;
   ticker: string;
   setShowEth: React.Dispatch<React.SetStateAction<boolean>>;
+  isSelected: boolean;
 }
 
 export function useKeyboardShortcuts({
@@ -13,6 +14,7 @@ export function useKeyboardShortcuts({
   onUpdateDrawings,
   ticker,
   setShowEth,
+  isSelected,
 }: UseKeyboardShortcutsParams) {
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawType, setDrawType] = useState<DrawType>('ray');
@@ -47,7 +49,7 @@ export function useKeyboardShortcuts({
       const container = chartContainerRef.current;
       if (!container) return;
       const isHovered = container.matches(':hover') || container.contains(document.activeElement);
-      if (!isHovered && !keyboardActionRef.current.active) return;
+      if (!isHovered && !isSelected && !keyboardActionRef.current.active) return;
 
       if (e.altKey || e.ctrlKey) {
         const keyLower = e.key.toLowerCase();
@@ -113,7 +115,7 @@ export function useKeyboardShortcuts({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [chartContainerRef, drawType, onUpdateDrawings, setShowEth, updateKeyboardAction]);
+  }, [chartContainerRef, drawType, onUpdateDrawings, setShowEth, updateKeyboardAction, isSelected]);
 
   return {
     isDrawingMode,

@@ -16,6 +16,8 @@ interface ChartWorkspaceProps {
   chartGroups: Record<number, GroupColor>;
   groupTickers: Record<string, string>;
   workspaceRef: React.RefObject<HTMLElement | null>;
+  selectedChartId: number;
+  onSelectChart: (id: number) => void;
   onToggleMaximize: (id: number) => void;
   onUpdateDrawings: (ticker: string, type: 'rays' | 'rects', items: any[]) => void;
   onPnLUpdate: (id: number, r: number, u: number) => void;
@@ -40,6 +42,8 @@ export const ChartWorkspace: React.FC<ChartWorkspaceProps> = ({
   chartGroups,
   groupTickers,
   workspaceRef,
+  selectedChartId,
+  onSelectChart,
   onToggleMaximize,
   onUpdateDrawings,
   onPnLUpdate,
@@ -95,6 +99,8 @@ export const ChartWorkspace: React.FC<ChartWorkspaceProps> = ({
       <ErrorBoundary key={`${layoutMode}-${i}`}>
         <ChartUnit 
           id={i} 
+          isSelected={selectedChartId === i}
+          onSelect={() => onSelectChart(i)}
           tickers={tickers} 
           initialTicker={initialTicker}
           initialTf={initialTf}

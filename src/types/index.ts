@@ -111,6 +111,8 @@ export type DrawType = 'ray' | 'rect';
 
 export interface ChartUnitProps {
   id: number;
+  isSelected?: boolean;
+  onSelect?: () => void;
   selectedDate: string;
   isReplayMode: boolean;
   tickers: string[];

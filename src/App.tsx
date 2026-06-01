@@ -56,7 +56,9 @@ export default function App() {
     handlePointerEnd,
     handleTickerChange,
     handleGroupChange,
-    handleTimeframeChange
+    handleTimeframeChange,
+    handleSelectChart,
+    selectedChartId
   } = useWorkspace();
 
   const {
@@ -132,6 +134,8 @@ export default function App() {
             chartGroups={chartGroups}
             groupTickers={groupTickers}
             workspaceRef={workspaceRef}
+            selectedChartId={selectedChartId}
+            onSelectChart={handleSelectChart}
             onToggleMaximize={toggleMaximize}
             onUpdateDrawings={handleUpdateDrawings}
             onPnLUpdate={handlePnLUpdate}

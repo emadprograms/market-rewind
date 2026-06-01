@@ -43,6 +43,8 @@ export function useWorkspace() {
     return {};
   });
 
+  const [selectedChartId, setSelectedChartId] = useState<number>(0);
+
   const dragInfo = useRef<{ active: boolean; mode: 'v' | 'h' | null; index: number | null }>({ active: false, mode: null, index: null });
   const workspaceRef = useRef<HTMLElement | null>(null);
 
@@ -147,6 +149,11 @@ export function useWorkspace() {
 
   const toggleMaximize = useCallback((id: number) => {
     setMaximizedId(prev => prev === id ? null : id);
+    setSelectedChartId(id);
+  }, []);
+
+  const handleSelectChart = useCallback((id: number) => {
+    setSelectedChartId(id);
   }, []);
 
   return {
@@ -158,6 +165,7 @@ export function useWorkspace() {
     activeGutter,
     groupTickers,
     chartGroups,
+    selectedChartId,
     workspaceRef,
     minStepMinutes,
     activeStepMinutes,
@@ -167,6 +175,7 @@ export function useWorkspace() {
     handleTickerChange,
     handleGroupChange,
     handleTimeframeChange,
+    handleSelectChart,
     setManualStepMinutes
   };
 }

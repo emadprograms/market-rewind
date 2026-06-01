@@ -260,6 +260,13 @@ body {
   min-height: 0;
   min-width: 0;
   flex: 1 1 0%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.chart-card.is-selected {
+  border-color: var(--accent-blue) !important;
+  box-shadow: 0 0 0 2px rgba(66, 165, 245, 0.3);
+  z-index: 5;
 }
 
 .chart-card.is-maximized {

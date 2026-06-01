@@ -13,6 +13,8 @@ import { parseInput } from '../lib/parsing';
 
 export default function ChartUnit({ 
   id, 
+  isSelected = false,
+  onSelect,
   selectedDate,
   isReplayMode, 
   tickers, 
@@ -31,6 +33,7 @@ export default function ChartUnit({
   onTickerChange,
   style = {}
 }: ChartUnitProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const priceSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -65,10 +68,11 @@ export default function ChartUnit({
 
   // 2. Keyboard & Drawing state
   const keyboard = useKeyboardShortcuts({ 
-    chartContainerRef, 
+    chartContainerRef: cardRef, 
     onUpdateDrawings, 
     ticker: data.ticker,
-    setShowEth: data.setShowEth
+    setShowEth: data.setShowEth,
+    isSelected
   });
 
   // 3. Trade badge ref (needed for chart lifecycle)
@@ -130,10 +134,15 @@ export default function ChartUnit({
   };
 
   return (
-    <div className={`chart-card ${isMaximized ? 'is-maximized' : ''}`} style={{
-      ...mergedStyle,
-      borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,
-    }}>
+    <div 
+      ref={cardRef}
+      className={`chart-card ${isMaximized ? 'is-maximized' : ''} ${isSelected ? 'is-selected' : ''}`} 
+      style={{
+        ...mergedStyle,
+        borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,
+      }}
+      onClick={() => onSelect?.()}
+    >
       <ChartHeader 
         ticker={data.ticker}
         setTicker={data.setTicker}

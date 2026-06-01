@@ -1,6 +1,6 @@
 # Gemini Status - Market Rewind ⏪
 
-## Project State: COMPLETED (v7.8 - Group Sync Stabilization)
+## Project State: COMPLETED (v7.9 - Keyboard UX & Type Stability)
 
 Market Rewind is a zero-read, local-first market replay tool.
 
@@ -259,5 +259,11 @@ A rigorous automated verification suite was established to provide mathematical 
 - **`.gemini/active-plans/`**: Ongoing architectural and feature implementations.
 - **`.gemini/archived-plans/`**: Completed and verified implementation records.
 - **`tests/performance/`**: Specialized suite for system-level performance regression testing.
+
+### 7. Keyboard UX & Type Stability Phase
+*   **TradingView-style Input:** Implemented centralized parsing in `src/lib/parsing.ts` for seamless symbol and timeframe switching.
+*   **Input Responsiveness:** Fixed keyboard regression by capturing keystrokes in the pre-focus period and adding `onBlur` delays to prevent accidental closure.
+*   **TypeScript Hardening:** Resolved 40+ type errors by aligning React Ref types (`RefObject<T | null>`) and implementing strict null guards across hooks and components.
+*   **LWC v4 API Alignment:** Updated all custom plugins to the `ISeriesPrimitivePaneRenderer` interface and improved Unix timestamp mapping to ensure drawing stability during zoom/pan.
 
 

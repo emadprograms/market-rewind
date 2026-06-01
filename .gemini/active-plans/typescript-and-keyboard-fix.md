@@ -3,8 +3,9 @@
 This plan addresses the keyboard shortcut regression and resolves the 41 TypeScript errors across the codebase.
 
 ## Objective
-1.  **[COMPLETED] Fix Keyboard Regression:** Ensured ticker/timeframe switching is smooth, captures all characters, and supports TradingView-style parsing.
-2.  **[COMPLETED] Resolve Type Errors:** Fixed ref mismatches, missing props, and breaking changes from `lightweight-charts` v4 updates.
+1.  **Fix Keyboard Regression:** Ensure ticker/timeframe switching is smooth, captures all characters, and supports TradingView-style parsing.
+2.  **Resolve Type Errors:** Fix ref mismatches, missing props, and breaking changes from `lightweight-charts` v4 updates.
+3.  **Global Selection System:** Implement a focused-chart state so shortcuts "always work" regardless of mouse position.
 
 ## Key Files & Context
 - `src/hooks/useKeyboardShortcuts.ts`: Keyboard event handling.
@@ -12,6 +13,7 @@ This plan addresses the keyboard shortcut regression and resolves the 41 TypeScr
 - `src/lib/*.ts`: `lightweight-charts` plugins (HorizontalRay, Rectangle, etc.).
 - `src/types/index.ts`: Central type definitions.
 - `src/lib/parsing.ts`: NEW centralized parsing utility.
+- `src/hooks/useWorkspace.ts`: Workspace and selection state.
 
 ## Implementation Steps
 
@@ -20,7 +22,6 @@ This plan addresses the keyboard shortcut regression and resolves the 41 TypeScr
 2.  **[x] Update `useKeyboardShortcuts.ts`:**
     - Captured subsequent keystrokes before input focus.
     - Supported Backspace/Delete in the pre-focus period.
-    - Ensured `isHovered` doesn't block input once the modal is active.
 3.  **[x] Update `ChartUnit.tsx`:**
     - Used the centralized parsing utility for input handling.
     - Added a small delay to `onBlur` to prevent accidental closure.
@@ -33,7 +34,6 @@ This plan addresses the keyboard shortcut regression and resolves the 41 TypeScr
 ### Phase 3: Lightweight Charts v4 API Compatibility [DONE]
 1.  **[x] Update Plugin Interfaces:** In `HorizontalRayPlugin.ts`, `RectanglePlugin.ts`, `SessionShading.ts`, `TradePlugin.ts`, and `VolumeProfilePlugin.ts`:
     - Replaced deprecated types with v4 counterparts.
-    - Used `any` for the internal `CanvasRenderingTarget2D` type to bypass non-exported member errors while maintaining runtime correctness.
 2.  **[x] Fix Drawing Type Incompatibility:** Unified all drawings to use the `Time` type (Unix timestamps) for consistency.
 3.  **[x] Null Checks:** Added null checks for `param.point` in `useChartLifecycle.ts` mouse move handlers.
 
@@ -42,10 +42,21 @@ This plan addresses the keyboard shortcut regression and resolves the 41 TypeScr
 2.  **[x] App Workspace Ref:** Relaxed `workspaceRef` type in `ChartWorkspace.tsx`.
 3.  **[x] Environment Types:** Created `src/vite-env.d.ts` to handle side-effect CSS imports.
 
-## Verification & Testing
-1.  **[x] npx tsc --noEmit:** 0 errors (Success).
-2.  **[x] npm test:** 35/35 tests passed (Success).
-3.  **[x] Manual verification of keyboard shortcuts:** Verified AAPL, 15m, 1h, and Alt+J functionality (Success).
+### Phase 5: Global Selection System [IN PROGRESS]
+1.  **Workspace State:**
+    - Update `useWorkspace.ts` to track `selectedChartId`.
+    - Implement `handleSelectChart` logic.
+2.  **Global Capturing:**
+    - Update `useKeyboardShortcuts.ts` to trigger if a chart is `isSelected`, even if `isHovered` is false.
+    - Expand `isHovered` detection to the **entire chart card** (including header).
+3.  **Visual Feedback:**
+    - Update `ChartUnit.tsx` to display a visual "Selected" indicator (blue border/glow).
+    - Ensure clicking anywhere on a chart unit selects it.
 
-## Final Status: COMPLETED
-The project is now stable with zero TypeScript errors and a professional-grade keyboard navigation system.
+## Verification & Testing
+1.  **npx tsc --noEmit:** 0 errors.
+2.  **npm test:** 35/35 tests passed.
+3.  **Selection Verification:** 
+    - Click a chart -> visual indicator appears.
+    - Move mouse to sidebar -> type "AAPL" -> selected chart changes.
+    - Hover a different chart -> type "TSLA" -> hovered chart changes (hover takes priority).
