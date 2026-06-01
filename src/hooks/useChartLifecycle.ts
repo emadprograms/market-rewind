@@ -87,7 +87,12 @@ export function useChartLifecycle({
 
   useEffect(() => {
     currentTickerRef.current = ticker;
+    setIsHydrated(false);
   }, [ticker]);
+
+  useEffect(() => {
+    setIsHydrated(false);
+  }, [timeframe]);
 
   const scrollToRealTime = useCallback(() => {
     if (chartRef.current) {
@@ -438,6 +443,10 @@ export function useChartLifecycle({
 
         chartRef.current.priceScale('right').applyOptions({ autoScale: true });
         
+        requestAnimationFrame(() => {
+          setIsHydrated(true);
+        });
+
         const total = formatted.length;
         if (total > 0) {
           if (pendingHistoryPrependRef.current) {
