@@ -22,12 +22,14 @@ interface ChartHeaderProps {
   onUpdateDrawings: (ticker: string, type: 'rays' | 'rects', items: []) => void;
   isMaximized: boolean;
   onToggleMaximize: () => void;
+  onSelect?: () => void;
 }
 
 export function ChartHeader({
   ticker, setTicker, timeframe, setTimeframe, showEth, setShowEth, showVP, setShowVP,
   isDrawingMode, setIsDrawingMode, drawType, setDrawType, tickers, groupColor,
-  onGroupChange, onTickerChange, onUpdateDrawings, isMaximized, onToggleMaximize
+  onGroupChange, onTickerChange, onUpdateDrawings, isMaximized, onToggleMaximize,
+  onSelect
 }: ChartHeaderProps) {
   const [isTickerOpen, setIsTickerOpen] = useState(false);
   const [isTfOpen, setIsTfOpen] = useState(false);
@@ -62,7 +64,7 @@ export function ChartHeader({
   };
 
   return (
-    <div className="chart-header">
+    <div className="chart-header" onClick={() => onSelect?.()}>
       <div className="chart-controls">
         
         {/* ZONE A: PRIMARY CONTROLS */}

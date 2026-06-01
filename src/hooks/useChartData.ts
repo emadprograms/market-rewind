@@ -53,11 +53,6 @@ export function useChartData({
 
   // Group-to-Ticker Sync
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-
     // 1. Handle Group Change (Joining/Leaving)
     if (groupColor !== prevGroupColorRef.current) {
       prevGroupColorRef.current = groupColor;
@@ -77,7 +72,7 @@ export function useChartData({
       setTicker(groupTicker);
       prevGroupTickerRef.current = groupTicker; // Update anchor
     }
-  }, [groupColor, groupTicker]);
+  }, [groupColor, groupTicker, ticker]);
 
   // Report timeframe to parent
   useEffect(() => {

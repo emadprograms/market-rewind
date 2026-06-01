@@ -141,7 +141,6 @@ export default function ChartUnit({
         ...mergedStyle,
         borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,
       }}
-      onClick={() => onSelect?.()}
     >
       <ChartHeader 
         ticker={data.ticker}
@@ -163,9 +162,14 @@ export default function ChartUnit({
         onUpdateDrawings={onUpdateDrawings}
         isMaximized={isMaximized}
         onToggleMaximize={onToggleMaximize}
+        onSelect={onSelect}
       />
       
-      <div className="chart-panes" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div 
+        className="chart-panes" 
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+        onClick={() => onSelect?.()}
+      >
         <ChartCanvas
           chartContainerRef={chartContainerRef}
           isDrawingMode={keyboard.isDrawingMode}

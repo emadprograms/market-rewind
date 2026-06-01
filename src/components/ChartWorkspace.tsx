@@ -114,7 +114,7 @@ export const ChartWorkspace: React.FC<ChartWorkspaceProps> = ({
           onPnLUpdate={onPnLUpdate}
           onTimeframeChange={onTimeframeChange}
           groupColor={chartGroups[i] || 'none'}
-          groupTicker={groupTickers[chartGroups[i]] as string}
+          groupTicker={groupTickers[chartGroups[i] || 'none']}
           onGroupChange={(newGroup) => onGroupChange(i, newGroup)}
           onTickerChange={(newTicker) => onTickerChange(i, newTicker)}
           style={style}

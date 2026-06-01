@@ -264,8 +264,8 @@ body {
 }
 
 .chart-card.is-selected {
-  border-color: var(--accent-blue) !important;
-  box-shadow: 0 0 0 2px rgba(66, 165, 245, 0.3);
+  border-color: #42a5f5 !important;
+  box-shadow: 0 0 0 2px rgba(66, 165, 245, 0.4);
   z-index: 5;
 }
 

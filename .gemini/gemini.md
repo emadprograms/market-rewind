@@ -259,11 +259,16 @@ A rigorous automated verification suite was established to provide mathematical 
 - **`.gemini/active-plans/`**: Ongoing architectural and feature implementations.
 - **`.gemini/archived-plans/`**: Completed and verified implementation records.
 - **`tests/performance/`**: Specialized suite for system-level performance regression testing.
+### 7. Global Selection & Robust Shortcuts (v8.0)
+*   **Global Selection System**:
+    - **Focused-Chart Logic**: Implemented `selectedChartId` in `useWorkspace` to track the active chart for global keyboard input.
+    - **Visual Feedback**: Added a vibrant blue border (`#42a5f5`) and glow to the selected chart-card for clear focus indication.
+    - **Robust Event Propagation**: Moved click handlers to both header and panes in `ChartUnit.tsx` to ensure selection isn't blocked by child element `stopPropagation()`.
+    - **Global Keyboard Capture**: Updated `useKeyboardShortcuts` to listen for input globally if a chart is selected, while maintaining hover priority for rapid multi-chart navigation.
+*   **Group Sync Hardening**: 
+    - Fixed regression where grouped tickers failed to synchronize on initial mount.
+    - Corrected prop propagation in `ChartWorkspace.tsx` to ensure `groupTicker` state is correctly distributed to all members of a group.
+*   **TypeScript Stability**: Maintained zero errors across the codebase after the selection system refactor.
 
-### 7. Keyboard UX & Type Stability Phase
-*   **TradingView-style Input:** Implemented centralized parsing in `src/lib/parsing.ts` for seamless symbol and timeframe switching.
-*   **Input Responsiveness:** Fixed keyboard regression by capturing keystrokes in the pre-focus period and adding `onBlur` delays to prevent accidental closure.
-*   **TypeScript Hardening:** Resolved 40+ type errors by aligning React Ref types (`RefObject<T | null>`) and implementing strict null guards across hooks and components.
-*   **LWC v4 API Alignment:** Updated all custom plugins to the `ISeriesPrimitivePaneRenderer` interface and improved Unix timestamp mapping to ensure drawing stability during zoom/pan.
-
-
+---
+*Last Update: 2026-06-01*
