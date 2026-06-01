@@ -47,7 +47,7 @@ export function useKeyboardShortcuts({
       const container = chartContainerRef.current;
       if (!container) return;
       const isHovered = container.matches(':hover') || container.contains(document.activeElement);
-      if (!isHovered) return;
+      if (!isHovered && !keyboardActionRef.current.active) return;
 
       if (e.altKey || e.ctrlKey) {
         const keyLower = e.key.toLowerCase();
@@ -84,12 +84,21 @@ export function useKeyboardShortcuts({
       }
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (keyboardActionRef.current.active) return;
+        if (keyboardActionRef.current.active) {
+          updateKeyboardAction({ value: keyboardActionRef.current.value.slice(0, -1) });
+          return;
+        }
         onUpdateDrawings(currentTickerRef.current, 'rays', []);
         onUpdateDrawings(currentTickerRef.current, 'rects', []);
       }
 
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !keyboardActionRef.current.active) {
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        if (keyboardActionRef.current.active) {
+          // If already active but input not yet focused, append to value
+          updateKeyboardAction({ value: (keyboardActionRef.current.value + e.key).toUpperCase() });
+          return;
+        }
+
         const isNum = /^[0-9]$/.test(e.key);
         const isLetter = /^[a-zA-Z]$/.test(e.key);
 
@@ -98,7 +107,7 @@ export function useKeyboardShortcuts({
           updateKeyboardAction({ active: true, type: 'timeframe', value: e.key });
         } else if (isLetter) {
           e.preventDefault();
-          updateKeyboardAction({ active: true, type: 'ticker', value: e.key });
+          updateKeyboardAction({ active: true, type: 'ticker', value: e.key.toUpperCase() });
         }
       }
     };

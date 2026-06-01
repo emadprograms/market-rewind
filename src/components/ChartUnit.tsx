@@ -193,22 +193,33 @@ export default function ChartUnit({
                 return;
               }
 
-              if (keyboard.keyboardAction.type === 'timeframe') {
-                let newTf = null;
-                if (/^\d+$/.test(val)) {
-                  const num = parseInt(val);
+              // Unified Parsing (Timeframe vs Ticker)
+              let newTf: any = null;
+              const numericMatch = val.match(/^(\d+)(m|h|d)?$/);
+              
+              if (numericMatch) {
+                const num = parseInt(numericMatch[1]);
+                const unit = numericMatch[2] || 'm';
+
+                if (unit === 'm') {
                   if (num === 1) newTf = '1min';
                   else if (num === 5) newTf = '5min';
                   else if (num === 15) newTf = '15min';
                   else if (num === 30) newTf = '30min';
                   else if (num === 60) newTf = '1H';
-                } else if (val === '1h') newTf = '1H';
-                else if (val === '1d') newTf = '1D';
-
-                if (newTf) {
-                  data.setTimeframe(newTf as any);
+                } else if (unit === 'h') {
+                  if (num === 1) newTf = '1H';
+                } else if (unit === 'd') {
+                  if (num === 1) newTf = '1D';
                 }
-              } else if (keyboard.keyboardAction.type === 'ticker') {
+              } else {
+                if (val === '1h') newTf = '1H';
+                else if (val === '1d') newTf = '1D';
+              }
+
+              if (newTf) {
+                data.setTimeframe(newTf);
+              } else {
                 handleTickerUpdate(val.toUpperCase());
               }
 
@@ -219,7 +230,14 @@ export default function ChartUnit({
                 type="text"
                 value={keyboard.keyboardAction.value}
                 onChange={(e) => keyboard.updateKeyboardAction({ value: e.target.value.toUpperCase() })}
-                onBlur={() => keyboard.updateKeyboardAction({ active: false })}
+                onBlur={(e) => {
+                  // Small delay to allow clicking the form/modal without immediate closure
+                  setTimeout(() => {
+                    if (document.activeElement !== keyboard.keyboardInputRef.current) {
+                      keyboard.updateKeyboardAction({ active: false });
+                    }
+                  }, 100);
+                }}
               />
             </form>
           </div>
