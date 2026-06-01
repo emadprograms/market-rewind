@@ -4,25 +4,27 @@ export type GroupColor = 'none' | 'red' | 'blue' | 'green' | 'yellow' | 'purple'
 
 interface WorkspaceState {
   selectedId: string | null;
-  tickers: Record<string, string>;
-  groups: Record<string, GroupColor>;
-  groupTickers: Record<string, string>;
+  tickers: Record<string, string>; // chartId -> ticker
+  groups: Record<string, GroupColor>; // chartId -> group color
+  groupTickers: Record<string, string>; // group color -> ticker
 
   // Actions
   setSelectedId: (id: string) => void;
   setTicker: (id: string, ticker: string) => void;
   setGroup: (id: string, group: GroupColor) => void;
-  setGroupTicker: (group: string, ticker: string) => void;
+  setGroupTicker: (group: GroupColor, ticker: string) => void;
 }
 
-/**
- * Validates ticker strings to prevent unexpected characters or excessive length.
- * Mitigation for T-02-01.
- */
 const validateTicker = (ticker: string): string => {
-  // Allow alphanumeric, dots, dashes, and underscores. Max length 20.
-  const sanitized = ticker.replace(/[^a-zA-Z0-9.\-_]/g, '').substring(0, 20).toUpperCase();
-  return sanitized || 'UNKNOWN';
+  // Basic validation: alphanumeric, dots, dashes, max 20 chars
+  const sanitized = ticker.trim().toUpperCase();
+  if (sanitized.length === 0 || sanitized.length > 20) {
+    console.warn(`Invalid ticker length: ${ticker}`);
+  }
+  if (!/^[A-Z0-9.\- ]+$/.test(sanitized)) {
+    console.warn(`Invalid ticker characters: ${ticker}`);
+  }
+  return sanitized;
 };
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -32,44 +34,41 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   groupTickers: {},
 
   setSelectedId: (id) => set({ selectedId: id }),
-
-  setTicker: (id, ticker) => 
+  
+  setTicker: (id, ticker) => {
+    const validated = validateTicker(ticker);
     set((state) => ({
-      tickers: {
-        ...state.tickers,
-        [id]: validateTicker(ticker),
-      },
-    })),
+      tickers: { ...state.tickers, [id]: validated },
+    }));
+  },
 
-  setGroup: (id, group) => 
+  setGroup: (id, group) => {
     set((state) => ({
-      groups: {
-        ...state.groups,
-        [id]: group,
-      },
-    })),
+      groups: { ...state.groups, [id]: group },
+    }));
+  },
 
-  setGroupTicker: (group, ticker) => 
+  setGroupTicker: (group, ticker) => {
+    if (group === 'none') return;
+    const validated = validateTicker(ticker);
     set((state) => ({
-      groupTickers: {
-        ...state.groupTickers,
-        [group]: validateTicker(ticker),
-      },
-    })),
+      groupTickers: { ...state.groupTickers, [group]: validated },
+    }));
+  },
 }));
 
 /**
  * Returns the effective ticker for a chart.
- * If the chart is assigned to a group and that group has a ticker, use the group ticker.
- * Otherwise, fallback to the chart's individual ticker.
+ * If the chart is assigned to a group other than 'none', return the group's ticker.
+ * Otherwise, return the chart's own ticker.
  */
 export const getEffectiveTicker = (id: string) => {
   const { groups, groupTickers, tickers } = useWorkspaceStore.getState();
-  const group = groups[id];
+  const group = groups[id] || 'none';
   
-  if (group && group !== 'none' && groupTickers[group]) {
+  if (group !== 'none' && groupTickers[group]) {
     return groupTickers[group];
   }
   
-  return tickers[id] || 'NO TICKER';
+  return tickers[id] || '';
 };

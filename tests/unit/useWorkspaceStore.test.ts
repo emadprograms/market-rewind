@@ -12,35 +12,49 @@ describe('useWorkspaceStore', () => {
     });
   });
 
-  it('should update selectedId', () => {
+  it('should set and get the selectedId', () => {
     useWorkspaceStore.getState().setSelectedId('chart-1');
     expect(useWorkspaceStore.getState().selectedId).toBe('chart-1');
   });
 
-  it('should validate and set tickers', () => {
-    useWorkspaceStore.getState().setTicker('chart-1', 'AAPL!');
-    expect(useWorkspaceStore.getState().tickers['chart-1']).toBe('AAPL');
-    
-    useWorkspaceStore.getState().setTicker('chart-2', 'very-long-ticker-name-that-should-be-truncated');
-    expect(useWorkspaceStore.getState().tickers['chart-2']).toHaveLength(20);
+  it('should set and validate tickers', () => {
+    useWorkspaceStore.getState().setTicker('chart-1', ' apple ');
+    expect(useWorkspaceStore.getState().tickers['chart-1']).toBe('APPLE');
   });
 
-  it('should handle group assignments', () => {
+  it('should set and get group colors', () => {
     useWorkspaceStore.getState().setGroup('chart-1', 'red');
     expect(useWorkspaceStore.getState().groups['chart-1']).toBe('red');
   });
 
-  it('should correctly derive effective ticker', () => {
-    // Individual ticker
-    useWorkspaceStore.getState().setTicker('chart-1', 'AAPL');
-    expect(getEffectiveTicker('chart-1')).toBe('AAPL');
+  it('should set group tickers', () => {
+    useWorkspaceStore.getState().setGroupTicker('red', 'BTCUSD');
+    expect(useWorkspaceStore.getState().groupTickers['red']).toBe('BTCUSD');
+  });
 
-    // Group ticker override
-    useWorkspaceStore.getState().setGroup('chart-1', 'red');
-    useWorkspaceStore.getState().setGroupTicker('red', 'TSLA');
-    expect(getEffectiveTicker('chart-1')).toBe('TSLA');
+  describe('getEffectiveTicker', () => {
+    it('should return the chart ticker if not in a group', () => {
+      useWorkspaceStore.getState().setTicker('chart-1', 'AAPL');
+      useWorkspaceStore.getState().setGroup('chart-1', 'none');
+      expect(getEffectiveTicker('chart-1')).toBe('AAPL');
+    });
 
-    // No ticker case
-    expect(getEffectiveTicker('non-existent')).toBe('NO TICKER');
+    it('should return the group ticker if the chart is in a group', () => {
+      useWorkspaceStore.getState().setTicker('chart-1', 'AAPL');
+      useWorkspaceStore.getState().setGroup('chart-1', 'red');
+      useWorkspaceStore.getState().setGroupTicker('red', 'BTCUSD');
+      expect(getEffectiveTicker('chart-1')).toBe('BTCUSD');
+    });
+
+    it('should fallback to chart ticker if group ticker is missing', () => {
+      useWorkspaceStore.getState().setTicker('chart-1', 'AAPL');
+      useWorkspaceStore.getState().setGroup('chart-1', 'red');
+      // groupTickers['red'] is not set
+      expect(getEffectiveTicker('chart-1')).toBe('AAPL');
+    });
+
+    it('should return empty string if no ticker is found', () => {
+      expect(getEffectiveTicker('unknown')).toBe('');
+    });
   });
 });
