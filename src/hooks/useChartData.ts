@@ -72,7 +72,7 @@ export function useChartData({
       setTicker(groupTicker);
       prevGroupTickerRef.current = groupTicker; // Update anchor
     }
-  }, [groupColor, groupTicker, ticker]);
+  }, [groupColor, groupTicker]);
 
   // Report timeframe to parent
   useEffect(() => {
