@@ -69,6 +69,7 @@ export function useChartLifecycle({
 
   const [isAtEnd, setIsAtEnd] = useState(true);
   const [chartUpdateTick, setChartUpdateTick] = useState(0);
+  const [isHydrated, setIsHydrated] = useState(false);
   
   const lastDataCountRef = useRef(0);
   const lastBarSpacingRef = useRef<number | null>(null);
@@ -530,5 +531,6 @@ export function useChartLifecycle({
     tradePluginRef,
     isAtEnd,
     scrollToRealTime,
+    isHydrated,
   };
 }
