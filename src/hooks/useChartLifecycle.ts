@@ -71,6 +71,14 @@ export function useChartLifecycle({
   const [chartUpdateTick, setChartUpdateTick] = useState(0);
   const [isHydrated, setIsHydrated] = useState(false);
   
+  const AUTO_REVEAL_THRESHOLD = 10;
+
+  const scrollToRealTime = useCallback(() => {
+    if (chartRef.current) {
+      chartRef.current.timeScale().scrollToRealTime();
+    }
+  }, []);
+
   const lastDataCountRef = useRef(0);
   const lastBarSpacingRef = useRef<number | null>(null);
   const priceLineRef = useRef<IPriceLine | null>(null);
@@ -94,11 +102,11 @@ export function useChartLifecycle({
     setIsHydrated(false);
   }, [timeframe]);
 
-  const scrollToRealTime = useCallback(() => {
-    if (chartRef.current) {
-      chartRef.current.timeScale().scrollToRealTime();
+  useEffect(() => {
+    if (isHydrated && chartData.length > 0) {
+      scrollToRealTime();
     }
-  }, [chartRef]);
+  }, [isHydrated, chartData, scrollToRealTime]);
 
   // 2. Initialize Charts
   useEffect(() => {
@@ -416,7 +424,21 @@ export function useChartLifecycle({
 
         const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
 
-        if (wasAtEnd) {
+        if (pendingHistoryPrependRef.current) {
+          // Prepend takes precedence over end-of-chart shift
+          const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
+          const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
+          
+          if (newFirstIndex > 0 && prependRange) {
+              ts.setVisibleLogicalRange({
+                  from: prependRange.from + newFirstIndex,
+                  to: prependRange.to + newFirstIndex
+              });
+          } else {
+              ts.setVisibleLogicalRange(oldLogicalRange);
+          }
+          pendingHistoryPrependRef.current = null;
+        } else if (wasAtEnd) {
           const shift = formatted.length - lastDataCountRef.current;
           if (shift > 0) {
             ts.setVisibleLogicalRange({
@@ -447,25 +469,17 @@ export function useChartLifecycle({
           setIsHydrated(true);
         });
 
-        const total = formatted.length;
-        if (total > 0) {
-          if (pendingHistoryPrependRef.current) {
-              const { oldFirstTime, oldLogicalRange } = pendingHistoryPrependRef.current;
-              const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
-              
-              if (newFirstIndex > 0 && oldLogicalRange) {
-                  chartRef.current.timeScale().setVisibleLogicalRange({
-                      from: oldLogicalRange.from + newFirstIndex,
-                      to: oldLogicalRange.to + newFirstIndex
-                  });
-              }
-              pendingHistoryPrependRef.current = null;
-          } else {
-              setTimeout(() => {
-                if (!chartRef.current) return;
-                chartRef.current.timeScale().scrollToRealTime();
-              }, 80);
-          }
+        if (pendingHistoryPrependRef.current) {
+            const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
+            const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
+            
+            if (newFirstIndex > 0 && prependRange) {
+                ts.setVisibleLogicalRange({
+                    from: prependRange.from + newFirstIndex,
+                    to: prependRange.to + newFirstIndex
+                });
+            }
+            pendingHistoryPrependRef.current = null;
         }
       }
 
@@ -491,7 +505,24 @@ export function useChartLifecycle({
     }
   }, [ticker, timeframe, showEth]);
 
-  // 4. Live Price Line for 1D chart (Extended Hours)
+  // 4. Auto-Reveal Logic during Replay
+  useEffect(() => {
+    if (!isReplayMode || !chartRef.current || !priceSeriesRef.current) return;
+
+    const ts = chartRef.current.timeScale();
+    const range = ts.getVisibleLogicalRange();
+    if (!range) return;
+
+    const data = priceSeriesRef.current.data();
+    const dataEnd = data.length - 1;
+    
+    // If viewport right edge is within threshold of data end, reveal new bars
+    if (range.to >= dataEnd - AUTO_REVEAL_THRESHOLD) {
+      scrollToRealTime();
+    }
+  }, [globalTime, isReplayMode, scrollToRealTime]);
+
+  // 5. Live Price Line for 1D chart (Extended Hours)
   useEffect(() => {
     if (!priceSeriesRef.current) return;
 

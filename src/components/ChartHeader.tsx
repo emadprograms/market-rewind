@@ -71,8 +71,7 @@ export function ChartHeader({
         <div className="custom-dropdown-container" ref={tickerRef}>
           <div 
             className={`custom-select ${isTickerOpen ? 'active' : ''}`} 
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={() => {
               setIsTickerOpen(!isTickerOpen);
             }}
           >
@@ -117,8 +116,7 @@ export function ChartHeader({
         <div className="custom-dropdown-container" ref={tfRef}>
           <div 
             className={`custom-select ${isTfOpen ? 'active' : ''}`} 
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={() => {
               setIsTfOpen(!isTfOpen);
             }}
           >
@@ -151,8 +149,7 @@ export function ChartHeader({
         <div className="custom-dropdown-container" ref={settingsRef}>
           <div 
             className={`custom-select icon-only ${isSettingsOpen ? 'active' : ''} ${isDrawingMode ? 'active-drawing' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={() => {
               setIsSettingsOpen(!isSettingsOpen);
             }}
             title="Settings & Tools"
@@ -263,8 +260,7 @@ export function ChartHeader({
         <div className="custom-dropdown-container" ref={groupRef}>
           <div 
             className={`custom-select ${isGroupOpen ? 'active' : ''} ${groupColor !== 'none' ? 'group-active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={() => {
               setIsGroupOpen(!isGroupOpen);
             }}
             style={{
