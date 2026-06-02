@@ -10,6 +10,7 @@ import type {
     ITimeScaleApi,
     Coordinate
 } from 'lightweight-charts';
+import type { ChartTarget, ChartScope } from '../types';
 
 export interface Rectangle {
     p1: { price: number; time: Time };
@@ -34,8 +35,8 @@ class RectangleRenderer implements ISeriesPrimitivePaneRenderer {
         this._data = data;
     }
 
-    draw(target: any) {
-        target.useMediaCoordinateSpace((scope: any) => {
+    draw(target: ChartTarget) {
+        target.useMediaCoordinateSpace((scope: ChartScope) => {
             const ctx = scope.context;
             if (!this._data || !this._data.rects || this._data.rects.length === 0) return;
 

@@ -134,6 +134,18 @@ export interface ChartUnitProps {
 
 // --- Chart Refs (for useChartLifecycle) ---
 
+export interface ChartTarget {
+  useMediaCoordinateSpace(callback: (scope: ChartScope) => void): void;
+}
+
+export interface ChartScope {
+  context: CanvasRenderingContext2D;
+  mediaSize: {
+    width: number;
+    height: number;
+  };
+}
+
 export interface ChartRefs {
   chartRef: React.MutableRefObject<IChartApi | null>;
   priceSeriesRef: React.MutableRefObject<ISeriesApi<'Candlestick'> | null>;

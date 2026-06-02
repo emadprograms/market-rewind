@@ -11,7 +11,7 @@ import type {
     CandlestickData,
     Coordinate
 } from 'lightweight-charts';
-import type { Timeframe } from '../types';
+import type { Timeframe, ChartTarget, ChartScope } from '../types';
 
 const formatter = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York',
@@ -50,8 +50,8 @@ class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
     this._data = data;
   }
 
-  draw(target: any) {
-    target.useMediaCoordinateSpace((scope: any) => {
+  draw(target: ChartTarget) {
+    target.useMediaCoordinateSpace((scope: ChartScope) => {
       const ctx = scope.context;
       if (!this._data || !this._data.bars || this._data.bars.length === 0) return;
       

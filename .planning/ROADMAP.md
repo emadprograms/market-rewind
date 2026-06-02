@@ -4,8 +4,8 @@
 
 - [x] **Phase 1: Viewport Stabilization** - Eliminate violent viewport jumps and ensure deterministic chart loading.
 - [ ] **Phase 2: Selection & Grouping Hardening** - Ensure 100% reliable focus and symbol synchronization.
-- [ ] **Phase 3: Stability Guardrails** - Build automated regression tests for critical stability paths.
-- [ ] **Phase 4: Systemic Hardening & Audit** - Map architectural fragility and resolve systemic technical debt to ensure long-term maintainability.
+- [x] **Phase 3: Stability Guardrails** - Build automated regression tests for critical stability paths.
+- [x] **Phase 4: Systemic Hardening & Audit** - Map architectural fragility and resolve systemic technical debt to ensure long-term maintainability.
 
 ## Phase Details
 

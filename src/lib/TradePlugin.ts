@@ -10,7 +10,7 @@ import type {
     SeriesAttachedParameter,
     Coordinate
 } from 'lightweight-charts';
-import type { ActiveTrade, TradeType } from '../types';
+import type { ActiveTrade, TradeType, ChartTarget, ChartScope } from '../types';
 
 interface TradeRenderData {
     yEntry: Coordinate;
@@ -28,9 +28,9 @@ class TradeRenderer implements ISeriesPrimitivePaneRenderer {
         this._badgeRef = badgeRef;
     }
 
-    draw(target: any) {
+    draw(target: ChartTarget) {
         try {
-            target.useMediaCoordinateSpace((scope: any) => {
+            target.useMediaCoordinateSpace((scope: ChartScope) => {
                 const ctx = scope.context;
                 if (!this._data) return;
 

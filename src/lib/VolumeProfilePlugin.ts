@@ -9,6 +9,7 @@ import type {
     SeriesAttachedParameter,
     Coordinate
 } from 'lightweight-charts';
+import type { ChartTarget, ChartScope } from '../types';
 
 export interface VPDataBar {
     time: Time;
@@ -43,8 +44,8 @@ class VolumeProfileRenderer implements ISeriesPrimitivePaneRenderer {
         this._data = data;
     }
 
-    draw(target: any) {
-        target.useMediaCoordinateSpace((scope: any) => {
+    draw(target: ChartTarget) {
+        target.useMediaCoordinateSpace((scope: ChartScope) => {
             const ctx = scope.context;
             if (!this._data || !this._data.bins || this._data.bins.length === 0) return;
             
