@@ -86,6 +86,7 @@ export function useChartData({
       const data = await fetchMarketData(ticker, selectedDate, daysBack);
       if (cancelled) return;
       
+      console.log(`[useChartData] Fetched ${data?.length || 0} bars for ${ticker} at ${timeframe}`);
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }

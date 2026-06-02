@@ -130,7 +130,7 @@ export const ChartWorkspace: React.FC<ChartWorkspaceProps> = ({
   
   return (
     <main className={`workspace grid-${layoutMode}`} ref={workspaceRef}>
-      {!maximizedId && isResizable ? (
+      {maximizedId === null && isResizable ? (
         (() => {
           const res: React.ReactNode[] = [];
           const gutterMode = layoutMode.endsWith('v') ? 'v' : 'h';

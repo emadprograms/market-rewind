@@ -102,6 +102,7 @@ export function useChartInit({
     const resizeObserver = new ResizeObserver(entries => {
       if (entries.length === 0 || entries[0].target !== chartContainerRef.current) return;
       const newRect = entries[0].contentRect;
+      console.log(`[useChartInit] Resize: ${newRect.width}x${newRect.height} for ${ticker}`);
       chart.applyOptions({ width: newRect.width, height: newRect.height });
     });
 
