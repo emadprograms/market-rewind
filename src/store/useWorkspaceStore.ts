@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-
-export type GroupColor = 'none' | 'red' | 'blue' | 'green' | 'yellow' | 'purple' | 'orange';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import type { GroupColor } from '../types';
 
 interface WorkspaceState {
   selectedId: string | null;
@@ -16,7 +16,6 @@ interface WorkspaceState {
 }
 
 const validateTicker = (ticker: string): string => {
-  // Basic validation: alphanumeric, dots, dashes, max 20 chars
   const sanitized = ticker.trim().toUpperCase();
   if (sanitized.length === 0 || sanitized.length > 20) {
     console.warn(`Invalid ticker length: ${ticker}`);
@@ -27,50 +26,70 @@ const validateTicker = (ticker: string): string => {
   return sanitized;
 };
 
-export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
-  selectedId: null,
-  tickers: {},
-  groups: {},
-  groupTickers: {},
+export const useWorkspaceStore = create<WorkspaceState>()(
+  persist(
+    (set, get) => ({
+      selectedId: null,
+      tickers: {},
+      groups: {},
+      groupTickers: { red: 'SPY', blue: 'SPY', green: 'SPY', yellow: 'SPY' },
 
-  setSelectedId: (id) => set({ selectedId: id }),
-  
-  setTicker: (id, ticker) => {
-    const validated = validateTicker(ticker);
-    set((state) => ({
-      tickers: { ...state.tickers, [id]: validated },
-    }));
-  },
+      setSelectedId: (id) => set({ selectedId: id }),
+      
+      setTicker: (id, ticker) => {
+        const validated = validateTicker(ticker);
+        set((state) => ({
+          tickers: { ...state.tickers, [id]: validated },
+        }));
+      },
 
-  setGroup: (id, group) => {
-    const allowedGroups: GroupColor[] = ['none', 'red', 'blue', 'green', 'yellow', 'purple', 'orange'];
-    if (!allowedGroups.includes(group)) {
-      console.warn(`Invalid group color provided: ${group}. Reverting to 'none'.`);
-      set((state) => ({
-        groups: { ...state.groups, [id]: 'none' },
-      }));
-      return;
+      setGroup: (id, group) => {
+        const allowedGroups: GroupColor[] = ['none', 'red', 'blue', 'green', 'yellow'];
+        if (!allowedGroups.includes(group)) {
+          console.warn(`Invalid group color provided: ${group}. Reverting to 'none'.`);
+          set((state) => ({
+            groups: { ...state.groups, [id]: 'none' },
+          }));
+          return;
+        }
+
+        set((state) => {
+          const oldGroup = state.groups[id];
+          const nextGroups = { ...state.groups, [id]: group };
+          
+          // Check if the old group is now empty
+          let nextGroupTickers = { ...state.groupTickers };
+          if (oldGroup && oldGroup !== 'none' && oldGroup !== group) {
+            const isNowEmpty = Object.values(nextGroups).every(g => g !== oldGroup);
+            if (isNowEmpty) {
+              const { [oldGroup]: _, ...rest } = nextGroupTickers;
+              nextGroupTickers = rest;
+            }
+          }
+
+          return {
+            groups: nextGroups,
+            groupTickers: nextGroupTickers
+          };
+        });
+      },
+
+      setGroupTicker: (group, ticker) => {
+        if (group === 'none') return;
+        const validated = validateTicker(ticker);
+        set((state) => ({
+          groupTickers: { ...state.groupTickers, [group]: validated },
+        }));
+      },
+    }),
+    {
+      name: 'workspace-storage', // unique name for localStorage key
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ groups: state.groups, groupTickers: state.groupTickers, tickers: state.tickers }),
     }
+  )
+);
 
-    set((state) => ({
-      groups: { ...state.groups, [id]: group },
-    }));
-  },
-
-  setGroupTicker: (group, ticker) => {
-    if (group === 'none') return;
-    const validated = validateTicker(ticker);
-    set((state) => ({
-      groupTickers: { ...state.groupTickers, [group]: validated },
-    }));
-  },
-}));
-
-/**
- * Returns the effective ticker for a chart.
- * If the chart is assigned to a group other than 'none', return the group's ticker.
- * Otherwise, return the chart's own ticker.
- */
 export const getEffectiveTicker = (id: string) => {
   const { groups, groupTickers, tickers } = useWorkspaceStore.getState();
   const group = groups[id] || 'none';

@@ -13,7 +13,7 @@ interface ChartWorkspaceProps {
   selectedDate: string;
   isSessionStarted: boolean;
   drawings: AllDrawings;
-  chartGroups: Record<number, GroupColor>;
+  chartGroups: Record<string, GroupColor>;
   groupTickers: Record<string, string>;
   workspaceRef: React.RefObject<HTMLElement | null>;
   selectedChartId: number;
@@ -80,14 +80,17 @@ export const ChartWorkspace: React.FC<ChartWorkspaceProps> = ({
 
     const sizes = panelSizes[layoutMode] || [100 / gridCount];
     const style: React.CSSProperties = {};
-    if (maximizedId === i) {
+    
+    const effectiveMaximizedId = (maximizedId !== null && maximizedId < gridCount) ? maximizedId : null;
+
+    if (effectiveMaximizedId === i) {
       style.position = 'absolute';
       style.top = '0';
       style.left = '0';
       style.width = '100%';
       style.height = '100%';
       style.zIndex = 9999;
-    } else if (!maximizedId) {
+    } else if (effectiveMaximizedId === null) {
       const size = sizes[i] !== undefined ? sizes[i] : (100 / gridCount);
       if (layoutMode.endsWith('v')) style.width = `${size}%`;
       if (layoutMode.endsWith('h')) style.height = `${size}%`;
@@ -113,8 +116,8 @@ export const ChartWorkspace: React.FC<ChartWorkspaceProps> = ({
           onUpdateDrawings={onUpdateDrawings}
           onPnLUpdate={onPnLUpdate}
           onTimeframeChange={onTimeframeChange}
-          groupColor={chartGroups[i] || 'none'}
-          groupTicker={groupTickers[chartGroups[i] || 'none']}
+          groupColor={chartGroups[i.toString()] || 'none'}
+          groupTicker={groupTickers[chartGroups[i.toString()] || 'none']}
           onGroupChange={(newGroup) => onGroupChange(i, newGroup)}
           onTickerChange={(newTicker) => onTickerChange(i, newTicker)}
           style={style}

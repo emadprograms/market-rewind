@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { GroupColor, Timeframe } from '../types';
+import { useWorkspaceStore } from '../store/useWorkspaceStore';
 
 const TF_MINUTES: Record<string, number> = { '1min': 1, '5min': 5, '15min': 15, '30min': 30, '1H': 60, '1D': 1440 };
 
@@ -17,45 +18,20 @@ export function useWorkspace() {
     '4': [50, 50, 50, 50]
   });
 
-  const [groupTickers, setGroupTickers] = useState<Record<string, string>>(() => {
-    try {
-      const saved = localStorage.getItem('groupTickers');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
-      }
-    } catch (e) {
-      console.error('Failed to parse groupTickers from localStorage', e);
-    }
-    return { red: 'SPY', blue: 'SPY', green: 'SPY', yellow: 'SPY' };
+  // Use Workspace Store for these
+  const chartGroups = useWorkspaceStore((state) => state.groups);
+  const groupTickers = useWorkspaceStore((state) => state.groupTickers);
+  const setGroup = useWorkspaceStore((state) => state.setGroup);
+  const setGroupTicker = useWorkspaceStore((state) => state.setGroupTicker);
+  const setTicker = useWorkspaceStore((state) => state.setTicker);
+  const selectedChartId = useWorkspaceStore((state) => {
+    const sid = state.selectedId;
+    return sid ? parseInt(sid, 10) : 0;
   });
-  
-  const [chartGroups, setChartGroups] = useState<Record<number, GroupColor>>(() => {
-    try {
-      const saved = localStorage.getItem('chartGroups');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
-      }
-    } catch (e) {
-      console.error('Failed to parse chartGroups from localStorage', e);
-    }
-    return {};
-  });
-
-  const [selectedChartId, setSelectedChartId] = useState<number>(0);
+  const setSelectedChartId = (id: number) => useWorkspaceStore.getState().setSelectedId(id.toString());
 
   const dragInfo = useRef<{ active: boolean; mode: 'v' | 'h' | null; index: number | null }>({ active: false, mode: null, index: null });
   const workspaceRef = useRef<HTMLElement | null>(null);
-
-  // Persistence
-  useEffect(() => {
-    localStorage.setItem('chartGroups', JSON.stringify(chartGroups));
-  }, [chartGroups]);
-
-  useEffect(() => {
-    localStorage.setItem('groupTickers', JSON.stringify(groupTickers));
-  }, [groupTickers]);
 
   const minStepMinutes = useMemo(() => {
     const tfs = Object.values(chartTimeframes);
@@ -115,30 +91,16 @@ export function useWorkspace() {
   }, []);
 
   const handleTickerChange = useCallback((chartId: number, newTicker: string) => {
-    const group = chartGroups[chartId] || 'none';
+    setTicker(chartId.toString(), newTicker);
+    const group = chartGroups[chartId.toString()] || 'none';
     if (group !== 'none') {
-      setGroupTickers(prev => ({ ...prev, [group]: newTicker }));
+      setGroupTicker(group, newTicker);
     }
-  }, [chartGroups]);
+  }, [chartGroups, setGroupTicker, setTicker]);
 
   const handleGroupChange = useCallback((chartId: number, newGroup: GroupColor) => {
-    setChartGroups(prev => {
-      const oldGroup = prev[chartId];
-      const next = { ...prev, [chartId]: newGroup };
-      
-      // Check if the old group is now empty
-      if (oldGroup && oldGroup !== 'none' && oldGroup !== newGroup) {
-        const isNowEmpty = Object.values(next).every(g => g !== oldGroup);
-        if (isNowEmpty) {
-          setGroupTickers(gt => {
-            const { [oldGroup]: _, ...rest } = gt;
-            return rest;
-          });
-        }
-      }
-      return next;
-    });
-  }, []);
+    setGroup(chartId.toString(), newGroup);
+  }, [setGroup]);
 
   const handleTimeframeChange = useCallback((chartId: number, tf: Timeframe) => {
     setChartTimeframes(prev => ({
@@ -150,11 +112,11 @@ export function useWorkspace() {
   const toggleMaximize = useCallback((id: number) => {
     setMaximizedId(prev => prev === id ? null : id);
     setSelectedChartId(id);
-  }, []);
+  }, [setSelectedChartId]);
 
   const handleSelectChart = useCallback((id: number) => {
     setSelectedChartId(id);
-  }, []);
+  }, [setSelectedChartId]);
 
   return {
     layoutMode,
