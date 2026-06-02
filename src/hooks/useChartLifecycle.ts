@@ -5,6 +5,9 @@ import { getTzForTicker } from '../lib/timezones';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 import { useChartInit } from './chart/useChartInit';
 import { useChartPlugins } from './chart/useChartPlugins';
+import { useChartDrawings } from './chart/useChartDrawings';
+import { useChartViewport } from './chart/useChartViewport';
+
 
 interface UseChartLifecycleParams {
   chartContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -85,22 +88,43 @@ export function useChartLifecycle({
     tradeBadgeRef,
   });
 
+  const {
+    syncViewport,
+    checkAutoReveal,
+    scrollToRealTime,
+  } = useChartViewport({
+    chartRef,
+    priceSeriesRef,
+    chartData,
+    pendingHistoryPrependRef,
+  });
+
+  useChartDrawings({
+    chartRef,
+    priceSeriesRef,
+    chartContainerRef,
+    isDrawingMode,
+    drawType,
+    rectAnchor,
+    setRectAnchor,
+    ghostPoint,
+    setGhostPoint,
+    drawings,
+    ticker,
+    onUpdateDrawings,
+  });
+
   const [isAtEnd, setIsAtEnd] = useState(true);
   const [chartUpdateTick, setChartUpdateTick] = useState(0);
   const [isHydrated, setIsHydrated] = useState(false);
   
-  const AUTO_REVEAL_THRESHOLD = 10;
+  // The AUTO_REVEAL_THRESHOLD is now inside useChartViewport
+
 
   useEffect(() => {
     chartRef.current = initChartRef.current;
     priceSeriesRef.current = initPriceSeriesRef.current;
   }, [initChartRef.current, initPriceSeriesRef.current, chartRef, priceSeriesRef]);
-
-  const scrollToRealTime = useCallback(() => {
-    if (initChartRef.current) {
-      initChartRef.current.timeScale().scrollToRealTime();
-    }
-  }, []);
 
   const lastDataCountRef = useRef(0);
   const priceLineRef = useRef<IPriceLine | null>(null);
@@ -110,6 +134,7 @@ export function useChartLifecycle({
   
   const isDrawingModeRef = useRef(isDrawingMode);
   const currentTickerRef = useRef(ticker);
+
 
   useEffect(() => {
     isDrawingModeRef.current = isDrawingMode;
@@ -131,111 +156,6 @@ export function useChartLifecycle({
       scrollToRealTime();
     }
   }, [isHydrated, scrollToRealTime]);
-
-  // Drawing Click/DblClick/MouseMove Handlers
-  useEffect(() => {
-    const container = chartContainerRef.current;
-    if (!container || !initChartRef.current || !initPriceSeriesRef.current) return;
-
-    const chart = initChartRef.current;
-    const series = initPriceSeriesRef.current;
-
-    const handleClick = (param: MouseEventParams<Time>) => {
-      if (!isDrawingModeRef.current || !param.point || !param.time) return;
-      const price = series.coordinateToPrice(param.point.y);
-      if (price === null || price === undefined) return;
-
-      if (drawType === 'ray') {
-        onUpdateDrawings(currentTickerRef.current, 'rays', [...(drawings.rays || []), { price, time: param.time }]);
-      } else if (drawType === 'rect') {
-        if (!rectAnchor) {
-          setRectAnchor({ price, time: param.time });
-        } else {
-          onUpdateDrawings(currentTickerRef.current, 'rects', [...(drawings.rects || []), { p1: rectAnchor, p2: { price, time: param.time } }]);
-          setRectAnchor(null);
-        }
-      }
-    };
-
-    const handleMouseMove = (param: MouseEventParams<Time>) => {
-      if (!isDrawingModeRef.current || !rectAnchor || !param.point || !param.time) {
-        if (ghostPoint) setGhostPoint(null);
-        return;
-      }
-      const price = series.coordinateToPrice(param.point.y);
-      if (price !== null) {
-        setGhostPoint({ price, time: param.time });
-      }
-    };
-
-    const handleDblClick = (param: MouseEventParams<Time>) => {
-      if (!param.point || !param.time) return;
-      const clickPrice = series.coordinateToPrice(param.point.y);
-      if (clickPrice === null || clickPrice === undefined) return;
-
-      let nearestIdx = -1;
-      let nearestDist = Infinity;
-      (drawings.rays || []).forEach((entry, idx) => {
-        const dist = Math.abs(entry.price - clickPrice);
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearestIdx = idx;
-        }
-      });
-
-      if (nearestIdx !== -1) {
-        const ray = drawings.rays[nearestIdx];
-        const rayY = series.priceToCoordinate(ray.price);
-        const rayX = chart.timeScale().timeToCoordinate(ray.time as Time);
-        if (rayY !== null && Math.abs(rayY - param.point.y) < 10 && (param.point.x >= (rayX || 0) - 5)) { 
-          const newRays = [...drawings.rays];
-          newRays.splice(nearestIdx, 1);
-          onUpdateDrawings(currentTickerRef.current, 'rays', newRays);
-          return;
-        }
-      }
-
-      let rectToDelete = -1;
-      (drawings.rects || []).forEach((rect, idx) => {
-          const y1 = series.priceToCoordinate(rect.p1.price);
-          const y2 = series.priceToCoordinate(rect.p2.price);
-          const x1 = chart.timeScale().timeToCoordinate(rect.p1.time as Time);
-          const x2 = chart.timeScale().timeToCoordinate(rect.p2.time as Time);
-          
-          if (y1 === null || y2 === null) return;
-          
-          const top = Math.min(y1, y2);
-          const bottom = Math.max(y1, y2);
-          const xStart = x1 === null ? -100 : x1;
-          const xEnd = x2 === null ? chart.timeScale().width() + 100 : x2;
-          const left = Math.min(xStart, xEnd);
-          const right = Math.max(xStart, xEnd);
-
-          if (param.point && param.point.y >= top - 5 && param.point.y <= bottom + 5 &&
-              param.point.x >= left - 5 && param.point.x <= right + 5) {
-              rectToDelete = idx;
-          }
-      });
-
-      if (rectToDelete !== -1) {
-          const newRects = [...drawings.rects];
-          newRects.splice(rectToDelete, 1);
-          onUpdateDrawings(currentTickerRef.current, 'rects', newRects);
-      }
-    };
-
-    chart.subscribeClick(handleClick);
-    chart.subscribeCrosshairMove(handleMouseMove);
-    chart.subscribeDblClick(handleDblClick);
-
-    return () => {
-      try {
-        chart.unsubscribeClick(handleClick);
-        chart.unsubscribeCrosshairMove(handleMouseMove);
-        chart.unsubscribeDblClick(handleDblClick);
-      } catch(_) {}
-    };
-  }, [drawings, drawType, rectAnchor]);
 
   // Update chart timezone and timeframe-aware formatters
   useEffect(() => {
@@ -294,83 +214,17 @@ export function useChartLifecycle({
                             lastTfRef.current === timeframe && 
                             lastEthRef.current === showEth;
       console.log(`[StabilityTrace] isSameContext: ${isSameContext}, dataLength: ${formatted.length}`);
-      const ts = initChartRef.current.timeScale();
-      const oldLogicalRange = ts.getVisibleLogicalRange();
+      
+      initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+        time, open, high, low, close
+      })));
+      initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
+        time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
+      })));
 
-      if (isSameContext && oldLogicalRange) {
-        initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
-          time, open, high, low, close
-        })));
-        initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
-          time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
-        })));
-
-        initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
-
-        const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
-
-        if (pendingHistoryPrependRef.current) {
-          // Prepend takes precedence over end-of-chart shift
-          const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
-          
-          if (oldFirstTime === null) {
-            pendingHistoryPrependRef.current = null;
-            ts.setVisibleLogicalRange(oldLogicalRange);
-            return;
-          }
-
-          const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
-          console.log(`[StabilityTrace] Prepend detected. oldFirstTime: ${oldFirstTime}, newFirstIndex: ${newFirstIndex}`);
-          
-          if (newFirstIndex > 0 && prependRange) {
-              ts.setVisibleLogicalRange({
-                  from: prependRange.from + newFirstIndex,
-                  to: prependRange.to + newFirstIndex
-              });
-          } else {
-              ts.setVisibleLogicalRange(oldLogicalRange);
-          }
-          pendingHistoryPrependRef.current = null;
-        } else if (wasAtEnd) {
-          const shift = formatted.length - lastDataCountRef.current;
-          if (shift > 0) {
-            ts.setVisibleLogicalRange({
-              from: oldLogicalRange.from + shift,
-              to: oldLogicalRange.to + shift
-            });
-          } else {
-            ts.setVisibleLogicalRange(oldLogicalRange);
-          }
-        } else {
-          ts.setVisibleLogicalRange(oldLogicalRange);
-        }
-
-      } else {
-        initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
-          time, open, high, low, close
-        })));
-
-        initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
-          time,
-          value: volume,
-          color: close >= open ? '#26a69a' : '#ef5350'
-        })));
-
-        initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
-        
-        if (pendingHistoryPrependRef.current) {
-            const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
-            const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
-            
-            if (newFirstIndex > 0 && prependRange) {
-                ts.setVisibleLogicalRange({
-                    from: prependRange.from + newFirstIndex,
-                    to: prependRange.to + newFirstIndex
-                });
-            }
-            pendingHistoryPrependRef.current = null;
-        }
-      }
+      initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
+      
+      syncViewport(isSameContext);
 
       lastDataCountRef.current = formatted.length;
       lastTickerRef.current = ticker;
@@ -391,7 +245,7 @@ export function useChartLifecycle({
         lastDataCountRef.current = 0;
     }
 
-  }, [chartData, isReplayMode, isLoadingHistory]);
+  }, [chartData, isReplayMode, isLoadingHistory, syncViewport]);
 
   // 3b. Refresh shading plugin when ticker/timeframe/ETH changes
   useEffect(() => {
@@ -404,18 +258,8 @@ export function useChartLifecycle({
   useEffect(() => {
     if (!isReplayMode || !initChartRef.current || !initPriceSeriesRef.current) return;
 
-    const ts = initChartRef.current.timeScale();
-    const range = ts.getVisibleLogicalRange();
-    if (!range) return;
-
-    const data = initPriceSeriesRef.current.data();
-    const dataEnd = data.length - 1;
-    
-    // If viewport right edge is within threshold of data end, reveal new bars
-    if (range.to >= dataEnd - AUTO_REVEAL_THRESHOLD) {
-      scrollToRealTime();
-    }
-  }, [globalTime, isReplayMode, scrollToRealTime]);
+    checkAutoReveal();
+  }, [globalTime, isReplayMode, checkAutoReveal]);
 
   // 5. Live Price Line for 1D chart (Extended Hours)
   useEffect(() => {
