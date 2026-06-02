@@ -92,11 +92,7 @@ export function useWorkspace() {
 
   const handleTickerChange = useCallback((chartId: number, newTicker: string) => {
     setTicker(chartId.toString(), newTicker);
-    const group = chartGroups[chartId.toString()] || 'none';
-    if (group !== 'none') {
-      setGroupTicker(group, newTicker);
-    }
-  }, [chartGroups, setGroupTicker, setTicker]);
+  }, [setTicker]);
 
   const handleGroupChange = useCallback((chartId: number, newGroup: GroupColor) => {
     setGroup(chartId.toString(), newGroup);

@@ -38,9 +38,20 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       
       setTicker: (id, ticker) => {
         const validated = validateTicker(ticker);
-        set((state) => ({
-          tickers: { ...state.tickers, [id]: validated },
-        }));
+        set((state) => {
+          const group = state.groups[id] || 'none';
+          const nextTickers = { ...state.tickers, [id]: validated };
+          const nextGroupTickers = { ...state.groupTickers };
+          
+          if (group !== 'none') {
+            nextGroupTickers[group] = validated;
+          }
+          
+          return {
+            tickers: nextTickers,
+            groupTickers: nextGroupTickers
+          };
+        });
       },
 
       setGroup: (id, group) => {
@@ -54,21 +65,22 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }
 
         set((state) => {
-          const oldGroup = state.groups[id];
           const nextGroups = { ...state.groups, [id]: group };
+          const nextTickers = { ...state.tickers };
+          const nextGroupTickers = { ...state.groupTickers };
           
-          // Check if the old group is now empty
-          let nextGroupTickers = { ...state.groupTickers };
-          if (oldGroup && oldGroup !== 'none' && oldGroup !== group) {
-            const isNowEmpty = Object.values(nextGroups).every(g => g !== oldGroup);
-            if (isNowEmpty) {
-              const { [oldGroup]: _, ...rest } = nextGroupTickers;
-              nextGroupTickers = rest;
+          if (group !== 'none') {
+            if (!nextGroupTickers[group]) {
+              // If group has no ticker yet, adopt the chart's current ticker
+              nextGroupTickers[group] = state.tickers[id] || 'SPY';
             }
+            // Ensure individual ticker matches group ticker
+            nextTickers[id] = nextGroupTickers[group];
           }
 
           return {
             groups: nextGroups,
+            tickers: nextTickers,
             groupTickers: nextGroupTickers
           };
         });

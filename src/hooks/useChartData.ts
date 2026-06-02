@@ -48,14 +48,7 @@ export function useChartData({
   });
 
   const setTicker = (newTicker: string) => {
-    const state = useWorkspaceStore.getState();
-    const group = state.groups[chartId] || 'none';
-    
-    state.setTicker(chartId, newTicker);
-    
-    if (group !== 'none') {
-      state.setGroupTicker(group, newTicker);
-    }
+    useWorkspaceStore.getState().setTicker(chartId, newTicker);
   };
 
   const [localMasterData, setLocalMasterData] = useState<RawBar[]>([]);
