@@ -1,23 +1,10 @@
-import { vi, describe, it, expect } from 'vitest';
-
-export const mockTimeScale = {
-  setVisibleLogicalRange: vi.fn(),
-  getVisibleLogicalRange: vi.fn(() => ({ from: 0, to: 100 })),
-  scrollToRealTime: vi.fn(),
-};
-
-export const mockSeries = {
-  setData: vi.fn(),
-  update: vi.fn(),
-};
-
-export const mockChart = {
-  addCandlestickSeries: vi.fn(() => mockSeries),
-  timeScale: vi.fn(() => mockTimeScale),
-  remove: vi.fn(),
-};
-
-export const createChartMock = vi.fn(() => mockChart);
+import { describe, it, expect } from 'vitest';
+import { 
+  mockChart, 
+  mockSeries, 
+  mockTimeScale, 
+  createChartMock 
+} from './chart-simulation';
 
 describe('Chart Simulation Smoke Tests', () => {
   it('smoke: should return a mock chart', () => {

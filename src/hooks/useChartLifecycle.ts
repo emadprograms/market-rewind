@@ -103,10 +103,12 @@ export function useChartLifecycle({
   }, [timeframe]);
 
   useEffect(() => {
+    console.log(`[StabilityTrace] ScrollEffect: isHydrated=${isHydrated}, dataLength=${chartData.length}`);
     if (isHydrated && chartData.length > 0) {
+      console.log(`[StabilityTrace] Triggering scrollToRealTime`);
       scrollToRealTime();
     }
-  }, [isHydrated, chartData, scrollToRealTime]);
+  }, [isHydrated, scrollToRealTime]);
 
   // 2. Initialize Charts
   useEffect(() => {
@@ -409,6 +411,7 @@ export function useChartLifecycle({
       const isSameContext = lastTickerRef.current === ticker && 
                             lastTfRef.current === timeframe && 
                             lastEthRef.current === showEth;
+      console.log(`[StabilityTrace] isSameContext: ${isSameContext}, dataLength: ${formatted.length}`);
       const ts = chartRef.current.timeScale();
       const oldLogicalRange = ts.getVisibleLogicalRange();
 
@@ -427,7 +430,11 @@ export function useChartLifecycle({
         if (pendingHistoryPrependRef.current) {
           // Prepend takes precedence over end-of-chart shift
           const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
-          const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
+          
+          // Convert oldFirstTime string to Unix timestamp to match 'formatted' data types
+          const oldFirstTimeUnix = Math.floor(new Date(oldFirstTime.replace(' ', 'T') + 'Z').getTime() / 1000);
+          const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTimeUnix);
+          console.log(`[StabilityTrace] Prepend detected. oldFirstTimeUnix: ${oldFirstTimeUnix}, newFirstIndex: ${newFirstIndex}`);
           
           if (newFirstIndex > 0 && prependRange) {
               ts.setVisibleLogicalRange({
@@ -465,10 +472,6 @@ export function useChartLifecycle({
 
         chartRef.current.priceScale('right').applyOptions({ autoScale: true });
         
-        requestAnimationFrame(() => {
-          setIsHydrated(true);
-        });
-
         if (pendingHistoryPrependRef.current) {
             const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
             const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
@@ -488,7 +491,15 @@ export function useChartLifecycle({
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
 
-    } else if (priceSeriesRef.current && volumeSeriesRef.current) {
+      if (!isHydrated) {
+        console.log(`[StabilityTrace] Triggering Hydration`);
+        requestAnimationFrame(() => {
+          console.log(`[StabilityTrace] Hydration state updating to true`);
+          setIsHydrated(true);
+        });
+      }
+
+      } else if (priceSeriesRef.current && volumeSeriesRef.current) {
         priceSeriesRef.current.setData([]);
         volumeSeriesRef.current.setData([]);
         lastDataCountRef.current = 0;

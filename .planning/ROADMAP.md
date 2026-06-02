@@ -5,7 +5,7 @@
 - [x] **Phase 1: Viewport Stabilization** - Eliminate violent viewport jumps and ensure deterministic chart loading.
 - [ ] **Phase 2: Selection & Grouping Hardening** - Ensure 100% reliable focus and symbol synchronization.
 - [ ] **Phase 3: Stability Guardrails** - Build automated regression tests for critical stability paths.
-- [ ] **Phase 4: Systemic Hardening & Audit** - Map architectural fragility and resolve systemic technical debt.
+- [ ] **Phase 4: Systemic Hardening & Audit** - Map architectural fragility and resolve systemic technical debt to ensure long-term maintainability.
 
 ## Phase Details
 
@@ -50,26 +50,9 @@
   2. Automated test suite verifies viewport stability during data prepends (infinite scroll).
   3. Automated test suite verifies group synchronization on mount and symbol updates.
 
-**Plans**: TBD
-
-### Phase 4: Systemic Hardening & Audit
-
-**Goal**: Map architectural fragility and resolve systemic technical debt to ensure long-term maintainability.
-**Depends on**: Phase 3
-**Requirements**: QUAL-03, QUAL-04
-**Success Criteria** (what must be TRUE):
-
-  1. `FRAGILITY.md` map exists and documents high-risk interactions between `useChartData`, `useChartLifecycle`, and `useWorkspace`.
-  2. Critical "God Hook" patterns in `useChartLifecycle` are refactored into smaller, testable utilities.
-  3. Systemic fragility identified in the audit is resolved and verified.
-
-**Plans**: TBD
-
-## Progress Table
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Viewport Stabilization | 1/1 | Completed | 2023-10-27 |
-| 2. Selection & Grouping Hardening | 2/5 | In Progress|  |
-| 3. Stability Guardrails | 0/0 | Not started | - |
-| 4. Systemic Hardening & Audit | 0/0 | Not started | - |
+**Plans**:
+- [ ] 03-01-PLAN.md — Setup testing infrastructure (Playwright/MSW)
+- [ ] 03-02-PLAN.md — Logical viewport regression tests (Vitest)
+- [ ] 03-03-PLAN.md — Visual viewport regression tests (Playwright)
+- [ ] 03-04-PLAN.md — Logical group sync regression tests (Vitest)
+- [ ] 03-05-PLAN.md — Visual group sync regression tests (Playwright)
