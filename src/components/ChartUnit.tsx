@@ -62,11 +62,10 @@ export default function ChartUnit({
 
   // Unified Ticker Updater
   const handleTickerUpdate = React.useCallback((newTicker: string) => {
-    data.setTicker(newTicker);
     if (onTickerChange) {
       onTickerChange(newTicker);
     }
-  }, [data, onTickerChange]);
+  }, [onTickerChange]);
 
 
   // 2. Keyboard & Drawing state

@@ -300,9 +300,7 @@ body {
   flex-direction: column;
   position: relative;
   background: rgba(0, 0, 0, 0.1);
-  height: 0;
 }
-
 .pane-price {
   flex: 3;
   position: relative;
