@@ -1,13 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createChart, IChartApi, ISeriesApi, MouseEventParams, Time, TickMarkType, IPriceLine, CandlestickData } from 'lightweight-charts';
+import { IChartApi, ISeriesApi, MouseEventParams, Time, TickMarkType, IPriceLine } from 'lightweight-charts';
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
 import { getTzForTicker } from '../lib/timezones';
-import { SessionShadingPlugin } from '../lib/SessionShading';
-import { VolumeProfilePlugin, VPDataBar } from '../lib/VolumeProfilePlugin';
-import { HorizontalRayPlugin } from '../lib/HorizontalRayPlugin';
-import { RectanglePlugin } from '../lib/RectanglePlugin';
-import { TradePlugin } from '../lib/TradePlugin';
 import { usePlaybackStore } from '../store/usePlaybackStore';
+import { useChartInit } from './chart/useChartInit';
+import { useChartPlugins } from './chart/useChartPlugins';
 
 interface UseChartLifecycleParams {
   chartContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -59,13 +56,34 @@ export function useChartLifecycle({
   priceSeriesRef,
 }: UseChartLifecycleParams) {
   const globalTime = usePlaybackStore((state) => state.currentTime);
-  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-  const tradePluginRef = useRef<TradePlugin | null>(null);
+  
+  const { 
+    chartRef: initChartRef, 
+    priceSeriesRef: initPriceSeriesRef, 
+    volumeSeriesRef: initVolumeSeriesRef, 
+    lastBarSpacingRef: initLastBarSpacingRef 
+  } = useChartInit({
+    chartContainerRef,
+    ticker,
+    timeframe,
+    onAtEndChange: (atEnd) => setIsAtEnd(atEnd),
+  });
 
-  const shadingPluginRef = useRef<SessionShadingPlugin | null>(null);
-  const vpPluginRef = useRef<VolumeProfilePlugin | null>(null);
-  const rayPluginRef = useRef<HorizontalRayPlugin | null>(null);
-  const rectPluginRef = useRef<RectanglePlugin | null>(null);
+  const {
+    shadingPluginRef,
+    vpPluginRef,
+    rayPluginRef,
+    rectPluginRef,
+    tradePluginRef,
+    updateShadingConfig,
+  } = useChartPlugins({
+    priceSeriesRef: initPriceSeriesRef,
+    timeframe,
+    showEth,
+    showVP,
+    drawings,
+    tradeBadgeRef,
+  });
 
   const [isAtEnd, setIsAtEnd] = useState(true);
   const [chartUpdateTick, setChartUpdateTick] = useState(0);
@@ -73,14 +91,18 @@ export function useChartLifecycle({
   
   const AUTO_REVEAL_THRESHOLD = 10;
 
+  useEffect(() => {
+    chartRef.current = initChartRef.current;
+    priceSeriesRef.current = initPriceSeriesRef.current;
+  }, [initChartRef.current, initPriceSeriesRef.current, chartRef, priceSeriesRef]);
+
   const scrollToRealTime = useCallback(() => {
-    if (chartRef.current) {
-      chartRef.current.timeScale().scrollToRealTime();
+    if (initChartRef.current) {
+      initChartRef.current.timeScale().scrollToRealTime();
     }
   }, []);
 
   const lastDataCountRef = useRef(0);
-  const lastBarSpacingRef = useRef<number | null>(null);
   const priceLineRef = useRef<IPriceLine | null>(null);
   const lastTickerRef = useRef(ticker);
   const lastTfRef = useRef(timeframe);
@@ -110,138 +132,13 @@ export function useChartLifecycle({
     }
   }, [isHydrated, scrollToRealTime]);
 
-  // 2. Initialize Charts
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
-    const tz = getTzForTicker(ticker);
-
-    chartRef.current = createChart(chartContainerRef.current, {
-      layout: {
-        background: { color: 'transparent' },
-        textColor: '#94a3b8',
-        attributionLogo: false,
-      },
-      grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
-      },
-      crosshair: { mode: 0 },
-      localization: {
-        timeFormatter: (time: Time) => {
-          const date = new Date((time as number) * 1000);
-          if (timeframe === '1D') {
-            return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' });
-          }
-          return date.toLocaleString('en-US', { timeZone: tz, hour12: false, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-        }
-      },
-      timeScale: {
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        timeVisible: timeframe !== '1D',
-        secondsVisible: false,
-        shiftVisibleRangeOnNewBar: false,
-        rightOffset: 15,
-        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType) => {
-          const date = new Date((time as number) * 1000);
-          if (tickMarkType <= 2) return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric' });
-          return date.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
-        }
-      },
-      handleScroll: true,
-      handleScale: true,
-    });
-
-    chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(() => {
-        if (!chartRef.current) return;
-        const ts = chartRef.current.timeScale();
-        lastBarSpacingRef.current = ts.options().barSpacing;
-
-        const logicalRange = ts.getVisibleLogicalRange();
-        if (logicalRange) {
-            const bars = priceSeriesRef.current?.data() || [];
-            if (bars.length > 0) {
-                const lastBarIndex = bars.length - 1;
-                const newAtEnd = logicalRange.to >= lastBarIndex - 0.5;
-                setIsAtEnd(prev => {
-                    if (prev !== newAtEnd) return newAtEnd;
-                    return prev;
-                });
-            }
-        }
-    });
-
-    const isET = tz === 'America/New_York';
-
-    priceSeriesRef.current = chartRef.current.addCandlestickSeries({
-      upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
-    });
-
-    shadingPluginRef.current = new SessionShadingPlugin(timeframe, isET && showEth);
-    priceSeriesRef.current.attachPrimitive(shadingPluginRef.current);
-
-    vpPluginRef.current = new VolumeProfilePlugin();
-    priceSeriesRef.current.attachPrimitive(vpPluginRef.current);
-
-    rayPluginRef.current = new HorizontalRayPlugin();
-    priceSeriesRef.current.attachPrimitive(rayPluginRef.current);
-    
-    rectPluginRef.current = new RectanglePlugin();
-    priceSeriesRef.current.attachPrimitive(rectPluginRef.current);
-    
-    tradePluginRef.current = new TradePlugin();
-    tradePluginRef.current.setBadgeRef(tradeBadgeRef);
-    priceSeriesRef.current.attachPrimitive(tradePluginRef.current);
-    
-    rayPluginRef.current.setRays(drawings.rays || []);
-    rectPluginRef.current.setRects(drawings.rects || []);
-    
-    chartRef.current.priceScale('right').applyOptions({
-      scaleMargins: {
-        top: 0.1,
-        bottom: 0.25,
-      },
-    });
-
-    volumeSeriesRef.current = chartRef.current.addHistogramSeries({
-      priceFormat: { type: 'volume' },
-      priceScaleId: '',
-    });
-    
-    volumeSeriesRef.current.priceScale().applyOptions({
-      scaleMargins: {
-        top: 0.8,
-        bottom: 0,
-      },
-    });
-
-    const resizeObserver = new ResizeObserver(entries => {
-      if (entries.length === 0 || entries[0].target !== chartContainerRef.current) return;
-      if (!chartRef.current) return;
-      const newRect = entries[0].contentRect;
-      chartRef.current.applyOptions({ width: newRect.width, height: newRect.height });
-      setChartUpdateTick(t => t + 1);
-    });
-
-    if (chartContainerRef.current) {
-      resizeObserver.observe(chartContainerRef.current);
-    }
-
-    return () => {
-      resizeObserver.disconnect();
-      if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
-      }
-    };
-  }, []);
-
   // Drawing Click/DblClick/MouseMove Handlers
   useEffect(() => {
     const container = chartContainerRef.current;
-    if (!container || !chartRef.current || !priceSeriesRef.current) return;
+    if (!container || !initChartRef.current || !initPriceSeriesRef.current) return;
 
-    const chart = chartRef.current;
-    const series = priceSeriesRef.current;
+    const chart = initChartRef.current;
+    const series = initPriceSeriesRef.current;
 
     const handleClick = (param: MouseEventParams<Time>) => {
       if (!isDrawingModeRef.current || !param.point || !param.time) return;
@@ -342,9 +239,9 @@ export function useChartLifecycle({
 
   // Update chart timezone and timeframe-aware formatters
   useEffect(() => {
-    if (!chartRef.current) return;
+    if (!initChartRef.current) return;
     const tz = getTzForTicker(ticker);
-    chartRef.current.applyOptions({
+    initChartRef.current.applyOptions({
       localization: {
         timeFormatter: (time: Time) => {
           const date = new Date((time as number) * 1000);
@@ -365,14 +262,6 @@ export function useChartLifecycle({
     });
   }, [ticker, timeframe]);
 
-  // Update Ray/Rect Plugins when synced drawings change
-  useEffect(() => {
-    if (rayPluginRef.current && rectPluginRef.current) {
-        rayPluginRef.current.setRays(drawings.rays || []);
-        rectPluginRef.current.setRects(drawings.rects || []);
-    }
-  }, [drawings]);
-
   // Update effect for ghost rectangle
   useEffect(() => {
     if (rectPluginRef.current && rectAnchor && ghostPoint) {
@@ -382,17 +271,10 @@ export function useChartLifecycle({
     }
   }, [rectAnchor, ghostPoint, drawings.rects]);
 
-  // Update VP Enabled State
-  useEffect(() => {
-      if (vpPluginRef.current) {
-          vpPluginRef.current.setEnabled(showVP);
-      }
-  }, [showVP]);
-
   // 3. Update Chart Data
   useEffect(() => {
-    if (priceSeriesRef.current && volumeSeriesRef.current && chartRef.current && chartData.length > 0) {
-      const formatted: VPDataBar[] = chartData.map(d => {
+    if (initPriceSeriesRef.current && initVolumeSeriesRef.current && initChartRef.current && chartData.length > 0) {
+      const formatted: any[] = chartData.map(d => {
         const isoString = d.time.replace(' ', 'T') + 'Z';
         return {
           time: Math.floor(new Date(isoString).getTime() / 1000) as Time,
@@ -412,18 +294,18 @@ export function useChartLifecycle({
                             lastTfRef.current === timeframe && 
                             lastEthRef.current === showEth;
       console.log(`[StabilityTrace] isSameContext: ${isSameContext}, dataLength: ${formatted.length}`);
-      const ts = chartRef.current.timeScale();
+      const ts = initChartRef.current.timeScale();
       const oldLogicalRange = ts.getVisibleLogicalRange();
 
       if (isSameContext && oldLogicalRange) {
-        priceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+        initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
           time, open, high, low, close
         })));
-        volumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
+        initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
           time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
         })));
 
-        chartRef.current.priceScale('right').applyOptions({ autoScale: true });
+        initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
 
         const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
 
@@ -431,10 +313,14 @@ export function useChartLifecycle({
           // Prepend takes precedence over end-of-chart shift
           const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
           
-          // Convert oldFirstTime string to Unix timestamp to match 'formatted' data types
-          const oldFirstTimeUnix = Math.floor(new Date(oldFirstTime.replace(' ', 'T') + 'Z').getTime() / 1000);
-          const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTimeUnix);
-          console.log(`[StabilityTrace] Prepend detected. oldFirstTimeUnix: ${oldFirstTimeUnix}, newFirstIndex: ${newFirstIndex}`);
+          if (oldFirstTime === null) {
+            pendingHistoryPrependRef.current = null;
+            ts.setVisibleLogicalRange(oldLogicalRange);
+            return;
+          }
+
+          const newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime);
+          console.log(`[StabilityTrace] Prepend detected. oldFirstTime: ${oldFirstTime}, newFirstIndex: ${newFirstIndex}`);
           
           if (newFirstIndex > 0 && prependRange) {
               ts.setVisibleLogicalRange({
@@ -460,17 +346,17 @@ export function useChartLifecycle({
         }
 
       } else {
-        priceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+        initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
           time, open, high, low, close
         })));
 
-        volumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
+        initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
           time,
           value: volume,
           color: close >= open ? '#26a69a' : '#ef5350'
         })));
 
-        chartRef.current.priceScale('right').applyOptions({ autoScale: true });
+        initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
         
         if (pendingHistoryPrependRef.current) {
             const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
@@ -499,9 +385,9 @@ export function useChartLifecycle({
         });
       }
 
-      } else if (priceSeriesRef.current && volumeSeriesRef.current) {
-        priceSeriesRef.current.setData([]);
-        volumeSeriesRef.current.setData([]);
+      } else if (initPriceSeriesRef.current && initVolumeSeriesRef.current) {
+        initPriceSeriesRef.current.setData([]);
+        initVolumeSeriesRef.current.setData([]);
         lastDataCountRef.current = 0;
     }
 
@@ -509,22 +395,20 @@ export function useChartLifecycle({
 
   // 3b. Refresh shading plugin when ticker/timeframe/ETH changes
   useEffect(() => {
-    if (shadingPluginRef.current) {
-        const tz = getTzForTicker(ticker);
-        const isET = tz === 'America/New_York';
-        shadingPluginRef.current.setConfig(timeframe, isET && showEth);
-    }
-  }, [ticker, timeframe, showEth]);
+    const tz = getTzForTicker(ticker);
+    const isET = tz === 'America/New_York';
+    updateShadingConfig(isET);
+  }, [ticker, timeframe, showEth, updateShadingConfig]);
 
   // 4. Auto-Reveal Logic during Replay
   useEffect(() => {
-    if (!isReplayMode || !chartRef.current || !priceSeriesRef.current) return;
+    if (!isReplayMode || !initChartRef.current || !initPriceSeriesRef.current) return;
 
-    const ts = chartRef.current.timeScale();
+    const ts = initChartRef.current.timeScale();
     const range = ts.getVisibleLogicalRange();
     if (!range) return;
 
-    const data = priceSeriesRef.current.data();
+    const data = initPriceSeriesRef.current.data();
     const dataEnd = data.length - 1;
     
     // If viewport right edge is within threshold of data end, reveal new bars
@@ -535,7 +419,7 @@ export function useChartLifecycle({
 
   // 5. Live Price Line for 1D chart (Extended Hours)
   useEffect(() => {
-    if (!priceSeriesRef.current) return;
+    if (!initPriceSeriesRef.current) return;
 
     if (timeframe === '1D' && globalTime && localMasterData.length > 0) {
       let lastPrice = null;
@@ -550,7 +434,7 @@ export function useChartLifecycle({
 
       if (lastPrice !== null) {
         if (!priceLineRef.current) {
-          priceLineRef.current = priceSeriesRef.current.createPriceLine({
+          priceLineRef.current = initPriceSeriesRef.current.createPriceLine({
             price: lastPrice,
             color: 'rgba(255, 210, 0, 0.6)',
             lineWidth: 1,
@@ -562,15 +446,15 @@ export function useChartLifecycle({
           priceLineRef.current.applyOptions({ price: lastPrice });
         }
       }
-    } else if (priceLineRef.current && priceSeriesRef.current) {
-      priceSeriesRef.current.removePriceLine(priceLineRef.current);
+    } else if (priceLineRef.current && initPriceSeriesRef.current) {
+      initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
       priceLineRef.current = null;
     }
     
     return () => {
-      if (priceLineRef.current && priceSeriesRef.current) {
+      if (priceLineRef.current && initPriceSeriesRef.current) {
         try {
-          priceSeriesRef.current.removePriceLine(priceLineRef.current);
+          initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
           priceLineRef.current = null;
         } catch(_) {}
       }
@@ -578,7 +462,7 @@ export function useChartLifecycle({
   }, [globalTime, timeframe, ticker, localMasterData]);
 
   return {
-    volumeSeriesRef,
+    volumeSeriesRef: initVolumeSeriesRef,
     tradePluginRef,
     isAtEnd,
     scrollToRealTime,
