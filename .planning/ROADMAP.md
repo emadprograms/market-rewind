@@ -32,7 +32,7 @@
 **Success Criteria** (what must be TRUE):
 
   1. Clicking any element in a `ChartUnit` (header, canvas, buttons) immediately focuses that chart.
-  2. Grouped charts synchronize their ticker symbol immediately upon component mount.
+  2. Grouped charts synchronize their ticker symbol immediately upon mount.
   3. Ticker changes in a group leader propagate to all members without "one-render-later" lag.
   4. Group membership changes are reflected visually and logically in real-time.
 
@@ -51,8 +51,28 @@
   3. Automated test suite verifies group synchronization on mount and symbol updates.
 
 **Plans**:
+
 - [ ] 03-01-PLAN.md — Setup testing infrastructure (Playwright/MSW)
 - [ ] 03-02-PLAN.md — Logical viewport regression tests (Vitest)
 - [ ] 03-03-PLAN.md — Visual viewport regression tests (Playwright)
 - [ ] 03-04-PLAN.md — Logical group sync regression tests (Vitest)
 - [ ] 03-05-PLAN.md — Visual group sync regression tests (Playwright)
+
+### Phase 4: Systemic Hardening & Audit
+
+**Goal**: Map architectural fragility and resolve systemic technical debt to ensure long-term maintainability.
+**Depends on**: Phase 3
+**Requirements**: HARD-01, HARD-02, HARD-03, HARD-04
+**Success Criteria** (what must be TRUE):
+
+  1. `useChartLifecycle` is decomposed into specialized hooks.
+  2. All plugin renderers use strict interfaces instead of `any`.
+  3. Viewport stability is maintained during concurrent Prepend/Auto-Reveal operations.
+  4. Database operations are offloaded to a Web Worker to prevent main-thread blocking.
+
+**Plans**:
+
+- [x] 04-01-PLAN.md — Type hardening for plugin renderers
+- [x] 04-02-PLAN.md — Extraction of base chart and plugin init
+- [x] 04-03-PLAN.md — Extraction of drawings and prioritized viewport control
+- [ ] 04-04-PLAN.md — Migration of sql.js to Web Worker
