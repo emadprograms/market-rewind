@@ -183,6 +183,7 @@ export default function ChartUnit({
           currentPrice={currentPrice}
           tradeBadgeRef={tradeBadgeRef}
           onCloseTrade={() => trade.setActiveTrade(null)}
+          isHydrated={chart.isHydrated}
         />
         
         <DrawingStatus 

@@ -73,6 +73,7 @@ export function useChartData({
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setLocalMasterData([]);
       setIsLoadingHistory(true);
       
       let daysBack = 30;

@@ -12,6 +12,7 @@ interface ChartCanvasProps {
   currentPrice: number;
   tradeBadgeRef: React.RefObject<HTMLDivElement | null>;
   onCloseTrade: () => void;
+  isHydrated: boolean;
 }
 
 export function ChartCanvas({
@@ -22,11 +23,22 @@ export function ChartCanvas({
   activeTrade,
   currentPrice,
   tradeBadgeRef,
-  onCloseTrade
+  onCloseTrade,
+  isHydrated
 }: ChartCanvasProps) {
   return (
     <div ref={chartContainerRef} style={{ flex: 1, position: 'relative', minHeight: 0, minWidth: 0, overflow: 'hidden', cursor: isDrawingMode ? 'crosshair' : 'default' }}>
       
+      {!isHydrated && (
+        <div style={{ 
+          position: 'absolute', 
+          inset: 0, 
+          backgroundColor: 'var(--bg-dark)', 
+          zIndex: 10,
+          pointerEvents: 'none' 
+        }} />
+      )}
+
       {!isAtEnd && (
         <button 
           className="scroll-to-end-btn"
