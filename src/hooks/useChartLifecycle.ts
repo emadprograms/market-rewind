@@ -69,7 +69,7 @@ export function useChartLifecycle({
     chartContainerRef,
     ticker,
     timeframe,
-    onAtEndChange: (atEnd) => setIsAtEnd(atEnd),
+    onAtEndChange: useCallback((atEnd: boolean) => setIsAtEnd(atEnd), []),
   });
 
   const {
