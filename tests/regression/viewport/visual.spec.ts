@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Viewport Visual Stability', () => {
   test('Scenario 1: Rapid Ticker Swap should be stable', async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto('/');
     
     const tickers = ['BTC', 'ETH', 'SOL', 'AAPL'];
     for (const ticker of tickers) {
@@ -23,7 +23,7 @@ test.describe('Viewport Visual Stability', () => {
   });
 
   test('Scenario 2: Viewport Anchor stability during prepend', async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto('/');
     
     // 1. Scroll to a historical area
     const chartCanvas = page.locator('canvas').first();

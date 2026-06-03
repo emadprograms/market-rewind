@@ -104,6 +104,7 @@ export default function ChartUnit({
     tradeBadgeRef,
     chartRef,
     priceSeriesRef,
+    onFocus: () => setSelectedId(id.toString()),
   });
 
   // 5. Trade management

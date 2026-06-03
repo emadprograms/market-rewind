@@ -29,8 +29,11 @@ export const mockChart = {
   remove: vi.fn(),
   applyOptions: vi.fn(),
   subscribeClick: vi.fn(),
+  unsubscribeClick: vi.fn(),
   subscribeCrosshairMove: vi.fn(),
+  unsubscribeCrosshairMove: vi.fn(),
   subscribeDblClick: vi.fn(),
+  unsubscribeDblClick: vi.fn(),
 };
 
 export const createChartMock = vi.fn(() => mockChart);

@@ -32,6 +32,7 @@ interface UseChartLifecycleParams {
   tradeBadgeRef: React.RefObject<HTMLDivElement | null>;
   chartRef: React.MutableRefObject<IChartApi | null>;
   priceSeriesRef: React.MutableRefObject<ISeriesApi<'Candlestick'> | null>;
+  onFocus?: () => void;
 }
 
 export function useChartLifecycle({
@@ -57,6 +58,7 @@ export function useChartLifecycle({
   tradeBadgeRef,
   chartRef,
   priceSeriesRef,
+  onFocus,
 }: UseChartLifecycleParams) {
   const globalTime = usePlaybackStore((state) => state.currentTime);
   
@@ -261,7 +263,24 @@ export function useChartLifecycle({
     checkAutoReveal();
   }, [globalTime, isReplayMode, checkAutoReveal]);
 
-  // 5. Live Price Line for 1D chart (Extended Hours)
+  // 5. Handle Focus Click
+  useEffect(() => {
+    if (!initChartRef.current || !onFocus) return;
+    
+    const chart = initChartRef.current;
+    const handleFocus = () => {
+      onFocus();
+    };
+
+    chart.subscribeClick(handleFocus);
+    return () => {
+      try {
+        chart.unsubscribeClick(handleFocus);
+      } catch (_) {}
+    };
+  }, [initChartRef.current, onFocus]);
+
+  // 6. Live Price Line for 1D chart (Extended Hours)
   useEffect(() => {
     if (!initPriceSeriesRef.current) return;
 

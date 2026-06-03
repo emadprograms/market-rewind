@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Group Synchronization Propagation', () => {
   test('Scenario 1: Real-time Propagation between grouped charts', async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto('/');
     
     // 1. Create two charts (assuming a "Add Chart" button exists)
     const addChartBtn = page.locator('button:has-text("Add Chart"), button:has-text("New Chart")').first();
@@ -30,7 +30,7 @@ test.describe('Group Synchronization Propagation', () => {
   });
 
   test('Scenario 2: Mount Sync for new chart joining existing group', async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto('/');
     
     // 1. Establish a group with a specific ticker
     const tickerInput = page.locator('input[placeholder*="Ticker"]').first();
