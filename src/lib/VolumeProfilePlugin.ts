@@ -60,7 +60,7 @@ class VolumeProfileRenderer implements ISeriesPrimitivePaneRenderer {
                 if (bin.isPOC) {
                     ctx.fillStyle = 'rgba(255, 210, 0, 0.4)'; 
                 } else {
-                    ctx.fillStyle = 'rgba(41, 98, 255, 0.25)'; 
+                    ctx.fillStyle = 'rgba(41, 98, 255, 0.35)'; 
                 }
 
                 const width = bin.width;

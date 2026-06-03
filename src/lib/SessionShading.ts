@@ -91,11 +91,11 @@ class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
           if (x === null) continue;
 
           if (type === 'PRE') {
-              ctx.fillStyle = 'rgba(255, 210, 0, 0.07)'; 
+              ctx.fillStyle = 'rgba(255, 210, 0, 0.15)'; 
           } else if (type === 'POST') {
-              ctx.fillStyle = 'rgba(0, 130, 255, 0.07)'; 
+              ctx.fillStyle = 'rgba(0, 130, 255, 0.15)'; 
           } else if (type === 'OTHER') {
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'; 
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.07)'; 
           } else {
               continue; 
           }
