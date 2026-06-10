@@ -219,6 +219,7 @@ export function useChartLifecycle({
       
       // Capture viewport range BEFORE setData to prevent reset
       const capturedRange = initChartRef.current.timeScale().getVisibleLogicalRange();
+      console.log(`[StabilityTrace] Pre-setData capture: from=${capturedRange?.from.toFixed(2)}, to=${capturedRange?.to.toFixed(2)}`);
 
       initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
         time, open, high, low, close
@@ -229,6 +230,7 @@ export function useChartLifecycle({
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
       
+      console.log(`[StabilityTrace] Calling syncViewport now`);
       syncViewport(isSameContext, capturedRange);
 
       lastTickerRef.current = ticker;

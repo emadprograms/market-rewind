@@ -96,6 +96,32 @@ export function useChartViewport({
     const dataEnd = data.length - 1;
     
     if (range.to >= dataEnd - AUTO_REVEAL_THRESHOLD) {
+      console.log(`[StabilityTrace] Auto-Reveal TRIGGERED: range.to=${range.to.toFixed(2)}, dataEnd=${dataEnd}`);
+      scrollToRealTime();
+    } else {
+      // console.log(`[StabilityTrace] Auto-Reveal ignored: distance=${(dataEnd - range.to).toFixed(2)}`);
+    }
+  }, [chartRef, priceSeriesRef, scrollToRealTime]);
+
+  return {
+    syncViewport,
+    checkAutoReveal,
+    scrollToRealTime,
+  };
+}
+hartRef, priceSeriesRef, chartData, pendingHistoryPrependRef]);
+
+  const checkAutoReveal = useCallback(() => {
+    if (!chartRef.current || !priceSeriesRef.current) return;
+
+    const ts = chartRef.current.timeScale();
+    const range = ts.getVisibleLogicalRange();
+    if (!range) return;
+
+    const data = priceSeriesRef.current.data();
+    const dataEnd = data.length - 1;
+    
+    if (range.to >= dataEnd - AUTO_REVEAL_THRESHOLD) {
       scrollToRealTime();
     }
   }, [chartRef, priceSeriesRef, scrollToRealTime]);
