@@ -1,5 +1,4 @@
 import type { RawBar, Timeframe } from '../types';
-
 export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
   const start = performance.now();
   if (!data || data.length === 0) return [];
@@ -21,9 +20,9 @@ export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
   data.forEach((bar) => {
     const date = new Date(bar.time.replace(' ', 'T') + 'Z');
     const timestamp = date.getTime();
-    
+
     let bucketTimeStr: string;
-    
+
     if (timeframe === '1D') {
       const yyyy = date.getUTCFullYear();
       const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -32,7 +31,7 @@ export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
     } else {
       const bucketStartMs = Math.floor(timestamp / (durationMin * 60000)) * (durationMin * 60000);
       const bucketDate = new Date(bucketStartMs);
-      
+
       const yyyy = bucketDate.getUTCFullYear();
       const mm = String(bucketDate.getUTCMonth() + 1).padStart(2, '0');
       const dd = String(bucketDate.getUTCDate()).padStart(2, '0');

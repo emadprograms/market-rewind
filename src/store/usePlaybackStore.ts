@@ -26,8 +26,9 @@ const msToIso = (ms: number) => new Date(ms).toISOString().replace('T', ' ').sli
 const advanceTimeLogic = (currentMs: number | null, stepMinutes: number, masterData: RawBar[]) => {
   if (!currentMs || masterData.length === 0) return null;
   
-  const targetMs = currentMs + stepMinutes * 60000;
-  const targetStr = msToIso(targetMs);
+  // Align to the next bucket boundary (e.g., if current is 9:37 and step is 5, target is 9:40)
+  const nextBoundaryMs = Math.ceil((currentMs + 1) / (stepMinutes * 60000)) * (stepMinutes * 60000);
+  const targetStr = msToIso(nextBoundaryMs);
   
   const nextBar = masterData.find(d => d.time >= targetStr);
   if (nextBar) {
@@ -40,8 +41,9 @@ const advanceTimeLogic = (currentMs: number | null, stepMinutes: number, masterD
 const rewindTimeLogic = (currentMs: number | null, stepMinutes: number, masterData: RawBar[]) => {
   if (!currentMs || masterData.length === 0) return currentMs;
   
-  const targetMs = currentMs - stepMinutes * 60000;
-  const targetStr = msToIso(targetMs);
+  // Align to the previous bucket boundary (e.g., if current is 9:37 and step is 5, target is 9:35)
+  const prevBoundaryMs = Math.floor((currentMs - 1) / (stepMinutes * 60000)) * (stepMinutes * 60000);
+  const targetStr = msToIso(prevBoundaryMs);
   
   let best = null;
   for (let i = masterData.length - 1; i >= 0; i--) {

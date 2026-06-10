@@ -138,36 +138,29 @@ export function useChartData({
     return () => timeScale.unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
   }, [localMasterData, isLoadingHistory, ticker, chartRef, priceSeriesRef]);
 
-  // Memoized filtered data
-  const filteredData = useMemo(() => {
+  // Memoized resampled data (calculated from FULL master data)
+  const resampledFull = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
+    return resampleData(localMasterData, timeframe);
+  }, [localMasterData, timeframe]);
+
+  // Filter the resampled data based on playback time
+  const chartData = useMemo(() => {
+    if (resampledFull.length === 0) return [];
     
-    let filtered = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
+    // Basic filtering for ETH/REG sessions
+    let filtered = (showEth && timeframe !== '1D') ? resampledFull : resampledFull.filter(d => d.session === 'REG');
     
     if (isReplayMode && globalTime) {
-      filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
+      filtered = filtered.filter(d => {
+        const bucketStartTime = new Date(d.time.replace(' ', 'T') + 'Z').getTime();
+        // A bucket is visible if its start time is <= globalTime
+        return bucketStartTime <= globalTime;
+      });
     }
     
     return filtered;
-  }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
-
-  const [chartData, setChartData] = useState<ChartBar[]>([]);
-
-  // Resample data in a separate effect to decouple filtering from resampling
-  useEffect(() => {
-    if (filteredData.length === 0) {
-      setChartData([]);
-      return;
-    }
-    
-    if (timeframe !== dataTimeframeRef.current) {
-        setChartData([]);
-        return;
-    }
-
-    const resampled = resampleData(filteredData, timeframe);
-    setChartData(resampled);
-  }, [filteredData, timeframe]);
+  }, [resampledFull, showEth, isReplayMode, globalTime]);
 
   return {
     ticker,
