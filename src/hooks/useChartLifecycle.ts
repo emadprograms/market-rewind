@@ -217,6 +217,9 @@ export function useChartLifecycle({
                             lastEthRef.current === showEth;
       console.log(`[StabilityTrace] isSameContext: ${isSameContext}, dataLength: ${formatted.length}`);
       
+      // Capture viewport range BEFORE setData to prevent reset
+      const capturedRange = initChartRef.current.timeScale().getVisibleLogicalRange();
+
       initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
         time, open, high, low, close
       })));
@@ -226,9 +229,8 @@ export function useChartLifecycle({
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
       
-      syncViewport(isSameContext);
+      syncViewport(isSameContext, capturedRange);
 
-      lastDataCountRef.current = formatted.length;
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
@@ -244,7 +246,6 @@ export function useChartLifecycle({
       } else if (initPriceSeriesRef.current && initVolumeSeriesRef.current) {
         initPriceSeriesRef.current.setData([]);
         initVolumeSeriesRef.current.setData([]);
-        lastDataCountRef.current = 0;
     }
 
   }, [chartData, isReplayMode, isLoadingHistory, syncViewport]);

@@ -24,11 +24,11 @@ export function useChartViewport({
     }
   }, [chartRef]);
 
-  const syncViewport = useCallback((isSameContext: boolean) => {
+  const syncViewport = useCallback((isSameContext: boolean, capturedRange?: LogicalRange | null) => {
     if (!chartRef.current || !priceSeriesRef.current || chartData.length === 0) return;
 
     const ts = chartRef.current.timeScale();
-    const oldLogicalRange = ts.getVisibleLogicalRange();
+    const oldLogicalRange = capturedRange || ts.getVisibleLogicalRange();
 
     if (isSameContext && oldLogicalRange) {
       const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
