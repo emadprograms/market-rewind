@@ -1,6 +1,7 @@
 import type { RawBar, Timeframe } from '../types';
 
 export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
+  const start = performance.now();
   if (!data || data.length === 0) return [];
   if (timeframe === '1min') return data;
 
@@ -60,5 +61,7 @@ export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
   });
 
   if (currentBucket) resampled.push(currentBucket);
+  const end = performance.now();
+  console.log(`[Performance] resampleData took ${(end - start).toFixed(2)}ms`);
   return resampled;
 }

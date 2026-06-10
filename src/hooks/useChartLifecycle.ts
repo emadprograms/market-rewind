@@ -196,6 +196,7 @@ export function useChartLifecycle({
   // 3. Update Chart Data
   useEffect(() => {
     if (initPriceSeriesRef.current && initVolumeSeriesRef.current && initChartRef.current && chartData.length > 0) {
+      const startUpdate = performance.now();
       const formatted: any[] = chartData.map(d => {
         const isoString = d.time.replace(' ', 'T') + 'Z';
         return {
@@ -225,12 +226,15 @@ export function useChartLifecycle({
       }
 
       console.log(`[ViewportDebug] Calling setData...`);
+      const startSetData = performance.now();
       initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
         time, open, high, low, close
       })));
       initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
         time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
       })));
+      const endSetData = performance.now();
+      console.log(`[Performance] setData took ${(endSetData - startSetData).toFixed(2)}ms`);
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
       
@@ -248,7 +252,8 @@ export function useChartLifecycle({
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
       lastDataCountRef.current = formatted.length;
-      console.log(`[ViewportDebug] --- Data Update Sequence End ---`);
+      const endUpdate = performance.now();
+      console.log(`[ViewportDebug] --- Data Update Sequence End --- Total time: ${(endUpdate - startUpdate).toFixed(2)}ms`);
 
       if (!isHydrated) {
         console.log(`[StabilityTrace] Triggering Hydration`);

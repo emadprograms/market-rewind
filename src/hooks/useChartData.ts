@@ -138,10 +138,9 @@ export function useChartData({
     return () => timeScale.unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
   }, [localMasterData, isLoadingHistory, ticker, chartRef, priceSeriesRef]);
 
-  // Memoized Chart Data
-  const chartData = useMemo(() => {
+  // Memoized filtered data
+  const filteredData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
-    if (timeframe !== dataTimeframeRef.current) return [];
     
     let filtered = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
     
@@ -149,8 +148,26 @@ export function useChartData({
       filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
     }
     
-    return resampleData(filtered, timeframe);
+    return filtered;
   }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
+
+  const [chartData, setChartData] = useState<ChartBar[]>([]);
+
+  // Resample data in a separate effect to decouple filtering from resampling
+  useEffect(() => {
+    if (filteredData.length === 0) {
+      setChartData([]);
+      return;
+    }
+    
+    if (timeframe !== dataTimeframeRef.current) {
+        setChartData([]);
+        return;
+    }
+
+    const resampled = resampleData(filteredData, timeframe);
+    setChartData(resampled);
+  }, [filteredData, timeframe]);
 
   return {
     ticker,
