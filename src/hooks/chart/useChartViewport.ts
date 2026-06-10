@@ -16,6 +16,7 @@ export function useChartViewport({
   pendingHistoryPrependRef,
 }: UseChartViewportParams) {
   const lastDataCountRef = useRef(0);
+  const autoRevealLockedRef = useRef(false);
   const AUTO_REVEAL_THRESHOLD = 10;
 
   const scrollToRealTime = useCallback(() => {
@@ -44,6 +45,7 @@ export function useChartViewport({
         if (oldFirstTime === null) {
           console.log(`[ViewportDebug] Action: Prepend Null -> Restore`);
           ts.setVisibleLogicalRange(oldLogicalRange);
+          autoRevealLockedRef.current = true;
           pendingHistoryPrependRef.current = null;
           return;
         }
@@ -52,9 +54,11 @@ export function useChartViewport({
             const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
             console.log(`[ViewportDebug] Action: Prepend Shift -> from=${newRange.from.toFixed(2)}, to=${newRange.to.toFixed(2)}`);
             ts.setVisibleLogicalRange(newRange);
+            autoRevealLockedRef.current = true;
         } else {
             console.log(`[ViewportDebug] Action: Prepend Restore`);
             ts.setVisibleLogicalRange(oldLogicalRange);
+            autoRevealLockedRef.current = true;
         }
         pendingHistoryPrependRef.current = null;
       } else if (wasAtEnd) {
@@ -63,13 +67,16 @@ export function useChartViewport({
           const newRange = { from: oldLogicalRange.from + shift, to: oldLogicalRange.to + shift };
           console.log(`[ViewportDebug] Action: End Shift (shift=${shift}) -> from=${newRange.from.toFixed(2)}, to=${newRange.to.toFixed(2)}`);
           ts.setVisibleLogicalRange(newRange);
+          autoRevealLockedRef.current = true;
         } else {
           console.log(`[ViewportDebug] Action: End Restore (no shift)`);
           ts.setVisibleLogicalRange(oldLogicalRange);
+          autoRevealLockedRef.current = true;
         }
       } else {
         console.log(`[ViewportDebug] Action: Pure Restore -> from=${oldLogicalRange.from.toFixed(2)}, to=${oldLogicalRange.to.toFixed(2)}`);
         ts.setVisibleLogicalRange(oldLogicalRange);
+        autoRevealLockedRef.current = true;
       }
     } else if (pendingHistoryPrependRef.current) {
         const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
@@ -78,6 +85,7 @@ export function useChartViewport({
             const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
             console.log(`[ViewportDebug] Action: Context-Change Prepend Shift -> from=${newRange.from.toFixed(2)}, to=${newRange.to.toFixed(2)}`);
             ts.setVisibleLogicalRange(newRange);
+            autoRevealLockedRef.current = true;
         }
         pendingHistoryPrependRef.current = null;
     } else {
@@ -89,6 +97,12 @@ export function useChartViewport({
 
   const checkAutoReveal = useCallback(() => {
     if (!chartRef.current || !priceSeriesRef.current) return;
+
+    if (autoRevealLockedRef.current) {
+      console.log(`[ViewportDebug] Auto-Reveal SUPPRESSED (Lock active). Releasing lock.`);
+      autoRevealLockedRef.current = false;
+      return;
+    }
 
     const ts = chartRef.current.timeScale();
     const range = ts.getVisibleLogicalRange();
