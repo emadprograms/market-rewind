@@ -30,56 +30,58 @@ export function useChartViewport({
     const ts = chartRef.current.timeScale();
     const oldLogicalRange = capturedRange || ts.getVisibleLogicalRange();
 
+    console.log(`[ViewportDebug] syncViewport start: isSameContext=${isSameContext}, dataLen=${chartData.length}, lastCount=${lastDataCountRef.current}`);
+    if (oldLogicalRange) {
+      console.log(`[ViewportDebug] Input Range: from=${oldLogicalRange.from.toFixed(2)}, to=${oldLogicalRange.to.toFixed(2)}`);
+    }
+
     if (isSameContext && oldLogicalRange) {
       const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
+      console.log(`[ViewportDebug] wasAtEnd: ${wasAtEnd}`);
 
       if (pendingHistoryPrependRef.current) {
-        // Priority 1: Prepend History
         const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
-        
         if (oldFirstTime === null) {
-          pendingHistoryPrependRef.current = null;
+          console.log(`[ViewportDebug] Action: Prepend Null -> Restore`);
           ts.setVisibleLogicalRange(oldLogicalRange);
+          pendingHistoryPrependRef.current = null;
           return;
         }
-
         const newFirstIndex = chartData.findIndex(d => d.time === oldFirstTime);
-        
         if (newFirstIndex > 0 && prependRange) {
-            ts.setVisibleLogicalRange({
-                from: prependRange.from + newFirstIndex,
-                to: prependRange.to + newFirstIndex
-            });
+            const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
+            console.log(`[ViewportDebug] Action: Prepend Shift -> from=${newRange.from.toFixed(2)}, to=${newRange.to.toFixed(2)}`);
+            ts.setVisibleLogicalRange(newRange);
         } else {
+            console.log(`[ViewportDebug] Action: Prepend Restore`);
             ts.setVisibleLogicalRange(oldLogicalRange);
         }
         pendingHistoryPrependRef.current = null;
       } else if (wasAtEnd) {
-        // Priority 2: Manual Shift (End-of-chart)
         const shift = chartData.length - lastDataCountRef.current;
         if (shift > 0) {
-          ts.setVisibleLogicalRange({
-            from: oldLogicalRange.from + shift,
-            to: oldLogicalRange.to + shift
-          });
+          const newRange = { from: oldLogicalRange.from + shift, to: oldLogicalRange.to + shift };
+          console.log(`[ViewportDebug] Action: End Shift (shift=${shift}) -> from=${newRange.from.toFixed(2)}, to=${newRange.to.toFixed(2)}`);
+          ts.setVisibleLogicalRange(newRange);
         } else {
+          console.log(`[ViewportDebug] Action: End Restore (no shift)`);
           ts.setVisibleLogicalRange(oldLogicalRange);
         }
       } else {
+        console.log(`[ViewportDebug] Action: Pure Restore -> from=${oldLogicalRange.from.toFixed(2)}, to=${oldLogicalRange.to.toFixed(2)}`);
         ts.setVisibleLogicalRange(oldLogicalRange);
       }
     } else if (pendingHistoryPrependRef.current) {
-        // Handle prepend even if context changed
         const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
         const newFirstIndex = chartData.findIndex(d => d.time === oldFirstTime);
-        
         if (newFirstIndex > 0 && prependRange) {
-            ts.setVisibleLogicalRange({
-                from: prependRange.from + newFirstIndex,
-                to: prependRange.to + newFirstIndex
-            });
+            const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
+            console.log(`[ViewportDebug] Action: Context-Change Prepend Shift -> from=${newRange.from.toFixed(2)}, to=${newRange.to.toFixed(2)}`);
+            ts.setVisibleLogicalRange(newRange);
         }
         pendingHistoryPrependRef.current = null;
+    } else {
+        console.log(`[ViewportDebug] Action: No Sync (Context Changed/No Range)`);
     }
 
     lastDataCountRef.current = chartData.length;
@@ -96,10 +98,8 @@ export function useChartViewport({
     const dataEnd = data.length - 1;
     
     if (range.to >= dataEnd - AUTO_REVEAL_THRESHOLD) {
-      console.log(`[StabilityTrace] Auto-Reveal TRIGGERED: range.to=${range.to.toFixed(2)}, dataEnd=${dataEnd}`);
+      console.log(`[ViewportDebug] Auto-Reveal TRIGGERED: range.to=${range.to.toFixed(2)}, dataEnd=${dataEnd}`);
       scrollToRealTime();
-    } else {
-      // console.log(`[StabilityTrace] Auto-Reveal ignored: distance=${(dataEnd - range.to).toFixed(2)}`);
     }
   }, [chartRef, priceSeriesRef, scrollToRealTime]);
 

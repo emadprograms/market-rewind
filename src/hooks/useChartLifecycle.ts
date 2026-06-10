@@ -215,12 +215,16 @@ export function useChartLifecycle({
       const isSameContext = lastTickerRef.current === ticker && 
                             lastTfRef.current === timeframe && 
                             lastEthRef.current === showEth;
-      console.log(`[StabilityTrace] isSameContext: ${isSameContext}, dataLength: ${formatted.length}`);
+      console.log(`[ViewportDebug] --- Data Update Sequence Start ---`);
+      console.log(`[ViewportDebug] isSameContext: ${isSameContext}, currentLength: ${formatted.length}, lastCount: ${lastDataCountRef.current}`);
       
       // Capture viewport range BEFORE setData to prevent reset
       const capturedRange = initChartRef.current.timeScale().getVisibleLogicalRange();
-      console.log(`[StabilityTrace] Pre-setData capture: from=${capturedRange?.from.toFixed(2)}, to=${capturedRange?.to.toFixed(2)}`);
+      if (capturedRange) {
+        console.log(`[ViewportDebug] Pre-setData capture: from=${capturedRange.from.toFixed(2)}, to=${capturedRange.to.toFixed(2)}`);
+      }
 
+      console.log(`[ViewportDebug] Calling setData...`);
       initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
         time, open, high, low, close
       })));
@@ -231,18 +235,20 @@ export function useChartLifecycle({
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
       
       if (isSameContext && formatted.length > lastDataCountRef.current) {
-        console.log(`[StabilityTrace] Targeted Sync: length increased from ${lastDataCountRef.current} to ${formatted.length}`);
+        console.log(`[ViewportDebug] Condition MET for Targeted Sync. Scheduling rAF...`);
         requestAnimationFrame(() => {
+          console.log(`[ViewportDebug] Executing scheduled syncViewport`);
           syncViewport(isSameContext, capturedRange);
         });
       } else {
-        console.log(`[StabilityTrace] Skipping syncViewport (no length increase or context change)`);
+        console.log(`[ViewportDebug] Condition NOT MET for Targeted Sync. Skipping.`);
       }
 
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
       lastDataCountRef.current = formatted.length;
+      console.log(`[ViewportDebug] --- Data Update Sequence End ---`);
 
       if (!isHydrated) {
         console.log(`[StabilityTrace] Triggering Hydration`);
