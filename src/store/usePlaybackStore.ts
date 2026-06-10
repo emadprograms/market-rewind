@@ -81,12 +81,12 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   stepForward: () => {
     const { currentTime, stepMinutes, masterData } = get();
     const next = advanceTimeLogic(currentTime, stepMinutes, masterData);
-    if (next) set({ currentTime: next });
+    if (next) set({ currentTime: next, isPaused: true });
   },
 
   stepBackward: () => {
     const { currentTime, stepMinutes, masterData } = get();
     const prev = rewindTimeLogic(currentTime, stepMinutes, masterData);
-    if (prev) set({ currentTime: prev });
-  }
+    if (prev) set({ currentTime: prev, isPaused: true });
+  },
 }));
