@@ -109,26 +109,3 @@ export function useChartViewport({
     scrollToRealTime,
   };
 }
-hartRef, priceSeriesRef, chartData, pendingHistoryPrependRef]);
-
-  const checkAutoReveal = useCallback(() => {
-    if (!chartRef.current || !priceSeriesRef.current) return;
-
-    const ts = chartRef.current.timeScale();
-    const range = ts.getVisibleLogicalRange();
-    if (!range) return;
-
-    const data = priceSeriesRef.current.data();
-    const dataEnd = data.length - 1;
-    
-    if (range.to >= dataEnd - AUTO_REVEAL_THRESHOLD) {
-      scrollToRealTime();
-    }
-  }, [chartRef, priceSeriesRef, scrollToRealTime]);
-
-  return {
-    syncViewport,
-    checkAutoReveal,
-    scrollToRealTime,
-  };
-}
