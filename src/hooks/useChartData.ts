@@ -38,7 +38,6 @@ export function useChartData({
 }: UseChartDataParams) {
   const chartId = id.toString();
   
-  // Derive ticker atomically from Workspace Store
   const ticker = useWorkspaceStore((state) => {
     const group = state.groups[chartId] || 'none';
     if (group !== 'none' && state.groupTickers[group]) {
@@ -64,12 +63,10 @@ export function useChartData({
   const dataTimeframeRef = useRef(timeframe);
   const isFirstRender = useRef(true);
 
-  // Report timeframe to parent
   useEffect(() => {
     if (onTimeframeChange) onTimeframeChange(id, timeframe);
   }, [timeframe, id, onTimeframeChange]);
 
-  // Initial data fetch
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -87,7 +84,6 @@ export function useChartData({
       const data = await fetchMarketData(ticker, selectedDate, daysBack);
       if (cancelled) return;
       
-      console.log(`[useChartData] Fetched ${data?.length || 0} bars for ${ticker} at ${timeframe}`);
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }
@@ -99,33 +95,24 @@ export function useChartData({
     return () => { cancelled = true; };
   }, [ticker, selectedDate, timeframe]);
 
-  // Infinite Scroll Listener
   useEffect(() => {
     if (!chartRef.current || !localMasterData || localMasterData.length === 0) return;
-    
     const timeScale = chartRef.current.timeScale();
-    
     const onVisibleLogicalRangeChanged = async (newLogicalRange: LogicalRange | null) => {
       if (!newLogicalRange) return;
-      
       if (newLogicalRange.from < 100 && !isLoadingHistory && earliestLoadedDateRef.current) {
         setIsLoadingHistory(true);
         try {
           const oldLogicalRange = timeScale.getVisibleLogicalRange();
           const currentChartBars = priceSeriesRef.current ? (priceSeriesRef.current.data() as CandlestickData[]) : [];
-          
           const chunk = await fetchHistoricalChunk(ticker, earliestLoadedDateRef.current, 30);
-          
           if (chunk && chunk.length > 0) {
             earliestLoadedDateRef.current = chunk[0].time;
-            
             let newData = [...chunk, ...localMasterData];
-            
             pendingHistoryPrependRef.current = {
                 oldFirstTime: currentChartBars.length > 0 ? (currentChartBars[0].time as number) : null,
                 oldLogicalRange: oldLogicalRange
             };
-            
             setLocalMasterData(newData as RawBar[]);
           }
         } finally {
@@ -133,33 +120,64 @@ export function useChartData({
         }
       }
     };
-    
     timeScale.subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
     return () => timeScale.unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
   }, [localMasterData, isLoadingHistory, ticker, chartRef, priceSeriesRef]);
 
-  // Filter data based on playback time first
   const filteredData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
-    
     let filtered = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
-    
     if (isReplayMode && globalTime) {
       filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
     }
-    
     return filtered;
   }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
 
-  // Resample the filtered data to the target timeframe
+  // --- HYBRID CACHE IMPLEMENTATION ---
+  const cachedCandlesRef = useRef<RawBar[]>([]);
+  
   const chartData = useMemo(() => {
-    return resampleData(filteredData, timeframe);
+    if (!filteredData || filteredData.length === 0) {
+      cachedCandlesRef.current = [];
+      return [];
+    }
+
+    const tfMap: Record<Timeframe, number> = {
+      '1min': 1, '5min': 5, '15min': 15, '30min': 30, '1H': 60, '1D': 1440
+    };
+    const durationMin = tfMap[timeframe] || 1;
+    const durationMs = durationMin * 60000;
+
+    const lastClosedBucketEnd = Math.floor(globalTime / durationMs) * durationMs;
+
+    if (dataTimeframeRef.current !== timeframe) {
+      cachedCandlesRef.current = [];
+      dataTimeframeRef.current = timeframe;
+    }
+
+    const tailData = filteredData.filter(bar => {
+      const timestamp = new Date(bar.time.replace(' ', 'T') + 'Z').getTime();
+      return timestamp >= lastClosedBucketEnd;
+    });
+
+    const resampledTail = resampleData(tailData, timeframe);
+
+    if (resampledTail.length > 1) {
+      const closedFromTail = resampledTail.slice(0, -1);
+      const newCache = [...cachedCandlesRef.current, ...closedFromTail];
+      const uniqueCache = Array.from(new Map(newCache.map(c => [c.time, c])).values());
+      cachedCandlesRef.current = uniqueCache;
+    }
+
+    const result = [...cachedCandlesRef.current, ...resampledTail];
+    const deduplicated = Array.from(new Map(result.map(c => [c.time, c])).values());
+    
+    return deduplicated;
   }, [filteredData, timeframe]);
 
   return {
     ticker,
     setTicker,
-    timeframe,
     setTimeframe,
     showEth,
     setShowEth,
