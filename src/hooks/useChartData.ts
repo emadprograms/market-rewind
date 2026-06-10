@@ -138,29 +138,23 @@ export function useChartData({
     return () => timeScale.unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
   }, [localMasterData, isLoadingHistory, ticker, chartRef, priceSeriesRef]);
 
-  // Memoized resampled data (calculated from FULL master data)
-  const resampledFull = useMemo(() => {
+  // Filter data based on playback time first
+  const filteredData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
-    return resampleData(localMasterData, timeframe);
-  }, [localMasterData, timeframe]);
-
-  // Filter the resampled data based on playback time
-  const chartData = useMemo(() => {
-    if (resampledFull.length === 0) return [];
     
-    // Basic filtering for ETH/REG sessions
-    let filtered = (showEth && timeframe !== '1D') ? resampledFull : resampledFull.filter(d => d.session === 'REG');
+    let filtered = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
     
     if (isReplayMode && globalTime) {
-      filtered = filtered.filter(d => {
-        const bucketStartTime = new Date(d.time.replace(' ', 'T') + 'Z').getTime();
-        // A bucket is visible if its start time is <= globalTime
-        return bucketStartTime <= globalTime;
-      });
+      filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
     }
     
     return filtered;
-  }, [resampledFull, showEth, isReplayMode, globalTime]);
+  }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
+
+  // Resample the filtered data to the target timeframe
+  const chartData = useMemo(() => {
+    return resampleData(filteredData, timeframe);
+  }, [filteredData, timeframe]);
 
   return {
     ticker,
