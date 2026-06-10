@@ -230,14 +230,19 @@ export function useChartLifecycle({
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
       
-      console.log(`[StabilityTrace] Deferring syncViewport to next frame`);
-      requestAnimationFrame(() => {
-        syncViewport(isSameContext, capturedRange);
-      });
+      if (isSameContext && formatted.length > lastDataCountRef.current) {
+        console.log(`[StabilityTrace] Targeted Sync: length increased from ${lastDataCountRef.current} to ${formatted.length}`);
+        requestAnimationFrame(() => {
+          syncViewport(isSameContext, capturedRange);
+        });
+      } else {
+        console.log(`[StabilityTrace] Skipping syncViewport (no length increase or context change)`);
+      }
 
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
+      lastDataCountRef.current = formatted.length;
 
       if (!isHydrated) {
         console.log(`[StabilityTrace] Triggering Hydration`);
