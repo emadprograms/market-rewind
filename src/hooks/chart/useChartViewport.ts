@@ -31,19 +31,12 @@ export function useChartViewport({
     const ts = chartRef.current.timeScale();
     const oldLogicalRange = capturedRange || ts.getVisibleLogicalRange();
 
-    console.log(`[ViewportDebug] syncViewport start: isSameContext=${isSameContext}, dataLen=${chartData.length}, lastCount=${lastDataCountRef.current}`);
-    if (oldLogicalRange) {
-      console.log(`[ViewportDebug] Input Range: from=${oldLogicalRange.from.toFixed(2)}, to=${oldLogicalRange.to.toFixed(2)}`);
-    }
-
     if (isSameContext && oldLogicalRange) {
       const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
-      console.log(`[ViewportDebug] wasAtEnd: ${wasAtEnd}`);
 
       if (pendingHistoryPrependRef.current) {
         const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
         if (oldFirstTime === null) {
-          console.log(`[ViewportDebug] Action: Prepend Null -> Restore`);
           ts.setVisibleLogicalRange(oldLogicalRange);
           autoRevealLockedRef.current = true;
           pendingHistoryPrependRef.current = null;
@@ -52,11 +45,9 @@ export function useChartViewport({
         const newFirstIndex = chartData.findIndex(d => d.time === oldFirstTime);
         if (newFirstIndex > 0 && prependRange) {
             const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
-            console.log(`[ViewportDebug] Action: Prepend Shift -> from=${newRange.from.toFixed(2)}, to=${newRange.to.toFixed(2)}`);
             ts.setVisibleLogicalRange(newRange);
             autoRevealLockedRef.current = true;
         } else {
-            console.log(`[ViewportDebug] Action: Prepend Restore`);
             ts.setVisibleLogicalRange(oldLogicalRange);
             autoRevealLockedRef.current = true;
         }
@@ -65,16 +56,13 @@ export function useChartViewport({
         const shift = chartData.length - lastDataCountRef.current;
         if (shift > 0) {
           const newRange = { from: oldLogicalRange.from + shift, to: oldLogicalRange.to + shift };
-          console.log(`[ViewportDebug] Action: End Shift (shift=${shift}) -> from=${newRange.from.toFixed(2)}, to=${newRange.to.toFixed(2)}`);
           ts.setVisibleLogicalRange(newRange);
           autoRevealLockedRef.current = true;
         } else {
-          console.log(`[ViewportDebug] Action: End Restore (no shift)`);
           ts.setVisibleLogicalRange(oldLogicalRange);
           autoRevealLockedRef.current = true;
         }
       } else {
-        console.log(`[ViewportDebug] Action: Pure Restore -> from=${oldLogicalRange.from.toFixed(2)}, to=${oldLogicalRange.to.toFixed(2)}`);
         ts.setVisibleLogicalRange(oldLogicalRange);
         autoRevealLockedRef.current = true;
       }
@@ -83,13 +71,10 @@ export function useChartViewport({
         const newFirstIndex = chartData.findIndex(d => d.time === oldFirstTime);
         if (newFirstIndex > 0 && prependRange) {
             const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
-            console.log(`[ViewportDebug] Action: Context-Change Prepend Shift -> from=${newRange.from.toFixed(2)}, to=${newRange.to.toFixed(2)}`);
             ts.setVisibleLogicalRange(newRange);
             autoRevealLockedRef.current = true;
         }
         pendingHistoryPrependRef.current = null;
-    } else {
-        console.log(`[ViewportDebug] Action: No Sync (Context Changed/No Range)`);
     }
 
     lastDataCountRef.current = chartData.length;
@@ -99,7 +84,6 @@ export function useChartViewport({
     if (!chartRef.current || !priceSeriesRef.current) return;
 
     if (autoRevealLockedRef.current) {
-      console.log(`[ViewportDebug] Auto-Reveal SUPPRESSED (Lock active). Releasing lock.`);
       autoRevealLockedRef.current = false;
       return;
     }
@@ -112,7 +96,6 @@ export function useChartViewport({
     const dataEnd = data.length - 1;
     
     if (range.to >= dataEnd - AUTO_REVEAL_THRESHOLD) {
-      console.log(`[ViewportDebug] Auto-Reveal TRIGGERED: range.to=${range.to.toFixed(2)}, dataEnd=${dataEnd}`);
       scrollToRealTime();
     }
   }, [chartRef, priceSeriesRef, scrollToRealTime]);
