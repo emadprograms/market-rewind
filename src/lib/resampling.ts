@@ -1,5 +1,10 @@
 import type { RawBar, Timeframe } from '../types';
-export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
+
+function parseUTCDate(timeStr: string): Date {
+  return new Date(timeStr.replace(' ', 'T') + 'Z');
+}
+
+export function resampleData(data: RawBar[] | null | undefined, timeframe: Timeframe): RawBar[] {
   const start = performance.now();
   if (!data || data.length === 0) return [];
   if (timeframe === '1min') return data;
@@ -18,7 +23,7 @@ export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
   let currentBucket: RawBar | null = null;
 
   data.forEach((bar) => {
-    const date = new Date(bar.time.replace(' ', 'T') + 'Z');
+    const date = parseUTCDate(bar.time);
     const timestamp = date.getTime();
 
     let bucketTimeStr: string;
@@ -40,7 +45,7 @@ export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
       bucketTimeStr = `${yyyy}-${mm}-${dd} ${hh}:${min}:00`;
     }
 
-    if (!currentBucket || currentBucket.time !== bucketTimeStr) {
+    if (!currentBucket || currentBucket.time !== bucketTimeStr || currentBucket.session !== bar.session) {
       if (currentBucket) resampled.push(currentBucket);
       currentBucket = {
         time: bucketTimeStr,
@@ -64,3 +69,4 @@ export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
   console.log(`[Performance] resampleData took ${(end - start).toFixed(2)}ms`);
   return resampled;
 }
+
