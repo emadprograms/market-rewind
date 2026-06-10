@@ -230,8 +230,10 @@ export function useChartLifecycle({
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
       
-      console.log(`[StabilityTrace] Calling syncViewport now`);
-      syncViewport(isSameContext, capturedRange);
+      console.log(`[StabilityTrace] Deferring syncViewport to next frame`);
+      requestAnimationFrame(() => {
+        syncViewport(isSameContext, capturedRange);
+      });
 
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
