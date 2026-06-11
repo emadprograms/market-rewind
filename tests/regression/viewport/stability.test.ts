@@ -62,10 +62,15 @@ describe('Viewport Stability Regression Tests', () => {
       open: 100, high: 110, low: 90, close: 105, volume: 1000 
     }));
     
-    act(() => {
+    await act(async () => {
       params.chartData = initialData;
     });
     rerender({ p: params });
+
+    // Wait for rAF (mocked as setTimeout(cb, 0)) to flush
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
 
     // 2. Simulate prepend: 50 new bars added before 2023-01-01
     const prependedData = new Array(50).fill(null).map((_, i) => ({ 
@@ -74,7 +79,7 @@ describe('Viewport Stability Regression Tests', () => {
     }));
     const combinedData = [...prependedData, ...initialData];
     
-    act(() => {
+    await act(async () => {
       params.pendingHistoryPrependRef.current = {
         oldFirstTime: '2023-01-01 00:00:00', // Match format exactly
         oldLogicalRange: initialRange
@@ -82,6 +87,11 @@ describe('Viewport Stability Regression Tests', () => {
       params.chartData = combinedData;
     });
     rerender({ p: params });
+
+    // Wait for rAF (mocked as setTimeout(cb, 0)) to flush so syncViewport executes
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
 
     // The hook calculates newFirstIndex = formatted.findIndex(d => d.time === oldFirstTime)
     // Since we prepended 50, newFirstIndex should be 50.

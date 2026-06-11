@@ -216,49 +216,55 @@ export function useChartLifecycle({
       const isSameContext = lastTickerRef.current === ticker && 
                             lastTfRef.current === timeframe && 
                             lastEthRef.current === showEth;
-      console.log(`[ViewportDebug] --- Data Update Sequence Start ---`);
-      console.log(`[ViewportDebug] isSameContext: ${isSameContext}, currentLength: ${formatted.length}, lastCount: ${lastDataCountRef.current}`);
       
-      // Capture viewport range BEFORE setData to prevent reset
-      const capturedRange = initChartRef.current.timeScale().getVisibleLogicalRange();
-      if (capturedRange) {
-        console.log(`[ViewportDebug] Pre-setData capture: from=${capturedRange.from.toFixed(2)}, to=${capturedRange.to.toFixed(2)}`);
-      }
+      // Use incremental update() when context is unchanged and bars are only added/appended.
+      // This avoids the full setData() call that causes visible chart jitter/flicker.
+      // Must NOT use incremental path for history prepends — update() can only append, not prepend.
+      const hasPendingPrepend = pendingHistoryPrependRef.current !== null;
+      const canIncrement = isSameContext && formatted.length >= lastDataCountRef.current && lastDataCountRef.current > 0 && !hasPendingPrepend;
 
-      console.log(`[ViewportDebug] Calling setData...`);
-      const startSetData = performance.now();
-      initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
-        time, open, high, low, close
-      })));
-      initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
-        time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
-      })));
-      const endSetData = performance.now();
-      console.log(`[Performance] setData took ${(endSetData - startSetData).toFixed(2)}ms`);
+      // Capture viewport range BEFORE any data mutation for accurate sync
+      const capturedRange = initChartRef.current.timeScale().getVisibleLogicalRange();
+
+      if (canIncrement) {
+        const prevCount = lastDataCountRef.current;
+        // Update the last existing bar (it may have been the partial edge bar last time)
+        if (prevCount > 0) {
+          const lastBar = formatted[prevCount - 1];
+          initPriceSeriesRef.current.update({ time: lastBar.time, open: lastBar.open, high: lastBar.high, low: lastBar.low, close: lastBar.close });
+          initVolumeSeriesRef.current.update({ time: lastBar.time, value: lastBar.volume, color: lastBar.close >= lastBar.open ? '#26a69a' : '#ef5350' });
+        }
+        // Append any new bars beyond what was previously shown
+        for (let i = prevCount; i < formatted.length; i++) {
+          const bar = formatted[i];
+          initPriceSeriesRef.current.update({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
+          initVolumeSeriesRef.current.update({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? '#26a69a' : '#ef5350' });
+        }
+      } else {
+        // Full setData for context changes (ticker, timeframe, ETH toggle, or history prepend)
+        initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+          time, open, high, low, close
+        })));
+        initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
+          time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
+        })));
+      }
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
       
       if (isSameContext && formatted.length > lastDataCountRef.current) {
-        console.log(`[ViewportDebug] Condition MET for Targeted Sync. Scheduling rAF...`);
         requestAnimationFrame(() => {
-          console.log(`[ViewportDebug] Executing scheduled syncViewport`);
           syncViewport(isSameContext, capturedRange);
         });
-      } else {
-        console.log(`[ViewportDebug] Condition NOT MET for Targeted Sync. Skipping.`);
       }
 
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
       lastDataCountRef.current = formatted.length;
-      const endUpdate = performance.now();
-      console.log(`[ViewportDebug] --- Data Update Sequence End --- Total time: ${(endUpdate - startUpdate).toFixed(2)}ms`);
 
       if (!isHydrated) {
-        console.log(`[StabilityTrace] Triggering Hydration`);
         requestAnimationFrame(() => {
-          console.log(`[StabilityTrace] Hydration state updating to true`);
           setIsHydrated(true);
         });
       }
