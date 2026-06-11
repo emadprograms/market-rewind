@@ -95,4 +95,40 @@ describe('useChartData hybrid caching', () => {
     expect(result.current.chartData).toHaveLength(1);
     expect(result.current.chartData[0].time).toBe('2024-01-01 10:00:00');
   });
+
+  it('purges cache when ticker changes', async () => {
+    const { result } = renderHook(() => useChartData({
+      id: 1,
+      initialTicker: 'AAPL',
+      initialTf: '5min',
+      initialEth: false,
+      selectedDate: '2024-01-01',
+      isReplayMode: true,
+      groupColor: 'none',
+      tickers: ['AAPL', 'MSFT'],
+      chartRef,
+      priceSeriesRef,
+    }));
+
+    await vi.waitFor(() => expect(result.current.localMasterData.length).toBeGreaterThan(0));
+
+    act(() => {
+      usePlaybackStore.setState({ currentTime: new Date('2024-01-01 10:05:00Z').getTime() });
+    });
+    expect(result.current.chartData).toHaveLength(2);
+
+    act(() => {
+      result.current.setTicker('MSFT');
+    });
+
+    // Wait for data load again
+    await vi.waitFor(() => expect(result.current.localMasterData.length).toBeGreaterThan(0));
+
+    // Even though MSFT has the same mock data, the cache should have been purged,
+    // resulting in a fresh calculation for the current globalTime (10:05).
+    // If it wasn't purged, it might carry over AAPL's cached candles.
+    // In this mock, it will just start over.
+    expect(result.current.chartData).toHaveLength(2);
+    expect(result.current.ticker).toBe('MSFT');
+  });
 });

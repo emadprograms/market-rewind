@@ -3,9 +3,10 @@
 ## Phases
 
 - [x] **Phase 1: Viewport Stabilization** - Eliminate violent viewport jumps and ensure deterministic chart loading.
-- [ ] **Phase 2: Selection & Grouping Hardening** - Ensure 100% reliable focus and symbol synchronization.
+- [x] **Phase 2: Selection & Grouping Hardening** - Ensure 100% reliable focus and symbol synchronization.
 - [x] **Phase 3: Stability Guardrails** - Build automated regression tests for critical stability paths.
 - [x] **Phase 4: Systemic Hardening & Audit** - Map architectural fragility and resolve systemic technical debt to ensure long-term maintainability.
+- [x] **Phase 05: Data Pipeline & Resampling Hardening** - Implement stable, high-performance resampling with immutable closed candles and session integrity.
 
 ## Phase Details
 
@@ -76,3 +77,19 @@
 - [x] 04-02-PLAN.md — Extraction of base chart and plugin init
 - [x] 04-03-PLAN.md — Extraction of drawings and prioritized viewport control
 - [ ] 04-04-PLAN.md — Migration of sql.js to Web Worker
+
+### Phase 05: Data Pipeline & Resampling Hardening
+
+**Goal**: Implement a stable, high-performance resampling pipeline that allows open candles to evolve while keeping closed candles immutable, and ensures perfect time alignment for playback.
+**Depends on**: Phase 4
+**Requirements**: DATA-01, DATA-02, DATA-03, DATA-04
+**Success Criteria** (what must be TRUE):
+
+  1. Closed candles remain immutable during playback ticks.
+  2. Candles are split exactly at session boundaries (PRE/REG/POST).
+  3. Playback `stepForward` lands precisely on resampled bucket boundaries.
+  4. Resampling processing time is reduced from O(N) to O(tail).
+
+**Plans**:
+
+- [x] 05-01-PLAN.md — Hybrid caching & session-aware resampling
