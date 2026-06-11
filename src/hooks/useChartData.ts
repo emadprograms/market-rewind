@@ -135,10 +135,13 @@ export function useChartData({
 
   // --- HYBRID CACHE IMPLEMENTATION ---
   const cachedCandlesRef = useRef<RawBar[]>([]);
+  const lastCacheUpdateRef = useRef<number>(0);
+  const tickerRef = useRef(ticker);
   
   const chartData = useMemo(() => {
     if (!filteredData || filteredData.length === 0) {
       cachedCandlesRef.current = [];
+      lastCacheUpdateRef.current = 0;
       return [];
     }
 
@@ -148,32 +151,39 @@ export function useChartData({
     const durationMin = tfMap[timeframe] || 1;
     const durationMs = durationMin * 60000;
 
-    const lastClosedBucketEnd = Math.floor(globalTime / durationMs) * durationMs;
-
-    if (dataTimeframeRef.current !== timeframe) {
+    // Reset cache if timeframe or ticker changes
+    if (dataTimeframeRef.current !== timeframe || tickerRef.current !== ticker) {
       cachedCandlesRef.current = [];
+      lastCacheUpdateRef.current = 0;
       dataTimeframeRef.current = timeframe;
+      tickerRef.current = ticker;
     }
 
+    // Filter data from the last point we cached
     const tailData = filteredData.filter(bar => {
       const timestamp = new Date(bar.time.replace(' ', 'T') + 'Z').getTime();
-      return timestamp >= lastClosedBucketEnd;
+      return timestamp >= lastCacheUpdateRef.current;
     });
 
     const resampledTail = resampleData(tailData, timeframe);
 
+    // If we have more than 1 resampled candle, it means some are now closed
     if (resampledTail.length > 1) {
       const closedFromTail = resampledTail.slice(0, -1);
       const newCache = [...cachedCandlesRef.current, ...closedFromTail];
-      const uniqueCache = Array.from(new Map(newCache.map(c => [c.time, c])).values());
-      cachedCandlesRef.current = uniqueCache;
+      // Deduplicate by time string
+      cachedCandlesRef.current = Array.from(new Map(newCache.map(c => [c.time, c])).values());
+      
+      // Update our pointer to the start of the last (still open) candle
+      const lastCandle = resampledTail[resampledTail.length - 1];
+      lastCacheUpdateRef.current = new Date(lastCandle.time.replace(' ', 'T') + 'Z').getTime();
     }
 
     const result = [...cachedCandlesRef.current, ...resampledTail];
     const deduplicated = Array.from(new Map(result.map(c => [c.time, c])).values());
     
     return deduplicated;
-  }, [filteredData, timeframe]);
+  }, [filteredData, timeframe, ticker]);
 
   return {
     ticker,
