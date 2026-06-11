@@ -95,4 +95,35 @@ describe('resampleData', () => {
     expect(resampled[0].time).toBe('2024-01-01 12:00:00');
     expect(resampled[1].time).toBe('2024-01-02 12:00:00');
   });
+
+  it('handles malformed data with missing time without crashing', () => {
+    const data = [
+      { open: 100, high: 101, low: 99, close: 100, volume: 100, session: 'REG' } as any
+    ];
+    expect(() => resampleData(data, '5min')).not.toThrow();
+    const resampled = resampleData(data, '5min');
+    expect(resampled).toHaveLength(1);
+    expect(resampled[0].time).toBe('1970-01-01 00:00:00');
+  });
+
+  it('treats PRE and POST as same session type (EXT) and does not split between them if they fall in same bucket', () => {
+    const data = [
+      createBar('2024-01-01 09:00:00', 'PRE'),
+      createBar('2024-01-01 09:15:00', 'POST'), 
+    ];
+    const resampled = resampleData(data, '1H');
+    expect(resampled).toHaveLength(1); 
+    expect(resampled[0].session).toBe('PRE');
+  });
+
+  it('still splits between PRE and REG', () => {
+    const data = [
+      createBar('2024-01-01 09:15:00', 'PRE'),
+      createBar('2024-01-01 09:30:00', 'REG'),
+    ];
+    const resampled = resampleData(data, '1H');
+    expect(resampled).toHaveLength(2);
+    expect(resampled[0].session).toBe('PRE');
+    expect(resampled[1].session).toBe('REG');
+  });
 });

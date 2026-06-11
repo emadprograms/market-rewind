@@ -1,6 +1,7 @@
 import type { RawBar, Timeframe } from '../types';
 
-function parseUTCDate(timeStr: string): Date {
+export function parseUTCDate(timeStr: string | null | undefined): Date {
+  if (!timeStr || typeof timeStr !== 'string') return new Date(0);
   return new Date(timeStr.replace(' ', 'T') + 'Z');
 }
 
@@ -45,7 +46,11 @@ export function resampleData(data: RawBar[] | null | undefined, timeframe: Timef
       bucketTimeStr = `${yyyy}-${mm}-${dd} ${hh}:${min}:00`;
     }
 
-    if (!currentBucket || currentBucket.time !== bucketTimeStr || currentBucket.session !== bar.session) {
+    // Split if timeframe bucket changes OR if we cross between REG and EXT (PRE/POST)
+    const isReg = bar.session === 'REG';
+    const currentIsReg = currentBucket?.session === 'REG';
+
+    if (!currentBucket || currentBucket.time !== bucketTimeStr || isReg !== currentIsReg) {
       if (currentBucket) resampled.push(currentBucket);
       currentBucket = {
         time: bucketTimeStr,

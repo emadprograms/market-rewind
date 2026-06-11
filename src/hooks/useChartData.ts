@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { IChartApi, ISeriesApi, LogicalRange, CandlestickData } from 'lightweight-charts';
 import type { ChartBar, GroupColor, RawBar, Timeframe, HistoryPrependState } from '../types';
 import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
-import { resampleData } from '../lib/resampling';
+import { resampleData, parseUTCDate } from '../lib/resampling';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
 
@@ -128,7 +128,7 @@ export function useChartData({
     if (!localMasterData || localMasterData.length === 0) return [];
     let filtered = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
     if (isReplayMode && globalTime) {
-      filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
+      filtered = filtered.filter(d => parseUTCDate(d.time).getTime() <= globalTime);
     }
     return filtered;
   }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
@@ -161,7 +161,7 @@ export function useChartData({
 
     // Filter data from the last point we cached
     const tailData = filteredData.filter(bar => {
-      const timestamp = new Date(bar.time.replace(' ', 'T') + 'Z').getTime();
+      const timestamp = parseUTCDate(bar.time).getTime();
       return timestamp >= lastCacheUpdateRef.current;
     });
 
@@ -181,7 +181,7 @@ export function useChartData({
       
       // Update our pointer to the start of the last (still open) candle
       const lastCandle = resampledTail[resampledTail.length - 1];
-      lastCacheUpdateRef.current = new Date(lastCandle.time.replace(' ', 'T') + 'Z').getTime();
+      lastCacheUpdateRef.current = parseUTCDate(lastCandle.time).getTime();
     }
 
     const result = [...cachedCandlesRef.current, ...resampledTail];
