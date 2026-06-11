@@ -95,8 +95,22 @@ export function useChartViewport({
     const data = priceSeriesRef.current.data();
     const dataEnd = data.length - 1;
     
-    if (range.to >= dataEnd - AUTO_REVEAL_THRESHOLD) {
-      scrollToRealTime();
+    const rightMargin = range.to - dataEnd;
+    
+    // If the user has scrolled back into history, don't auto-scroll
+    if (rightMargin < -AUTO_REVEAL_THRESHOLD) {
+      return;
+    }
+
+    // Maintain a minimum margin on the right. If candles get too close to the edge, push chart left.
+    // This allows candles to fill empty space naturally before forcing a scroll.
+    const MIN_MARGIN = 2;
+    if (rightMargin <= MIN_MARGIN) {
+      const shift = MIN_MARGIN - rightMargin;
+      ts.setVisibleLogicalRange({
+        from: range.from + shift,
+        to: range.to + shift
+      });
     }
   }, [chartRef, priceSeriesRef, scrollToRealTime]);
 
