@@ -165,7 +165,12 @@ export function useChartData({
       return timestamp >= lastCacheUpdateRef.current;
     });
 
+    const tailStart = performance.now();
     const resampledTail = resampleData(tailData, timeframe);
+    const tailEnd = performance.now();
+    if (tailData.length > 0) {
+      console.log(`[Performance] Tail resampling (${tailData.length} bars) took ${(tailEnd - tailStart).toFixed(2)}ms`);
+    }
 
     // If we have more than 1 resampled candle, it means some are now closed
     if (resampledTail.length > 1) {
