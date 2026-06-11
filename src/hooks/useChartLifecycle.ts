@@ -252,7 +252,10 @@ export function useChartLifecycle({
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
       
-      if (isSameContext && formatted.length > lastDataCountRef.current) {
+      // Only sync viewport for non-incremental updates (history prepend, context changes).
+      // For incremental replay steps, let candles fill the rightOffset space naturally.
+      // The checkAutoReveal logic (Section 4) handles auto-scrolling when bars reach the edge.
+      if (!canIncrement && isSameContext && formatted.length > lastDataCountRef.current) {
         requestAnimationFrame(() => {
           syncViewport(isSameContext, capturedRange);
         });
