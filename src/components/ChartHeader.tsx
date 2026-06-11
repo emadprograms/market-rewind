@@ -121,7 +121,7 @@ export function ChartHeader({
             }}
           >
             <Clock size={14} className="text-secondary" />
-            <span>{timeframe.replace('min', 'm')}</span>
+            <span>{(timeframe || '').replace('min', 'm')}</span>
             <ChevronDown size={14} className="text-secondary" />
           </div>
           
@@ -137,7 +137,7 @@ export function ChartHeader({
                       setIsTfOpen(false);
                     }}
                   >
-                    {tf.replace('min', 'm')}
+                    {(tf || '').replace('min', 'm')}
                   </div>
                 ))}
               </div>

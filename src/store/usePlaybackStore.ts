@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { RawBar } from '../types';
+import { parseUTCDate } from '../lib/resampling';
 
 interface PlaybackState {
   currentTime: number | null; // Unix ms
@@ -20,7 +21,7 @@ interface PlaybackState {
   stepBackward: () => void;
 }
 
-const isoToMs = (iso: string) => new Date(iso.replace(' ', 'T') + 'Z').getTime();
+const isoToMs = (iso: string) => parseUTCDate(iso).getTime();
 const msToIso = (ms: number) => new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
 
 const advanceTimeLogic = (currentMs: number | null, stepMinutes: number, masterData: RawBar[]) => {
