@@ -1,6 +1,5 @@
 import { useEffect, useCallback } from 'react';
 import { usePlaybackStore } from '../store/usePlaybackStore';
-import { parseUTCDate } from '../lib/resampling';
 import { fetchMarketData } from '../lib/db';
 import type { RawBar } from '../types';
 
@@ -24,7 +23,7 @@ export function useMarketSimulator(
       const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
       const startBar = data.find((d: any) => d.time >= targetTimeStr) || data[data.length - 1];
       if (startBar) {
-        setCurrentTime(parseUTCDate(startBar.time).getTime());
+        setCurrentTime(new Date(startBar.time.replace(' ', 'T') + 'Z').getTime());
       }
     } else {
       setCurrentTime(null);
@@ -41,7 +40,7 @@ export function useMarketSimulator(
     const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
     const startBar = masterData.find(d => d.time >= targetTimeStr) || masterData[masterData.length - 1];
     if (startBar) {
-      setCurrentTime(parseUTCDate(startBar.time).getTime());
+      setCurrentTime(new Date(startBar.time.replace(' ', 'T') + 'Z').getTime());
     }
     setPaused(true);
   }, [masterData, selectedDate, entryTime, getUtcTimeFromEt, setCurrentTime, setPaused]);

@@ -1,11 +1,5 @@
 import type { RawBar, Timeframe } from '../types';
-
-export function parseUTCDate(timeStr: string | null | undefined): Date {
-  if (!timeStr || typeof timeStr !== 'string') return new Date(0);
-  return new Date(timeStr.replace(' ', 'T') + 'Z');
-}
-
-export function resampleData(data: RawBar[] | null | undefined, timeframe: Timeframe): RawBar[] {
+export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
   const start = performance.now();
   if (!data || data.length === 0) return [];
   if (timeframe === '1min') return data;
@@ -24,7 +18,7 @@ export function resampleData(data: RawBar[] | null | undefined, timeframe: Timef
   let currentBucket: RawBar | null = null;
 
   data.forEach((bar) => {
-    const date = parseUTCDate(bar.time);
+    const date = new Date(bar.time.replace(' ', 'T') + 'Z');
     const timestamp = date.getTime();
 
     let bucketTimeStr: string;
@@ -46,11 +40,7 @@ export function resampleData(data: RawBar[] | null | undefined, timeframe: Timef
       bucketTimeStr = `${yyyy}-${mm}-${dd} ${hh}:${min}:00`;
     }
 
-    // Split if timeframe bucket changes OR if we cross between REG and EXT (PRE/POST)
-    const isReg = bar.session === 'REG';
-    const currentIsReg = currentBucket?.session === 'REG';
-
-    if (!currentBucket || currentBucket.time !== bucketTimeStr || isReg !== currentIsReg) {
+    if (!currentBucket || currentBucket.time !== bucketTimeStr) {
       if (currentBucket) resampled.push(currentBucket);
       currentBucket = {
         time: bucketTimeStr,
@@ -74,4 +64,3 @@ export function resampleData(data: RawBar[] | null | undefined, timeframe: Timef
   console.log(`[Performance] resampleData took ${(end - start).toFixed(2)}ms`);
   return resampled;
 }
-

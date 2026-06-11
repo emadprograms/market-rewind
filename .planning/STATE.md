@@ -5,10 +5,10 @@ milestone_name: milestone
 status: completed
 last_updated: "2026-06-02T12:00:00.000Z"
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 16
-  completed_plans: 16
+  total_phases: 4
+  completed_phases: 4
+  total_plans: 15
+  completed_plans: 15
   percent: 100
 ---
 
@@ -22,4 +22,3 @@ progress:
 - Phase 2: Selection & Grouping Hardening ✅
 - Phase 3: Stability Guardrails ✅
 - Phase 4: Systemic Hardening & Audit ✅
-- Phase 5: Data Pipeline & Resampling Hardening ✅

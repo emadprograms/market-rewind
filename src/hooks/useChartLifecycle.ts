@@ -3,7 +3,6 @@ import { IChartApi, ISeriesApi, MouseEventParams, Time, TickMarkType, IPriceLine
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
 import { getTzForTicker } from '../lib/timezones';
 import { usePlaybackStore } from '../store/usePlaybackStore';
-import { parseUTCDate } from '../lib/resampling';
 import { useChartInit } from './chart/useChartInit';
 import { useChartPlugins } from './chart/useChartPlugins';
 import { useChartDrawings } from './chart/useChartDrawings';
@@ -199,8 +198,9 @@ export function useChartLifecycle({
     if (initPriceSeriesRef.current && initVolumeSeriesRef.current && initChartRef.current && chartData.length > 0) {
       const startUpdate = performance.now();
       const formatted: any[] = chartData.map(d => {
+        const isoString = d.time.replace(' ', 'T') + 'Z';
         return {
-          time: Math.floor(parseUTCDate(d.time).getTime() / 1000) as Time,
+          time: Math.floor(new Date(isoString).getTime() / 1000) as Time,
           open: d.open,
           high: d.high,
           low: d.low,
@@ -309,7 +309,7 @@ export function useChartLifecycle({
       let lastPrice = null;
 
       for (let i = localMasterData.length - 1; i >= 0; i--) {
-        const barMs = parseUTCDate(localMasterData[i].time).getTime();
+        const barMs = new Date(localMasterData[i].time.replace(' ', 'T') + 'Z').getTime();
         if (barMs <= globalTime) {
           lastPrice = localMasterData[i].close;
           break;
