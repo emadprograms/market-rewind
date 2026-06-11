@@ -83,6 +83,7 @@ export function useChartLifecycle({
     updateShadingConfig,
   } = useChartPlugins({
     priceSeriesRef: initPriceSeriesRef,
+    ticker,
     timeframe,
     showEth,
     showVP,

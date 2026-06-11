@@ -9,6 +9,7 @@ import type { RayDrawing, RectDrawing, TickerDrawings, Timeframe } from '../../t
 
 interface UseChartPluginsParams {
   priceSeriesRef: React.MutableRefObject<ISeriesApi<'Candlestick'> | null>;
+  ticker: string;
   timeframe: Timeframe;
   showEth: boolean;
   showVP: boolean;
@@ -18,6 +19,7 @@ interface UseChartPluginsParams {
 
 export function useChartPlugins({
   priceSeriesRef,
+  ticker,
   timeframe,
   showEth,
   showVP,
@@ -59,7 +61,7 @@ export function useChartPlugins({
         // Note: Lightweight Charts primitives are usually detached when series is removed, 
         // but if explicit cleanup is needed, it would go here.
     };
-  }, [priceSeriesRef]);
+  }, [priceSeriesRef, ticker, timeframe]);
 
   // Update Ray/Rect Plugins when synced drawings change
   useEffect(() => {
