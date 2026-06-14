@@ -46,52 +46,52 @@ export function useChartPlugins({
 
     rayPluginRef.current = new HorizontalRayPlugin();
     series.attachPrimitive(rayPluginRef.current);
-    
+
     rectPluginRef.current = new RectanglePlugin();
     series.attachPrimitive(rectPluginRef.current);
-    
+
     tradePluginRef.current = new TradePlugin();
     tradePluginRef.current.setBadgeRef(tradeBadgeRef);
     series.attachPrimitive(tradePluginRef.current);
-    
+
     rayPluginRef.current.setRays(drawings.rays || []);
     rectPluginRef.current.setRects(drawings.rects || []);
 
     return () => {
-        // Note: Lightweight Charts primitives are usually detached when series is removed, 
-        // but if explicit cleanup is needed, it would go here.
+      // Note: Lightweight Charts primitives are usually detached when series is removed, 
+      // but if explicit cleanup is needed, it would go here.
     };
   }, [priceSeriesRef, ticker, timeframe]);
 
   // Update Ray/Rect Plugins when synced drawings change
   useEffect(() => {
     if (rayPluginRef.current && rectPluginRef.current) {
-        rayPluginRef.current.setRays(drawings.rays || []);
-        rectPluginRef.current.setRects(drawings.rects || []);
+      rayPluginRef.current.setRays(drawings.rays || []);
+      rectPluginRef.current.setRects(drawings.rects || []);
     }
   }, [drawings]);
 
   // Update VP Enabled State
   useEffect(() => {
-      if (vpPluginRef.current) {
-          vpPluginRef.current.setEnabled(showVP);
-      }
+    if (vpPluginRef.current) {
+      vpPluginRef.current.setEnabled(showVP);
+    }
   }, [showVP]);
 
   // Update shading plugin config (Tz/ETH/Tf)
   // This is called from useChartLifecycle based on ticker/timeframe changes
   const updateShadingConfig = (isET: boolean) => {
     if (shadingPluginRef.current) {
-        shadingPluginRef.current.setConfig(timeframe, isET && showEth);
+      shadingPluginRef.current.setConfig(timeframe, isET && showEth);
     }
   };
 
-  return { 
-    shadingPluginRef, 
-    vpPluginRef, 
-    rayPluginRef, 
-    rectPluginRef, 
-    tradePluginRef, 
-    updateShadingConfig 
+  return {
+    shadingPluginRef,
+    vpPluginRef,
+    rayPluginRef,
+    rectPluginRef,
+    tradePluginRef,
+    updateShadingConfig
   };
 }

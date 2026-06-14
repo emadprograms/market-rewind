@@ -147,24 +147,6 @@ export function useChartData({
     if (isReplayMode && globalTime) {
       filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
       
-      // Trim incomplete last bucket so resampled candles don't change shape on subsequent steps.
-      // A 5-min candle only appears once all 5 constituent 1-min bars are within globalTime.
-      if (timeframe !== '1min' && filtered.length > 0) {
-        const tfMap: Record<string, number> = { '1min': 1, '5min': 5, '15min': 15, '30min': 30, '1H': 60, '1D': 1440 };
-        const tfMinutes = tfMap[timeframe] || 1;
-        const bucketMs = tfMinutes * 60000;
-        const lastBarMs = new Date(filtered[filtered.length - 1].time.replace(' ', 'T') + 'Z').getTime();
-        const bucketStart = Math.floor(lastBarMs / bucketMs) * bucketMs;
-        // The last 1-min bar in this bucket starts at bucketEnd - 60000
-        const bucketEndBarMs = bucketStart + bucketMs - 60000;
-        // If globalTime hasn't reached the last 1-min bar of this bucket, the candle is incomplete
-        if (globalTime < bucketEndBarMs) {
-          filtered = filtered.filter(d => {
-            const ms = new Date(d.time.replace(' ', 'T') + 'Z').getTime();
-            return ms < bucketStart;
-          });
-        }
-      }
     }
     
     return filtered;

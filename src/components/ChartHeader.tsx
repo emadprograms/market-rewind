@@ -66,34 +66,34 @@ export function ChartHeader({
   return (
     <div className="chart-header" onClick={() => onSelect?.()}>
       <div className="chart-controls">
-        
+
         {/* ZONE A: PRIMARY CONTROLS */}
         <div className="custom-dropdown-container" ref={tickerRef}>
-          <div 
-            className={`custom-select ${isTickerOpen ? 'active' : ''}`} 
+          <div
+            className={`custom-select ${isTickerOpen ? 'active' : ''}`}
             onClick={() => {
               setIsTickerOpen(!isTickerOpen);
             }}
           >
             <Search size={14} className="text-secondary" />
-            <span style={{fontWeight: '700'}}>{ticker}</span>
+            <span style={{ fontWeight: '700' }}>{ticker}</span>
             <ChevronDown size={14} className="text-secondary" />
           </div>
-          
+
           {isTickerOpen && (
             <div className="dropdown-menu">
               <div className="dropdown-search">
-                <input 
-                  autoFocus 
-                  placeholder="Search symbols..." 
-                  value={tickerSearch} 
+                <input
+                  autoFocus
+                  placeholder="Search symbols..."
+                  value={tickerSearch}
                   onChange={(e) => setTickerSearch(e.target.value)}
                 />
               </div>
               <div className="dropdown-items">
                 {filteredTickers.map(t => (
-                  <div 
-                    key={t} 
+                  <div
+                    key={t}
                     className={`dropdown-item ${t === ticker ? 'selected' : ''}`}
                     onClick={() => {
                       setTicker(t);
@@ -107,15 +107,15 @@ export function ChartHeader({
                     {t}
                   </div>
                 ))}
-                {filteredTickers.length === 0 && <div className="dropdown-item" style={{opacity: 0.5}}>No results</div>}
+                {filteredTickers.length === 0 && <div className="dropdown-item" style={{ opacity: 0.5 }}>No results</div>}
               </div>
             </div>
           )}
         </div>
 
         <div className="custom-dropdown-container" ref={tfRef}>
-          <div 
-            className={`custom-select ${isTfOpen ? 'active' : ''}`} 
+          <div
+            className={`custom-select ${isTfOpen ? 'active' : ''}`}
             onClick={() => {
               setIsTfOpen(!isTfOpen);
             }}
@@ -124,13 +124,13 @@ export function ChartHeader({
             <span>{timeframe.replace('min', 'm')}</span>
             <ChevronDown size={14} className="text-secondary" />
           </div>
-          
+
           {isTfOpen && (
-            <div className="dropdown-menu" style={{minWidth: '100px'}}>
+            <div className="dropdown-menu" style={{ minWidth: '100px' }}>
               <div className="dropdown-items">
                 {(['1min', '5min', '15min', '30min', '1H', '1D'] as Timeframe[]).map(tf => (
-                  <div 
-                    key={tf} 
+                  <div
+                    key={tf}
                     className={`dropdown-item ${tf === timeframe ? 'selected' : ''}`}
                     onClick={() => {
                       setTimeframe(tf);
@@ -147,7 +147,7 @@ export function ChartHeader({
 
         {/* ZONE B: SETTINGS DROPDOWN (ICON ONLY) */}
         <div className="custom-dropdown-container" ref={settingsRef}>
-          <div 
+          <div
             className={`custom-select icon-only ${isSettingsOpen ? 'active' : ''} ${isDrawingMode ? 'active-drawing' : ''}`}
             onClick={() => {
               setIsSettingsOpen(!isSettingsOpen);
@@ -155,14 +155,14 @@ export function ChartHeader({
             title="Settings & Tools"
           >
             <Settings size={16} className={isSettingsOpen || isDrawingMode ? 'text-primary' : 'text-secondary'} />
-            <ChevronDown size={12} className="text-secondary" style={{marginLeft: '-2px'}} />
+            <ChevronDown size={12} className="text-secondary" style={{ marginLeft: '-2px' }} />
           </div>
 
           {isSettingsOpen && (
-            <div className="dropdown-menu" style={{minWidth: '200px'}}>
+            <div className="dropdown-menu" style={{ minWidth: '200px' }}>
               <div className="dropdown-section">
                 <div className="dropdown-section-label">Analysis</div>
-                <div 
+                <div
                   className={`dropdown-item ${showEth ? 'active' : ''}`}
                   onClick={() => {
                     setShowEth(!showEth);
@@ -170,11 +170,11 @@ export function ChartHeader({
                   }}
                 >
                   <span>Extended Hours (ETH)</span>
-                  <div className={`switch-track ${showEth ? 'active' : ''}`} style={{zoom: 0.8}}>
+                  <div className={`switch-track ${showEth ? 'active' : ''}`} style={{ zoom: 0.8 }}>
                     <div className="switch-thumb" />
                   </div>
                 </div>
-                <div 
+                <div
                   className={`dropdown-item ${showVP ? 'active' : ''}`}
                   onClick={() => {
                     setShowVP(!showVP);
@@ -182,7 +182,7 @@ export function ChartHeader({
                   }}
                 >
                   <span>Volume Profile (VP)</span>
-                  <div className={`switch-track ${showVP ? 'active' : ''}`} style={{zoom: 0.8}}>
+                  <div className={`switch-track ${showVP ? 'active' : ''}`} style={{ zoom: 0.8 }}>
                     <div className="switch-thumb" />
                   </div>
                 </div>
@@ -192,7 +192,7 @@ export function ChartHeader({
 
               <div className="dropdown-section">
                 <div className="dropdown-section-label">Tools</div>
-                <div 
+                <div
                   className={`dropdown-item ${isDrawingMode && drawType === 'ray' ? 'active' : ''}`}
                   onClick={() => {
                     if (isDrawingMode && drawType === 'ray') {
@@ -204,13 +204,13 @@ export function ChartHeader({
                     setIsSettingsOpen(false);
                   }}
                 >
-                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Minus size={14} />
                     <span>Horizontal Ray</span>
                   </div>
                   <span className="shortcut-hint">Alt+J</span>
                 </div>
-                <div 
+                <div
                   className={`dropdown-item ${isDrawingMode && drawType === 'rect' ? 'active' : ''}`}
                   onClick={() => {
                     if (isDrawingMode && drawType === 'rect') {
@@ -222,7 +222,7 @@ export function ChartHeader({
                     setIsSettingsOpen(false);
                   }}
                 >
-                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Square size={12} />
                     <span>Rectangle</span>
                   </div>
@@ -233,7 +233,7 @@ export function ChartHeader({
               <div className="dropdown-divider" />
 
               <div className="dropdown-section">
-                <div 
+                <div
                   className="dropdown-item danger"
                   onClick={() => {
                     if (window.confirm('Clear all drawings for ' + ticker + '?')) {
@@ -243,7 +243,7 @@ export function ChartHeader({
                     }
                   }}
                 >
-                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Trash2 size={14} />
                     <span>Clear All Drawings</span>
                   </div>
@@ -253,12 +253,12 @@ export function ChartHeader({
           )}
         </div>
       </div>
-      
+
       {/* ZONE C: WINDOW & ACTION CONTROLS */}
       <div className="chart-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {/* REFACTORED GROUP PICKER (DROPDOWN) - MOVED TO RIGHT */}
         <div className="custom-dropdown-container" ref={groupRef}>
-          <div 
+          <div
             className={`custom-select ${isGroupOpen ? 'active' : ''} ${groupColor !== 'none' ? 'group-active' : ''}`}
             onClick={() => {
               setIsGroupOpen(!isGroupOpen);
@@ -270,38 +270,38 @@ export function ChartHeader({
               '--group-rgb': groupColor !== 'none' ? GROUP_RGB[groupColor] : '0,0,0'
             }}
           >
-            <div 
-              style={{ 
-                width: '8px', 
-                height: '8px', 
-                borderRadius: '50%', 
-                backgroundColor: groupColor !== 'none' ? BORDER_COLORS[groupColor] : '#555' 
-              }} 
+            <div
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: groupColor !== 'none' ? BORDER_COLORS[groupColor] : '#555'
+              }}
             />
-            <span style={{fontWeight: '600'}}>Group</span>
+            <span style={{ fontWeight: '600' }}>Group</span>
             <ChevronDown size={14} className="text-secondary" />
           </div>
 
           {isGroupOpen && (
-            <div className="dropdown-menu" style={{minWidth: '120px', left: 'auto', right: 0}}>
+            <div className="dropdown-menu" style={{ minWidth: '120px', left: 'auto', right: 0 }}>
               <div className="dropdown-items">
                 {(['red', 'blue', 'green', 'yellow', 'none'] as GroupColor[]).map(color => (
-                  <div 
-                    key={color} 
+                  <div
+                    key={color}
                     className={`dropdown-item ${color === groupColor ? 'selected' : ''}`}
                     onClick={() => {
                       onGroupChange && onGroupChange(color);
                       setIsGroupOpen(false);
                     }}
                   >
-                    <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                      <div 
-                        style={{ 
-                          width: '10px', 
-                          height: '10px', 
-                          borderRadius: '50%', 
-                          backgroundColor: color === 'none' ? '#555' : BORDER_COLORS[color as Exclude<GroupColor, 'none'>] 
-                        }} 
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          backgroundColor: color === 'none' ? '#555' : BORDER_COLORS[color as Exclude<GroupColor, 'none'>]
+                        }}
                       />
                       <span>{color.charAt(0).toUpperCase() + color.slice(1)}</span>
                     </div>
@@ -312,9 +312,9 @@ export function ChartHeader({
           )}
         </div>
 
-         <button className="btn-icon" onClick={onToggleMaximize} title={isMaximized ? "Minimize" : "Maximize"}>
-           {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-         </button>
+        <button className="btn-icon" onClick={onToggleMaximize} title={isMaximized ? "Minimize" : "Maximize"}>
+          {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
     </div>
 

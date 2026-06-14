@@ -1,15 +1,15 @@
-import type { 
-    IChartApi, 
-    ISeriesApi, 
-    ISeriesPrimitive, 
-    ISeriesPrimitivePaneRenderer, 
-    ISeriesPrimitivePaneView,
-    Time,
-    SeriesPrimitivePaneViewZOrder,
-    SeriesAttachedParameter,
-    ITimeScaleApi,
-    CandlestickData,
-    Coordinate
+import type {
+  IChartApi,
+  ISeriesApi,
+  ISeriesPrimitive,
+  ISeriesPrimitivePaneRenderer,
+  ISeriesPrimitivePaneView,
+  Time,
+  SeriesPrimitivePaneViewZOrder,
+  SeriesAttachedParameter,
+  ITimeScaleApi,
+  CandlestickData,
+  Coordinate
 } from 'lightweight-charts';
 import type { Timeframe, ChartTarget, ChartScope } from '../types';
 
@@ -26,25 +26,25 @@ let dayOffset = 0; // in minutes
 export function getSessionType(timestamp: number): 'PRE' | 'RTH' | 'POST' | 'OTHER' {
   const date = new Date(timestamp * 1000);
   const day = Math.floor(timestamp / 86400);
-  
+
   if (day !== lastDay) {
-      // Recalculate offset for the day
-      const nyStr = formatter.format(date); // "H:MM" or "HH:MM"
-      const [h, m] = nyStr.split(':').map(Number);
-      const utcHours = date.getUTCHours();
-      const utcMinutes = date.getUTCMinutes();
-      
-      const nyTotal = h * 60 + m;
-      const utcTotal = utcHours * 60 + utcMinutes;
-      
-      dayOffset = nyTotal - utcTotal;
-      // Handle wrap around (day boundary)
-      if (dayOffset > 720) dayOffset -= 1440;
-      if (dayOffset < -720) dayOffset += 1440;
-      
-      lastDay = day;
+    // Recalculate offset for the day
+    const nyStr = formatter.format(date); // "H:MM" or "HH:MM"
+    const [h, m] = nyStr.split(':').map(Number);
+    const utcHours = date.getUTCHours();
+    const utcMinutes = date.getUTCMinutes();
+
+    const nyTotal = h * 60 + m;
+    const utcTotal = utcHours * 60 + utcMinutes;
+
+    dayOffset = nyTotal - utcTotal;
+    // Handle wrap around (day boundary)
+    if (dayOffset > 720) dayOffset -= 1440;
+    if (dayOffset < -720) dayOffset += 1440;
+
+    lastDay = day;
   }
-  
+
   const totalMinutesUTC = date.getUTCHours() * 60 + date.getUTCMinutes();
   let totalMinutes = totalMinutesUTC + dayOffset;
   if (totalMinutes < 0) totalMinutes += 1440;
@@ -57,15 +57,15 @@ export function getSessionType(timestamp: number): 'PRE' | 'RTH' | 'POST' | 'OTH
 }
 
 interface ShadedBar {
-    time: Time;
-    x: Coordinate | null;
-    type: 'PRE' | 'RTH' | 'POST' | 'OTHER';
+  time: Time;
+  x: Coordinate | null;
+  type: 'PRE' | 'RTH' | 'POST' | 'OTHER';
 }
 
 interface ShadingViewData {
-    bars: ShadedBar[];
-    barSpacing: number;
-    timeframe: Timeframe;
+  bars: ShadedBar[];
+  barSpacing: number;
+  timeframe: Timeframe;
 }
 
 class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
@@ -79,31 +79,31 @@ class SessionShadingRenderer implements ISeriesPrimitivePaneRenderer {
     target.useMediaCoordinateSpace((scope: ChartScope) => {
       const ctx = scope.context;
       if (!this._data || !this._data.bars || this._data.bars.length === 0) return;
-      
+
       const { bars, timeframe, barSpacing } = this._data;
       if (timeframe === '1D') return;
 
       ctx.save();
-      
+
       for (const bar of bars) {
-          const type = bar.type;
-          const x = bar.x;
-          if (x === null) continue;
+        const type = bar.type;
+        const x = bar.x;
+        if (x === null) continue;
 
-          if (type === 'PRE') {
-              ctx.fillStyle = 'rgba(255, 210, 0, 0.15)'; 
-          } else if (type === 'POST') {
-              ctx.fillStyle = 'rgba(0, 130, 255, 0.15)'; 
-          } else if (type === 'OTHER') {
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.07)'; 
-          } else {
-              continue; 
-          }
+        if (type === 'PRE') {
+          ctx.fillStyle = 'rgba(255, 210, 0, 0.15)';
+        } else if (type === 'POST') {
+          ctx.fillStyle = 'rgba(0, 130, 255, 0.15)';
+        } else if (type === 'OTHER') {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+        } else {
+          continue;
+        }
 
-          const halfWidth = barSpacing / 2;
-          ctx.fillRect(Math.round(x - halfWidth), 0, Math.ceil(barSpacing), scope.mediaSize.height);
+        const halfWidth = barSpacing / 2;
+        ctx.fillRect(Math.round(x - halfWidth), 0, Math.ceil(barSpacing), scope.mediaSize.height);
       }
-      
+
       ctx.restore();
     });
   }
@@ -132,7 +132,7 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
   _series: ISeriesApi<"Candlestick"> | null;
   _paneViews: SessionShadingPaneView[];
   _requestUpdate: () => void;
-  
+
   _cache: ShadingViewData | null = null;
   _lastLogicalRange: { from: number; to: number } = { from: -1, to: -1 };
   _lastWidth: number = 0;
@@ -145,7 +145,7 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     this._series = null;
     this._paneViews = [new SessionShadingPaneView(this)];
     this._requestUpdate = () => {
-        if (this._chart) this._chart.applyOptions({}); 
+      if (this._chart) this._chart.applyOptions({});
     };
   }
 
@@ -186,35 +186,35 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
     const viewportWidth = timeScale.width();
     const barSpacing = timeScale.options().barSpacing || 6;
 
-    if (this._cache && 
-        Math.abs(this._lastLogicalRange.from - (visibleRange.from ?? 0)) < 0.5 && 
-        Math.abs(this._lastLogicalRange.to - (visibleRange.to ?? 0)) < 0.5 &&
-        this._lastWidth === viewportWidth &&
-        this._lastBarSpacing === barSpacing
+    if (this._cache &&
+      Math.abs(this._lastLogicalRange.from - (visibleRange.from ?? 0)) < 0.5 &&
+      Math.abs(this._lastLogicalRange.to - (visibleRange.to ?? 0)) < 0.5 &&
+      this._lastWidth === viewportWidth &&
+      this._lastBarSpacing === barSpacing
     ) {
-        return this._cache;
+      return this._cache;
     }
 
     const data = this._series.data();
     const fromIndex = Math.max(0, Math.floor(visibleRange.from ?? 0));
     const toIndex = Math.min(data.length, Math.ceil(visibleRange.to ?? 0));
-    
+
     const bars: ShadedBar[] = [];
-    
+
     for (let i = fromIndex; i < toIndex; i++) {
-        const d = data[i];
-        if (!d) continue;
-        bars.push({
-            time: d.time,
-            x: timeScale.timeToCoordinate(d.time),
-            type: getSessionType(d.time as number)
-        });
+      const d = data[i];
+      if (!d) continue;
+      bars.push({
+        time: d.time,
+        x: timeScale.timeToCoordinate(d.time),
+        type: getSessionType(d.time as number)
+      });
     }
-    
+
     this._cache = {
-        bars,
-        barSpacing,
-        timeframe: this._timeframe
+      bars,
+      barSpacing,
+      timeframe: this._timeframe
     };
     this._lastLogicalRange = { from: visibleRange.from ?? 0, to: visibleRange.to ?? 0 };
     this._lastWidth = viewportWidth;
