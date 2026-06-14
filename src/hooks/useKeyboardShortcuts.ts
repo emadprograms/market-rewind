@@ -7,6 +7,8 @@ interface UseKeyboardShortcutsParams {
   ticker: string;
   setShowEth: React.Dispatch<React.SetStateAction<boolean>>;
   isSelected: boolean;
+  tickers?: string[];
+  setTicker?: (ticker: string) => void;
 }
 
 export function useKeyboardShortcuts({
@@ -15,6 +17,8 @@ export function useKeyboardShortcuts({
   ticker,
   setShowEth,
   isSelected,
+  tickers = [],
+  setTicker,
 }: UseKeyboardShortcutsParams) {
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawType, setDrawType] = useState<DrawType>('ray');
@@ -38,9 +42,13 @@ export function useKeyboardShortcuts({
   }, [keyboardAction.active]);
 
   const currentTickerRef = useRef(ticker);
+  const tickersRef = useRef(tickers);
+  const setTickerRef = useRef(setTicker);
   useEffect(() => {
     currentTickerRef.current = ticker;
-  }, [ticker]);
+    tickersRef.current = tickers;
+    setTickerRef.current = setTicker;
+  }, [ticker, tickers, setTicker]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -94,7 +102,23 @@ export function useKeyboardShortcuts({
         onUpdateDrawings(currentTickerRef.current, 'rects', []);
       }
 
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+      if (e.key === ' ' && !keyboardActionRef.current.active) {
+        e.preventDefault();
+        const currentTickers = tickersRef.current;
+        const currentSetTicker = setTickerRef.current;
+        if (currentTickers.length > 0 && currentSetTicker) {
+          const currentIndex = currentTickers.indexOf(currentTickerRef.current);
+          if (currentIndex !== -1) {
+            let nextIndex = e.shiftKey ? currentIndex - 1 : currentIndex + 1;
+            if (nextIndex >= currentTickers.length) nextIndex = 0;
+            if (nextIndex < 0) nextIndex = currentTickers.length - 1;
+            currentSetTicker(currentTickers[nextIndex]);
+          }
+        }
+        return;
+      }
+
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && e.key !== ' ') {
         if (keyboardActionRef.current.active) {
           // If already active but input not yet focused, append to value
           updateKeyboardAction({ value: (keyboardActionRef.current.value + e.key).toUpperCase() });

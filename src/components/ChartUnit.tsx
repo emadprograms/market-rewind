@@ -74,7 +74,9 @@ export default function ChartUnit({
     onUpdateDrawings, 
     ticker: data.ticker,
     setShowEth: data.setShowEth,
-    isSelected
+    isSelected,
+    tickers,
+    setTicker: handleTickerUpdate,
   });
 
   // 3. Trade badge ref (needed for chart lifecycle)
