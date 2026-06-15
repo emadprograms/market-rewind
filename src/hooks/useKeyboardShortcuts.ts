@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { DrawType, KeyboardAction, RayDrawing, RectDrawing, RectPoint } from '../types';
+import { usePlaybackStore } from '../store/usePlaybackStore';
+import type { IChartApi } from 'lightweight-charts';
 
 interface UseKeyboardShortcutsParams {
   chartContainerRef: React.RefObject<HTMLDivElement | null>;
+  chartRef?: React.MutableRefObject<IChartApi | null>;
   onUpdateDrawings: (ticker: string, type: 'rays' | 'rects', items: RayDrawing[] | RectDrawing[]) => void;
   ticker: string;
   setShowEth: React.Dispatch<React.SetStateAction<boolean>>;
@@ -13,6 +16,7 @@ interface UseKeyboardShortcutsParams {
 
 export function useKeyboardShortcuts({
   chartContainerRef,
+  chartRef,
   onUpdateDrawings,
   ticker,
   setShowEth,
@@ -118,6 +122,46 @@ export function useKeyboardShortcuts({
         return;
       }
 
+      if (e.key === 'ArrowLeft') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          usePlaybackStore.getState().stepBackward();
+        } else if (chartRef?.current) {
+          e.preventDefault();
+          const timeScale = chartRef.current.timeScale();
+          const visibleRange = timeScale.getVisibleLogicalRange();
+          if (visibleRange) {
+            const span = visibleRange.to - visibleRange.from;
+            const shift = Math.max(1, Math.floor(span * 0.1)); // Shift by 10% of visible range, at least 1 bar
+            timeScale.setVisibleLogicalRange({
+              from: visibleRange.from - shift,
+              to: visibleRange.to - shift,
+            });
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowRight') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          usePlaybackStore.getState().stepForward();
+        } else if (chartRef?.current) {
+          e.preventDefault();
+          const timeScale = chartRef.current.timeScale();
+          const visibleRange = timeScale.getVisibleLogicalRange();
+          if (visibleRange) {
+            const span = visibleRange.to - visibleRange.from;
+            const shift = Math.max(1, Math.floor(span * 0.1));
+            timeScale.setVisibleLogicalRange({
+              from: visibleRange.from + shift,
+              to: visibleRange.to + shift,
+            });
+          }
+        }
+        return;
+      }
+
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && e.key !== ' ') {
         if (keyboardActionRef.current.active) {
           // If already active but input not yet focused, append to value
@@ -139,7 +183,7 @@ export function useKeyboardShortcuts({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [chartContainerRef, drawType, onUpdateDrawings, setShowEth, updateKeyboardAction, isSelected]);
+  }, [chartContainerRef, chartRef, drawType, onUpdateDrawings, setShowEth, updateKeyboardAction, isSelected]);
 
   return {
     isDrawingMode,

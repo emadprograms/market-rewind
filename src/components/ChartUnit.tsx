@@ -71,6 +71,7 @@ export default function ChartUnit({
   // 2. Keyboard & Drawing state
   const keyboard = useKeyboardShortcuts({ 
     chartContainerRef: cardRef, 
+    chartRef,
     onUpdateDrawings, 
     ticker: data.ticker,
     setShowEth: data.setShowEth,
