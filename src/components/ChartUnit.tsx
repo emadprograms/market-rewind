@@ -14,6 +14,8 @@ import { parseInput } from '../lib/parsing';
 
 export default function ChartUnit({ 
   id, 
+  isSelected = false,
+  onSelect,
   selectedDate,
   isReplayMode, 
   tickers, 
@@ -36,10 +38,6 @@ export default function ChartUnit({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const priceSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-
-  const setSelectedId = useWorkspaceStore((state) => state.setSelectedId);
-  const selectedId = useWorkspaceStore((state) => state.selectedId);
-  const isSelected = selectedId === id.toString();
 
   const [showVP, setShowVP] = React.useState(false);
 
@@ -78,6 +76,7 @@ export default function ChartUnit({
     isSelected,
     tickers,
     setTicker: handleTickerUpdate,
+    onToggleMaximize,
   });
 
   // 3. Trade badge ref (needed for chart lifecycle)
@@ -107,7 +106,7 @@ export default function ChartUnit({
     tradeBadgeRef,
     chartRef,
     priceSeriesRef,
-    onFocus: () => setSelectedId(id.toString()),
+    onFocus: () => onSelect?.(),
   });
 
   // 5. Trade management
@@ -149,7 +148,7 @@ export default function ChartUnit({
         ...mergedStyle,
         borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,
       }}
-      onClick={() => setSelectedId(id.toString())}
+      onClick={() => onSelect?.()}
     >
       <ChartHeader 
         ticker={data.ticker}
