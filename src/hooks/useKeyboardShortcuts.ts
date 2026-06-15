@@ -12,6 +12,7 @@ interface UseKeyboardShortcutsParams {
   isSelected: boolean;
   tickers?: string[];
   setTicker?: (ticker: string) => void;
+  onToggleMaximize?: () => void;
 }
 
 export function useKeyboardShortcuts({
@@ -23,6 +24,7 @@ export function useKeyboardShortcuts({
   isSelected,
   tickers = [],
   setTicker,
+  onToggleMaximize,
 }: UseKeyboardShortcutsParams) {
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawType, setDrawType] = useState<DrawType>('ray');
@@ -64,6 +66,14 @@ export function useKeyboardShortcuts({
       if (!isHovered && !isSelected && !keyboardActionRef.current.active) return;
 
       if (e.altKey || e.ctrlKey) {
+        if (e.altKey && e.key === 'Enter') {
+          e.preventDefault();
+          if (onToggleMaximize) {
+            onToggleMaximize();
+          }
+          return;
+        }
+
         const keyLower = e.key.toLowerCase();
         const isKeyJ = e.code === 'KeyJ' || e.keyCode === 74 || keyLower === 'j' || keyLower === '∆';
         const isKeyE = e.code === 'KeyE' || e.keyCode === 69 || keyLower === 'e' || keyLower === '´';
@@ -183,7 +193,7 @@ export function useKeyboardShortcuts({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [chartContainerRef, chartRef, drawType, onUpdateDrawings, setShowEth, updateKeyboardAction, isSelected]);
+  }, [chartContainerRef, chartRef, drawType, onUpdateDrawings, setShowEth, updateKeyboardAction, isSelected, onToggleMaximize]);
 
   return {
     isDrawingMode,
