@@ -37,7 +37,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEST-01 | Phase 5 | Pending |
+| TEST-01 | Phase 5 | Complete |
 | DATA-01 | Phase 6 | Pending |
 | DATA-02 | Phase 6 | Pending |
 | DATA-03 | Phase 6 | Pending |
