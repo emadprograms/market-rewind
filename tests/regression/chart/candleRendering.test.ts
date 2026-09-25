@@ -146,12 +146,12 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
       const ticks = await streamingClient.getTicks('QQQ', { limit: 10 });
       expect(ticks).toHaveLength(3);
 
-      // Verify oldest tick is first
-      expect(ticks[0].time).toBe(Math.floor(new Date('2026-09-25T20:59:55.000Z').getTime() / 1000));
-      expect(ticks[1].time).toBe(Math.floor(new Date('2026-09-25T20:59:58.000Z').getTime() / 1000));
-      expect(ticks[2].time).toBe(Math.floor(new Date('2026-09-25T20:59:59.000Z').getTime() / 1000));
-      expect(ticks[0].time).toBeLessThan(ticks[1].time);
-      expect(ticks[1].time).toBeLessThan(ticks[2].time);
+      // Verify oldest tick is first (ascending chronological order)
+      expect(ticks[0].time).toBe('2026-09-25 20:59:55.000');
+      expect(ticks[1].time).toBe('2026-09-25 20:59:58.000');
+      expect(ticks[2].time).toBe('2026-09-25 20:59:59.000');
+      expect(ticks[0].time < ticks[1].time).toBe(true);
+      expect(ticks[1].time < ticks[2].time).toBe(true);
     });
   });
 

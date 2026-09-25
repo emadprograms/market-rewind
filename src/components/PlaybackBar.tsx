@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, ListFilter, Zap } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, ListFilter } from 'lucide-react';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 import { getTzForTicker, getTzLabel } from '../lib/timezones';
 
@@ -27,11 +27,9 @@ export function PlaybackBar({
   const currentTime = usePlaybackStore((state) => state.currentTime);
   const isPaused = usePlaybackStore((state) => state.isPaused);
   const playbackSpeed = usePlaybackStore((state) => state.playbackSpeed);
-  const stepMinutes = usePlaybackStore((state) => state.stepMinutes);
   const masterData = usePlaybackStore((state) => state.masterData);
 
   // Tick Replay Store State
-  const replayMode = usePlaybackStore((state) => state.replayMode);
   const bufferedTicks = usePlaybackStore((state) => state.bufferedTicks);
   const currentTickIndex = usePlaybackStore((state) => state.currentTickIndex);
   const currentTick = usePlaybackStore((state) => state.currentTick);
@@ -39,8 +37,6 @@ export function PlaybackBar({
 
   const setPaused = usePlaybackStore((state) => state.setPaused);
   const setPlaybackSpeed = usePlaybackStore((state) => state.setPlaybackSpeed);
-  const setStepMinutes = usePlaybackStore((state) => state.setStepMinutes);
-  const setReplayMode = usePlaybackStore((state) => state.setReplayMode);
   const stepForward = usePlaybackStore((state) => state.stepForward);
   const stepBackward = usePlaybackStore((state) => state.stepBackward);
   const seekTickIndex = usePlaybackStore((state) => state.seekTickIndex);
@@ -62,9 +58,16 @@ export function PlaybackBar({
     return `${timeStr}.${msDigits} ${label}`;
   };
 
-  const togglePlay = () => setPaused(!isPaused);
+  const togglePlay = () => {
+    if (isPaused && currentTickIndex >= totalTicks - 1 && totalTicks > 0) {
+      seekTickIndex(0);
+      setPaused(false);
+    } else {
+      setPaused(!isPaused);
+    }
+  };
 
-  const canPlay = replayMode === 'tick' ? bufferedTicks.length > 0 : (isDbLoaded && masterData.length > 0);
+  const canPlay = bufferedTicks.length > 0 || masterData.length > 0;
 
   return (
     <div className="playback-bar" style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -87,52 +90,6 @@ export function PlaybackBar({
             {totalUnrealized >= 0 ? '+' : ''}{totalUnrealized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>
-      </div>
-
-      {/* Mode Selector Pill: TICK vs BAR */}
-      <div style={{
-        display: 'flex',
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        borderRadius: '4px',
-        padding: '2px',
-        border: '1px solid #2a2e39',
-      }}>
-        <button
-          onClick={() => setReplayMode('tick')}
-          style={{
-            padding: '2px 8px',
-            fontSize: '10px',
-            fontWeight: 700,
-            borderRadius: '2px',
-            border: 'none',
-            cursor: 'pointer',
-            backgroundColor: replayMode === 'tick' ? '#2962ff' : 'transparent',
-            color: replayMode === 'tick' ? '#ffffff' : '#787b86',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '3px',
-          }}
-          title="Tick-by-tick streaming replay mode"
-        >
-          <Zap size={10} />
-          TICK
-        </button>
-        <button
-          onClick={() => setReplayMode('bar')}
-          style={{
-            padding: '2px 8px',
-            fontSize: '10px',
-            fontWeight: 700,
-            borderRadius: '2px',
-            border: 'none',
-            cursor: 'pointer',
-            backgroundColor: replayMode === 'bar' ? '#2962ff' : 'transparent',
-            color: replayMode === 'bar' ? '#ffffff' : '#787b86',
-          }}
-          title="Aggregated bar-by-bar replay mode"
-        >
-          BAR
-        </button>
       </div>
 
       {/* Current Replay Time Display */}
@@ -167,7 +124,7 @@ export function PlaybackBar({
         <button 
           className="btn-icon" 
           onClick={stepBackward} 
-          title={replayMode === 'tick' ? 'Step 1 Tick Backward' : 'Step Backward'}
+          title="Step 1 Tick Backward"
         >
           <SkipBack size={18} />
         </button>
@@ -183,7 +140,7 @@ export function PlaybackBar({
         <button 
           className="btn-icon" 
           onClick={stepForward} 
-          title={replayMode === 'tick' ? 'Step 1 Tick Forward' : 'Step Forward'}
+          title="Step 1 Tick Forward"
         >
           <SkipForward size={18} />
         </button>
@@ -191,7 +148,7 @@ export function PlaybackBar({
       </div>
 
       {/* Scrubber slider for Tick Replay */}
-      {replayMode === 'tick' && totalTicks > 0 && (
+      {totalTicks > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '120px', maxWidth: '300px' }}>
           <input
             type="range"
@@ -204,26 +161,6 @@ export function PlaybackBar({
           <span style={{ fontSize: '10px', color: '#787b86', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}>
             {currentTickIndex + 1}/{totalTicks}
           </span>
-        </div>
-      )}
-
-      {/* Bar step size (when in bar mode) */}
-      {replayMode === 'bar' && (
-        <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
-          <span style={{fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600}}>STEP</span>
-          <select 
-            value={stepMinutes} 
-            onChange={(e) => setStepMinutes(parseInt(e.target.value))}
-            style={{width: 'auto', padding: '2px 4px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-green)', background: 'rgba(0,0,0,0.2)'}}
-          >
-            <option value={minStepMinutes}>Auto ({minStepMinutes >= 1440 ? '1D' : minStepMinutes >= 60 ? `${minStepMinutes / 60}H` : `${minStepMinutes}m`})</option>
-            <option value="1">1m</option>
-            <option value="5">5m</option>
-            <option value="15">15m</option>
-            <option value="30">30m</option>
-            <option value="60">1 H</option>
-            <option value="1440">1 D</option>
-          </select>
         </div>
       )}
 

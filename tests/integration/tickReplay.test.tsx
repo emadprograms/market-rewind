@@ -17,7 +17,7 @@ describe('Tick Replay Integration Tests', () => {
     usePlaybackStore.getState().setReplayMode('tick');
   });
 
-  it('should render tick replay controls and TICK/BAR toggle', () => {
+  it('should render pure tick replay controls without TICK/BAR mode toggle', () => {
     render(
       <PlaybackBar
         totalRealized={150.5}
@@ -29,8 +29,7 @@ describe('Tick Replay Integration Tests', () => {
       />
     );
 
-    expect(screen.getByText('TICK')).toBeInTheDocument();
-    expect(screen.getByText('BAR')).toBeInTheDocument();
+    expect(screen.queryByText('BAR')).not.toBeInTheDocument();
     expect(screen.getByText('$180.00')).toBeInTheDocument();
   });
 

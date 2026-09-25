@@ -14,13 +14,16 @@ export function useMarketSimulator(
   const setMasterData = usePlaybackStore((state) => state.setMasterData);
   const setCurrentTime = usePlaybackStore((state) => state.setCurrentTime);
   const setPaused = usePlaybackStore((state) => state.setPaused);
+  const seekTickTime = usePlaybackStore((state) => state.seekTickTime);
   const masterData = usePlaybackStore((state) => state.masterData);
 
   const loadMarketData = useCallback(async () => {
     let data: RawBar[] = [];
+    const endBoundary = `${selectedDate} 23:59:59`;
     try {
       data = await streamingClient.getCandles(sessionTicker, {
         timeframe: '1min',
+        endTime: endBoundary,
         limit: 5000,
       });
     } catch {
@@ -37,16 +40,13 @@ export function useMarketSimulator(
 
     setMasterData(data);
     
-    if (data.length > 0) {
-      const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
-      const startBar = data.find((d: any) => d.time >= targetTimeStr) || data[0];
-      if (startBar) {
-        setCurrentTime(new Date(startBar.time.replace(' ', 'T') + 'Z').getTime());
-      }
-    } else {
-      setCurrentTime(null);
-    }
-  }, [sessionTicker, selectedDate, entryTime, getUtcTimeFromEt, setMasterData, setCurrentTime]);
+    // Always anchor replay cursor to exactly 9:20 AM ET of selectedDate
+    const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
+    const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
+    setCurrentTime(targetMs);
+    seekTickTime(targetMs);
+    setPaused(true);
+  }, [sessionTicker, selectedDate, entryTime, getUtcTimeFromEt, setMasterData, setCurrentTime, seekTickTime, setPaused]);
 
   useEffect(() => {
     if (isSessionStarted) {
@@ -56,12 +56,11 @@ export function useMarketSimulator(
 
   const handleResetToOpen = useCallback(() => {
     const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
-    const startBar = masterData.find(d => d.time >= targetTimeStr) || masterData[masterData.length - 1];
-    if (startBar) {
-      setCurrentTime(new Date(startBar.time.replace(' ', 'T') + 'Z').getTime());
-    }
+    const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
+    setCurrentTime(targetMs);
+    seekTickTime(targetMs);
     setPaused(true);
-  }, [masterData, selectedDate, entryTime, getUtcTimeFromEt, setCurrentTime, setPaused]);
+  }, [selectedDate, entryTime, getUtcTimeFromEt, setCurrentTime, seekTickTime, setPaused]);
 
   return { handleResetToOpen };
 }

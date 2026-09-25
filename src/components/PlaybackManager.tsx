@@ -9,13 +9,23 @@ export function PlaybackManager() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!isPaused) {
-      timerRef.current = setInterval(() => {
-        tick();
-      }, 1000 / playbackSpeed);
-    } else {
+    if (isPaused) {
       if (timerRef.current) clearInterval(timerRef.current);
+      return;
     }
+
+    let intervalMs = 1000 / playbackSpeed;
+    let ticksPerStep = 1;
+
+    // At high speeds (e.g. 50x, 100x), cap interval at ~30ms (~33fps) and batch ticks per frame
+    if (intervalMs < 30) {
+      intervalMs = 30;
+      ticksPerStep = Math.max(1, Math.round(playbackSpeed / 33));
+    }
+
+    timerRef.current = setInterval(() => {
+      tick(ticksPerStep);
+    }, intervalMs);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);

@@ -27,7 +27,7 @@ interface PlaybackState {
   setBufferedTicks: (ticks: MarketTick[]) => void;
   addTicks: (ticks: MarketTick[]) => void;
   
-  tick: () => void;
+  tick: (stepCount?: number) => void;
   stepForward: () => void;
   stepBackward: () => void;
   seekTickIndex: (index: number) => void;
@@ -102,13 +102,13 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   setBufferedTicks: (ticks) => {
     const firstTick = ticks[0] || null;
     const initialMs = firstTick ? isoToMs(firstTick.time) : null;
-    set({
+    set((state) => ({
       bufferedTicks: ticks,
       totalTicks: ticks.length,
       currentTickIndex: 0,
       currentTick: firstTick,
-      currentTime: initialMs,
-    });
+      currentTime: state.currentTime ?? initialMs,
+    }));
   },
 
   addTicks: (newTicks) => {
@@ -121,13 +121,13 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     });
   },
 
-  tick: () => {
-    const { replayMode, isPaused, bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
+  tick: (stepCount = 1) => {
+    const { isPaused, bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
     if (isPaused) return;
 
-    if (replayMode === 'tick') {
+    if (bufferedTicks.length > 0) {
       if (currentTickIndex < bufferedTicks.length - 1) {
-        const nextIndex = currentTickIndex + 1;
+        const nextIndex = Math.min(bufferedTicks.length - 1, currentTickIndex + Math.max(1, stepCount));
         const nextTick = bufferedTicks[nextIndex];
         set({
           currentTickIndex: nextIndex,
@@ -148,10 +148,10 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   stepForward: () => {
-    const { replayMode, bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
+    const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
 
-    if (replayMode === 'tick') {
-      if (bufferedTicks.length > 0 && currentTickIndex < bufferedTicks.length - 1) {
+    if (bufferedTicks.length > 0) {
+      if (currentTickIndex < bufferedTicks.length - 1) {
         const nextIndex = currentTickIndex + 1;
         const nextTick = bufferedTicks[nextIndex];
         set({
@@ -168,10 +168,10 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   stepBackward: () => {
-    const { replayMode, bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
+    const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
 
-    if (replayMode === 'tick') {
-      if (bufferedTicks.length > 0 && currentTickIndex > 0) {
+    if (bufferedTicks.length > 0) {
+      if (currentTickIndex > 0) {
         const prevIndex = currentTickIndex - 1;
         const prevTick = bufferedTicks[prevIndex];
         set({
@@ -201,9 +201,12 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
 
   seekTickTime: (time) => {
     const { bufferedTicks } = get();
-    if (bufferedTicks.length === 0) return;
-
     const targetMs = typeof time === 'number' ? time : isoToMs(time);
+    if (bufferedTicks.length === 0) {
+      set({ currentTime: targetMs });
+      return;
+    }
+
     let closestIndex = 0;
     let minDiff = Infinity;
 
@@ -221,7 +224,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     set({
       currentTickIndex: closestIndex,
       currentTick: targetTick,
-      currentTime: isoToMs(targetTick.time),
+      currentTime: targetMs,
     });
   },
 

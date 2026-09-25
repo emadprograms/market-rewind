@@ -134,7 +134,8 @@ class StreamingClient {
     try {
       const res = await fetch(`${API_BASE_URL}/api/ticks?${params.toString()}`);
       if (res.ok) {
-        rawTicks = await res.json();
+        const data = await res.json();
+        rawTicks = Array.isArray(data) ? data : (data.ticks || []);
       }
     } catch {
       // Fallback to tape endpoint
@@ -146,34 +147,40 @@ class StreamingClient {
         const tapeRes = await fetch(`${API_BASE_URL}/api/stream/tape?symbol=${encodeURIComponent(symbol.toUpperCase())}&limit=${options.limit || 10000}`);
         if (tapeRes.ok) {
           const tapeData = await tapeRes.json();
-          rawTicks = tapeData.ticks || [];
+          rawTicks = Array.isArray(tapeData) ? tapeData : (tapeData.ticks || []);
         }
       } catch {
         // ignore
       }
     }
 
-    const mapped = (rawTicks || []).map((t: any) => {
-      let timeVal = 0;
-      if (typeof t.time === 'number') {
-        timeVal = t.time;
-      } else if (t.timestamp) {
-        const str = String(t.timestamp).includes('T') ? String(t.timestamp) : String(t.timestamp).replace(' ', 'T');
-        const utcStr = str.endsWith('Z') ? str : str + 'Z';
-        timeVal = Math.floor(new Date(utcStr).getTime() / 1000);
+    const mapped: MarketTick[] = (rawTicks || []).map((t: any) => {
+      let timeStr = '';
+      if (typeof t.time === 'string') {
+        timeStr = t.time;
+      } else if (typeof t.timestamp === 'string') {
+        timeStr = t.timestamp;
+      } else if (t.time_str) {
+        timeStr = t.time_str;
+      } else if (typeof t.time === 'number') {
+        const ms = t.time < 1e11 ? t.time * 1000 : t.time;
+        timeStr = new Date(ms).toISOString().replace('T', ' ').slice(0, 23);
       }
-      return {
-        time: timeVal,
-        price: Number(t.price),
-        size: Number(t.volume ?? t.size ?? 1),
-        side: (t.side as 'buy' | 'sell' | 'neutral') || (t.price >= (t.ask || t.price) ? 'buy' : t.price <= (t.bid || t.price) ? 'sell' : 'neutral'),
-        bid: t.bid ? Number(t.bid) : undefined,
-        ask: t.ask ? Number(t.ask) : undefined,
-        symbol: t.symbol || symbol.toUpperCase(),
-      };
-    });
+      timeStr = timeStr.replace('T', ' ');
 
-    mapped.sort((a, b) => a.time - b.time);
+      return {
+        time: timeStr,
+        price: Number(t.price),
+        volume: Number(t.volume ?? t.size ?? 1),
+        bid: t.bid !== undefined && t.bid !== null ? Number(t.bid) : undefined,
+        ask: t.ask !== undefined && t.ask !== null ? Number(t.ask) : undefined,
+        symbol: t.symbol || symbol.toUpperCase(),
+        session: t.session || 'REG',
+        source: t.source || 'STREAMING',
+      };
+    }).filter(t => Boolean(t.time) && !isNaN(t.price));
+
+    mapped.sort((a, b) => a.time.localeCompare(b.time));
     return mapped;
   }
 
@@ -209,7 +216,16 @@ class StreamingClient {
     if (isSubSecond) {
       // Sub-second timeframes only exist in streaming DuckDB
       try {
-        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?symbol=${encodeURIComponent(sym)}&tf=${apiTf}&timeframe=${apiTf}&limit=${limit}`);
+        const streamParams = new URLSearchParams({
+          symbol: sym,
+          tf: apiTf,
+          timeframe: apiTf,
+          limit: String(limit),
+        });
+        if (options.startTime) streamParams.append('start', options.startTime);
+        if (options.endTime) streamParams.append('end', options.endTime);
+
+        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
         if (res.ok) {
           const data = await res.json();
           rawList = data.candles || [];
@@ -239,10 +255,19 @@ class StreamingClient {
         // ignore
       }
 
-      // Also fetch live/streaming candles for today
+      // Also fetch live/streaming candles (matching requested range if provided)
       let streamCandles: any[] = [];
       try {
-        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?symbol=${encodeURIComponent(sym)}&tf=${apiTf}&timeframe=${apiTf}&limit=1000`);
+        const streamParams = new URLSearchParams({
+          symbol: sym,
+          tf: apiTf,
+          timeframe: apiTf,
+          limit: '1000',
+        });
+        if (options.startTime) streamParams.append('start', options.startTime);
+        if (options.endTime) streamParams.append('end', options.endTime);
+
+        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
         if (res.ok) {
           const data = await res.json();
           streamCandles = data.candles || [];

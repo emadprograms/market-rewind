@@ -43,29 +43,36 @@ describe('SessionShadingPlugin Slicing Complexity (Test 1)', () => {
     plugin._getViewData();
     plugin._cache = null; // Clear cache for measurement
 
-    const startA = process.hrtime.bigint();
-    plugin._getViewData();
-    const endA = process.hrtime.bigint();
-    const durationA = endA - startA;
+    // Take minimum of 3 runs to avoid GC jitter
+    let minA = Infinity;
+    for (let i = 0; i < 3; i++) {
+      plugin._cache = null;
+      const s = process.hrtime.bigint();
+      plugin._getViewData();
+      const e = process.hrtime.bigint();
+      const d = Number(e - s);
+      if (d < minA) minA = d;
+    }
 
     // Dataset B: 100,000 bars (Large)
     const seriesB = createMockSeries(100000);
     plugin.attached({ chart: mockChart, series: seriesB, requestUpdate: () => {} });
-    
-    plugin._cache = null; // Clear cache for measurement
 
-    const startB = process.hrtime.bigint();
-    plugin._getViewData();
-    const endB = process.hrtime.bigint();
-    const durationB = endB - startB;
+    let minB = Infinity;
+    for (let i = 0; i < 3; i++) {
+      plugin._cache = null;
+      const s = process.hrtime.bigint();
+      plugin._getViewData();
+      const e = process.hrtime.bigint();
+      const d = Number(e - s);
+      if (d < minB) minB = d;
+    }
 
-    console.log(`Small Dataset (200 bars) duration: ${durationA}ns`);
-    console.log(`Large Dataset (100,000 bars) duration: ${durationB}ns`);
+    console.log(`Small Dataset (200 bars) min duration: ${minA}ns`);
+    console.log(`Large Dataset (100,000 bars) min duration: ${minB}ns`);
 
     // If it were O(TotalBars), B would be ~500x slower.
-    // We expect B to be within a small constant factor of A.
-    // Using 5x as a safe threshold for CI environments.
-    const ratio = Number(durationB) / Number(durationA);
+    const ratio = minB / Math.max(1, minA);
     console.log(`Performance Ratio: ${ratio.toFixed(2)}x`);
     
     expect(ratio).toBeLessThan(10); 
