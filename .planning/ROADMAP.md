@@ -3,7 +3,7 @@
 ## Phases
 
 - [x] **Phase 1: Viewport Stabilization** - Eliminate violent viewport jumps and ensure deterministic chart loading.
-- [ ] **Phase 2: Selection & Grouping Hardening** - Ensure 100% reliable focus and symbol synchronization.
+- [x] **Phase 2: Selection & Grouping Hardening** - Ensure 100% reliable focus and symbol synchronization.
 - [x] **Phase 3: Stability Guardrails** - Build automated regression tests for critical stability paths.
 - [x] **Phase 4: Systemic Hardening & Audit** - Map architectural fragility and resolve systemic technical debt to ensure long-term maintainability.
 
@@ -52,11 +52,11 @@
 
 **Plans**:
 
-- [ ] 03-01-PLAN.md — Setup testing infrastructure (Playwright/MSW)
-- [ ] 03-02-PLAN.md — Logical viewport regression tests (Vitest)
-- [ ] 03-03-PLAN.md — Visual viewport regression tests (Playwright)
-- [ ] 03-04-PLAN.md — Logical group sync regression tests (Vitest)
-- [ ] 03-05-PLAN.md — Visual group sync regression tests (Playwright)
+- [x] 03-01-PLAN.md — Setup testing infrastructure (Playwright/MSW)
+- [x] 03-02-PLAN.md — Logical viewport regression tests (Vitest)
+- [x] 03-03-PLAN.md — Visual viewport regression tests (Playwright)
+- [x] 03-04-PLAN.md — Logical group sync regression tests (Vitest)
+- [x] 03-05-PLAN.md — Visual group sync regression tests (Playwright)
 
 ### Phase 4: Systemic Hardening & Audit
 
@@ -75,4 +75,4 @@
 - [x] 04-01-PLAN.md — Type hardening for plugin renderers
 - [x] 04-02-PLAN.md — Extraction of base chart and plugin init
 - [x] 04-03-PLAN.md — Extraction of drawings and prioritized viewport control
-- [ ] 04-04-PLAN.md — Migration of sql.js to Web Worker
+- [x] 04-04-PLAN.md — Migration of sql.js to Web Worker

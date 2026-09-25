@@ -65,6 +65,14 @@ export default function ChartUnit({
     }
   }, [onTickerChange]);
 
+  // Unified Selection Updater (SYNC-01)
+  // Update the workspace store directly so a click anywhere in this chart
+  // focuses it — even if the parent doesn't wire `onSelect` — then notify the parent.
+  const handleSelect = React.useCallback(() => {
+    useWorkspaceStore.getState().setSelectedId(String(id));
+    onSelect?.();
+  }, [id, onSelect]);
+
 
   // 2. Keyboard & Drawing state
   const keyboard = useKeyboardShortcuts({ 
@@ -106,7 +114,7 @@ export default function ChartUnit({
     tradeBadgeRef,
     chartRef,
     priceSeriesRef,
-    onFocus: () => onSelect?.(),
+    onFocus: handleSelect,
   });
 
   // 5. Trade management
@@ -148,7 +156,7 @@ export default function ChartUnit({
         ...mergedStyle,
         borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,
       }}
-      onClick={() => onSelect?.()}
+      onClick={handleSelect}
     >
       <ChartHeader 
         ticker={data.ticker}
