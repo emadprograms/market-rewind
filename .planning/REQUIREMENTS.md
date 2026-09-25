@@ -42,11 +42,11 @@
 | DATA-02 | Phase 6 | Complete |
 | DATA-03 | Phase 6 | Complete |
 | DATA-04 | Phase 6 | Complete |
-| REPLAY-01 | Phase 7 | Pending |
-| REPLAY-02 | Phase 7 | Pending |
-| REPLAY-03 | Phase 7 | Pending |
-| REPLAY-04 | Phase 7 | Pending |
-| TEST-02 | Phase 7 | Pending |
+| REPLAY-01 | Phase 7 | Complete |
+| REPLAY-02 | Phase 7 | Complete |
+| REPLAY-03 | Phase 7 | Complete |
+| REPLAY-04 | Phase 7 | Complete |
+| TEST-02 | Phase 7 | Complete |
 | UI-01 | Phase 8 | Pending |
 | UI-02 | Phase 8 | Pending |
 | UI-03 | Phase 8 | Pending |
