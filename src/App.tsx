@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Activity } from 'lucide-react';
 
 // Hooks
@@ -9,6 +9,7 @@ import { usePortfolio } from './hooks/usePortfolio';
 import { useDrawings } from './hooks/useDrawings';
 import { useMarketSimulator } from './hooks/useMarketSimulator';
 import { usePlaybackStore } from './store/usePlaybackStore';
+import { streamingClient } from './lib/streamingClient';
 
 // Components
 import { Sidebar } from './components/Sidebar';
@@ -16,6 +17,7 @@ import { SessionConfig } from './components/SessionConfig';
 import { ChartWorkspace } from './components/ChartWorkspace';
 import { PlaybackBar } from './components/PlaybackBar';
 import { PlaybackManager } from './components/PlaybackManager';
+import { TimeAndSales } from './components/TimeAndSales';
 
 export default function App() {
   const { 
@@ -23,6 +25,7 @@ export default function App() {
     isLoading, 
     dbStatus, 
     isDbLoaded, 
+    isStreamingConnected,
     handleFileUpload 
   } = useDatabase();
 
@@ -81,10 +84,35 @@ export default function App() {
   );
 
   const setStepMinutes = usePlaybackStore((state) => state.setStepMinutes);
+  const setBufferedTicks = usePlaybackStore((state) => state.setBufferedTicks);
+
+  const [isTapeOpen, setIsTapeOpen] = useState(false);
 
   useEffect(() => {
     setStepMinutes(activeStepMinutes);
   }, [activeStepMinutes, setStepMinutes]);
+
+  // Buffer live ticks when session begins or ticker changes
+  const loadStreamingTicks = useCallback(async () => {
+    if (!sessionTicker) return;
+    try {
+      const ticks = await streamingClient.getTicks(sessionTicker, {
+        limit: 15000,
+        direction: 'asc',
+      });
+      if (ticks && ticks.length > 0) {
+        setBufferedTicks(ticks);
+      }
+    } catch (e) {
+      console.warn('Could not load streaming ticks into replay buffer:', e);
+    }
+  }, [sessionTicker, setBufferedTicks]);
+
+  useEffect(() => {
+    if (isSessionStarted) {
+      loadStreamingTicks();
+    }
+  }, [isSessionStarted, sessionTicker, loadStreamingTicks]);
 
   return (
     <div className="app-container">
@@ -100,53 +128,66 @@ export default function App() {
         setLayoutMode={setLayoutMode}
       />
 
-      <div className="main-content" style={{ position: 'relative' }}>
-        {isLoading ? (
-          <main className="workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-             <Activity className="animate-pulse" size={48} />
-          </main>
-        ) : !isDbLoaded ? (
-          <main className="workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-             Please upload your database file on the left to begin.
-          </main>
-        ) : !isSessionStarted ? (
-          <SessionConfig 
-            tickers={tickers}
-            sessionTicker={sessionTicker}
-            setSessionTicker={setSessionTicker}
-            selectedDate={selectedDate}
-            setSelectedDate={setSelectedDate}
-            entryTime={entryTime}
-            setEntryTime={setEntryTime}
-            onStartSession={startSession}
-          />
-        ) : (
-          <ChartWorkspace 
-            layoutMode={layoutMode}
-            maximizedId={maximizedId}
-            panelSizes={panelSizes}
-            activeGutter={activeGutter}
-            tickers={tickers}
-            sessionTicker={sessionTicker}
-            selectedDate={selectedDate}
-            isSessionStarted={isSessionStarted}
-            drawings={drawings}
-            chartGroups={chartGroups}
-            groupTickers={groupTickers}
-            workspaceRef={workspaceRef}
-            selectedChartId={selectedChartId}
-            onSelectChart={handleSelectChart}
-            onToggleMaximize={toggleMaximize}
-            onUpdateDrawings={handleUpdateDrawings}
-            onPnLUpdate={handlePnLUpdate}
-            onTickerChange={handleTickerChange}
-            onTimeframeChange={handleTimeframeChange}
-            onGroupChange={handleGroupChange}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerEnd={handlePointerEnd}
-          />
-        )}
+      <div className="main-content" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
+            {isLoading ? (
+              <main className="workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+                 <Activity className="animate-pulse" size={48} />
+              </main>
+            ) : !isDbLoaded ? (
+              <main className="workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+                 Please upload your database file or ensure streaming backend is running.
+              </main>
+            ) : !isSessionStarted ? (
+              <SessionConfig 
+                tickers={tickers}
+                sessionTicker={sessionTicker}
+                setSessionTicker={setSessionTicker}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                entryTime={entryTime}
+                setEntryTime={setEntryTime}
+                onStartSession={startSession}
+              />
+            ) : (
+              <ChartWorkspace 
+                layoutMode={layoutMode}
+                maximizedId={maximizedId}
+                panelSizes={panelSizes}
+                activeGutter={activeGutter}
+                tickers={tickers}
+                sessionTicker={sessionTicker}
+                selectedDate={selectedDate}
+                isSessionStarted={isSessionStarted}
+                drawings={drawings}
+                chartGroups={chartGroups}
+                groupTickers={groupTickers}
+                workspaceRef={workspaceRef}
+                selectedChartId={selectedChartId}
+                onSelectChart={handleSelectChart}
+                onToggleMaximize={toggleMaximize}
+                onUpdateDrawings={handleUpdateDrawings}
+                onPnLUpdate={handlePnLUpdate}
+                onTickerChange={handleTickerChange}
+                onTimeframeChange={handleTimeframeChange}
+                onGroupChange={handleGroupChange}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerEnd={handlePointerEnd}
+              />
+            )}
+          </div>
+
+          {/* Time & Sales Order Flow Drawer */}
+          {isTapeOpen && (
+            <TimeAndSales
+              isOpen={isTapeOpen}
+              onClose={() => setIsTapeOpen(false)}
+              symbol={sessionTicker}
+            />
+          )}
+        </div>
 
         <PlaybackBar
           totalRealized={totalRealized}
@@ -155,6 +196,8 @@ export default function App() {
           sessionTicker={sessionTicker}
           onResetToOpen={handleResetToOpen}
           minStepMinutes={minStepMinutes}
+          isTapeOpen={isTapeOpen}
+          onToggleTape={() => setIsTapeOpen(!isTapeOpen)}
         />
         <PlaybackManager />
       </div>

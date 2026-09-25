@@ -126,8 +126,26 @@ export function ChartHeader({
           </div>
 
           {isTfOpen && (
-            <div className="dropdown-menu" style={{ minWidth: '100px' }}>
+            <div className="dropdown-menu" style={{ minWidth: '120px' }}>
               <div className="dropdown-items">
+                <div style={{ padding: '4px 8px', fontSize: '9px', fontWeight: 700, color: '#2962ff', letterSpacing: '0.05em' }}>
+                  STREAMING / TICKS
+                </div>
+                {(['1s', '5s', '15s', '30s'] as Timeframe[]).map(tf => (
+                  <div
+                    key={tf}
+                    className={`dropdown-item ${tf === timeframe ? 'selected' : ''}`}
+                    onClick={() => {
+                      setTimeframe(tf);
+                      setIsTfOpen(false);
+                    }}
+                  >
+                    ⚡ {tf}
+                  </div>
+                ))}
+                <div style={{ padding: '4px 8px', fontSize: '9px', fontWeight: 700, color: '#787b86', letterSpacing: '0.05em', borderTop: '1px solid #2a2e39', marginTop: '4px' }}>
+                  CANDLES
+                </div>
                 {(['1min', '5min', '15min', '30min', '1H', '1D'] as Timeframe[]).map(tf => (
                   <div
                     key={tf}
@@ -143,6 +161,29 @@ export function ChartHeader({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Quick Timeframe Pills */}
+        <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+          {(['1s', '5s', '1min', '5min'] as Timeframe[]).map((tf) => (
+            <button
+              key={tf}
+              onClick={() => setTimeframe(tf)}
+              style={{
+                background: tf === timeframe ? '#2962ff' : 'transparent',
+                color: tf === timeframe ? '#ffffff' : '#787b86',
+                border: 'none',
+                borderRadius: '3px',
+                padding: '2px 5px',
+                fontSize: '10px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              title={`Switch to ${tf}`}
+            >
+              {tf.replace('min', 'm')}
+            </button>
+          ))}
         </div>
 
         {/* ZONE B: SETTINGS DROPDOWN (ICON ONLY) */}

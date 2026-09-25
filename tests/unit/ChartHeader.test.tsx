@@ -30,7 +30,7 @@ describe('ChartHeader', () => {
   it('renders primary controls in Zone A', () => {
     render(<ChartHeader {...defaultProps} />);
     expect(screen.getByText('AAPL')).toBeInTheDocument();
-    expect(screen.getByText('5m')).toBeInTheDocument();
+    expect(screen.getAllByText('5m').length).toBeGreaterThan(0);
     expect(screen.getByText('Group')).toBeInTheDocument();
   });
 
