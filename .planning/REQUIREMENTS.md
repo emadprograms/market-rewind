@@ -1,55 +1,39 @@
-# Milestone v2.0 Requirements: Tick-by-Tick Streaming Engine & Modern UI
+# Milestone v3.0 Requirements: Pure Tick-by-Tick Replay & Temporal Isolation Engine
 
 ## Requirements
 
-### Data Layer & DuckDB Integration
-- [x] **DATA-01**: Direct Python backend service connecting read-only to `../data-harvester/data/streaming.duckdb` (37.8M+ ticks) and `historical.duckdb`.
-- [x] **DATA-02**: Fast REST/WebSocket API endpoints exposing available symbols, time ranges, and tick counts.
-- [x] **DATA-03**: Dynamic candlestick resampling via DuckDB `time_bucket()` supporting sub-second (`1s`, `5s`, `15s`) and minute/hourly intervals (`1m`, `5m`, `15m`, `30m`, `1h`, `1d`).
-- [x] **DATA-04**: High-throughput raw tick streaming and paginated chunk retrieval for deep historical replay without browser memory exhaustion.
+### Pure Tick Replay Architecture
+- [ ] **TICK-01**: Pure Tick Mode & Streamlined Playback Bar
+  - Eliminate the "TICK vs BAR" mode toggle pill and the BAR step size dropdown.
+  - Playback operates strictly in tick format with speed multiplier (0.5x - 100x), tick scrubber, single-tick stepping, and play/pause.
 
-### Tick-by-Tick Replay Engine
-- [x] **REPLAY-01**: Millisecond-accurate replay clock with play, pause, seek, and single-tick stepping (step forward, step backward).
-- [x] **REPLAY-02**: Configurable replay speed multiplier (0.5x, 1x, 5x, 10x, 50x, 100x, Max/Instant).
-- [x] **REPLAY-03**: Real-time candle synthesizer: incoming ticks update the current candle's open, high, low, close, volume, and tick count in real time on the chart.
-- [x] **REPLAY-04**: Synchronized multi-chart tick replay across grouped charts (e.g. 1-second and 1-minute charts of the same ticker advancing in lockstep).
+### Temporal Isolation & Date Management
+- [ ] **TICK-02**: Canonical 9:20 AM ET Day Reset
+  - Selecting any date or resetting to start must jump the replay cursor directly to 9:20 AM Eastern Time of that date and pause.
+- [ ] **TICK-03**: Absolute Temporal Isolation (Zero Future Data Leak)
+  - All candle and tick queries must be strictly bounded to the requested historical date.
+  - Intraday charts must strictly filter out any candle or tick after the active replay timestamp.
+  - Daily charts must strictly exclude future dates beyond the selected replay day.
+- [ ] **TICK-05**: Universal Tick Availability via Fallback Micro-Tick Synthesis
+  - Provide realistic 4-tick/min micro-tick synthesis for dates or pre-market intervals where raw streaming ticks are absent, ensuring every symbol and day is replayable.
 
-### Modern UI & Order Flow Visuals
-- [x] **UI-01**: Real-time Time & Sales / Tick Tape widget displaying tick timestamp, symbol, price, size, bid, ask, and uptick/downtick color coding.
-- [x] **UI-02**: Modernized dark-mode terminal layout with enhanced playback scrubber, live tick metrics (current tick, total ticks, timestamp), and quick-switch symbol dropdown populated from live DB.
-- [x] **UI-03**: Sub-second and high-frequency timeframe selector buttons in chart headers (`1s`, `5s`, `15s`, `1m`, `5m`, `15m`, `1h`, `1d`).
-- [x] **UI-04**: Bid/Ask spread and current market price badge overlay on charts.
+### Real-Time Candle Forming & Engine
+- [ ] **TICK-04**: Real-Time Intraday Candle Forming from Ticks
+  - On any timeframe (1m, 5m, 15m, 30m, 1H), incoming ticks during playback dynamically update the forming candle's High, Low, Close, and Volume.
+  - At the timeframe boundary, the candle closes and the subsequent candle forms smoothly.
+  - Seeking or scrubbing cleanly reconstructs the forming candle state up to that tick index.
 
-### Quality, Tests & Guardrails
-- [x] **TEST-01**: Fix existing unit and integration test suites (resolve jsdom zustand localStorage mock issue).
-- [x] **TEST-02**: Unit tests for tick parsing, candle aggregation, and replay store state transitions.
-- [x] **TEST-03**: Integration tests for tick playback stepping, speed adjustment, and Time & Sales rendering.
-
-## Future Requirements (Deferred)
-- **FUT-01**: Level 2 DOM (Depth of Market) ladder visualization.
-- **FUT-02**: Multi-symbol replay synchronizer with simulated cross-asset order flow.
-
-## Out of Scope
-- Direct live broker execution (focus is offline high-fidelity tick replay).
-- Modifying the upstream `data-harvester` database (all queries are strictly read-only).
+### Verification & Testing
+- [ ] **TEST-04**: Automated Regression Test Suite
+  - Unit and integration tests verifying 9:20 AM ET positioning, future candle exclusion, 5-minute candle live tick updates, and streamlined UI controls.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEST-01 | Phase 5 | Complete |
-| DATA-01 | Phase 6 | Complete |
-| DATA-02 | Phase 6 | Complete |
-| DATA-03 | Phase 6 | Complete |
-| DATA-04 | Phase 6 | Complete |
-| REPLAY-01 | Phase 7 | Complete |
-| REPLAY-02 | Phase 7 | Complete |
-| REPLAY-03 | Phase 7 | Complete |
-| REPLAY-04 | Phase 7 | Complete |
-| TEST-02 | Phase 7 | Complete |
-| UI-01 | Phase 8 | Complete |
-| UI-02 | Phase 8 | Complete |
-| UI-03 | Phase 8 | Complete |
-| UI-04 | Phase 8 | Complete |
-| TEST-03 | Phase 8 | Complete |
-
+| TICK-01 | Phase 9 | Pending |
+| TICK-02 | Phase 10 | Pending |
+| TICK-03 | Phase 10 | Pending |
+| TICK-05 | Phase 10 | Pending |
+| TICK-04 | Phase 11 | Pending |
+| TEST-04 | Phase 12 | Pending |

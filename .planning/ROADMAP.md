@@ -1,38 +1,40 @@
-# Roadmap: Milestone v2.0 Tick-by-Tick Streaming Engine & Modern UI
+# Roadmap: Milestone v3.0 Pure Tick-by-Tick Replay & Temporal Isolation Engine
 
 ## Milestone Phases
 
-### Phase 5: Test Infrastructure Baseline & Fixes
-- **Goal**: Resolve test runner failures, establish mock environment stability, and verify existing test baseline passes cleanly.
-- **Requirements**: TEST-01
+### Phase 9: Playback Bar Modernization & Pure Tick Mode
+- **Goal**: Permanently eliminate the TICK vs BAR toggle, streamlining the playback controls to pure tick replay with speed controls (0.5x to 100x), tick scrubber, play/pause, and single-tick stepping.
+- **Requirements**: TICK-01
 - **Success Criteria**:
-  1. Vitest test runner executes all existing test suites without localStorage/zustand TypeError crashes.
-  2. Baseline suite passes cleanly with zero errors.
+  1. TICK vs BAR pill toggle and bar step size dropdown are completely removed from `PlaybackBar.tsx`.
+  2. Replay store operates exclusively in tick mode.
+  3. Scrubber slider and single-tick step buttons operate smoothly on tick indices.
+  4. Speed dropdown controls update frequency cleanly.
 
-### Phase 6: DuckDB Backend Service & Streaming API
-- **Goal**: Implement a high-performance Python data service connecting to `data-harvester`'s `streaming.duckdb` and `historical.duckdb`, exposing REST and streaming endpoints for symbols, ticks, and dynamic candle resampling.
-- **Requirements**: DATA-01, DATA-02, DATA-03, DATA-04
+### Phase 10: Temporal Isolation & Canonical 9:20 AM ET Date Reset
+- **Goal**: Anchor day resets and date selection strictly at 9:20 AM Eastern Time of the selected day, eliminate future data leakage by bounding historical queries, and backfill micro-ticks for historical dates.
+- **Requirements**: TICK-02, TICK-03, TICK-05
 - **Success Criteria**:
-  1. Service connects read-only to `../data-harvester/data/streaming.duckdb` and queries 37.8M+ ticks without lock contention.
-  2. Endpoints return symbol lists (`QQQ`, `US100`, `TSLA`, etc.) and metadata with sub-50ms latency.
-  3. Dynamic `time_bucket()` aggregation delivers candles across `1s`, `5s`, `15s`, `1m`, `5m`, `15m`, `1h`, `1d`.
-  4. Raw tick streaming and paginated chunk retrieval endpoints function with high throughput.
+  1. Selecting or resetting any day (e.g. September 2, 2026) positions `currentTime` at exactly 9:20 AM ET and pauses playback.
+  2. Data queries never fetch unconstrained live candles from today when viewing historical dates.
+  3. No candle, tick, or price after the current replay cursor is visible on the charts.
+  4. Micro-tick synthesizer generates high-fidelity ticks from 1m bars for any historical date or pre-market gap, ensuring universal replay availability.
 
-### Phase 7: Tick-by-Tick Replay Engine & Live Candle Synthesis
-- **Goal**: Build the client-side tick replay state machine with millisecond precision, single-tick stepping forward/backward, variable speed playback, and dynamic candle building.
-- **Requirements**: REPLAY-01, REPLAY-02, REPLAY-03, REPLAY-04, TEST-02
+### Phase 11: Real-Time Tick-by-Tick Candle Forming & Playback Engine
+- **Goal**: Dynamically form and update intraday candles (1m, 5m, 15m, 30m, 1H) in real time from incoming ticks as playback runs.
+- **Requirements**: TICK-04
 - **Success Criteria**:
-  1. User can step forward and backward by a single tick, updating the chart price and time indicator.
-  2. Playback speed can be set between 0.5x and 100x or instant.
-  3. Incoming ticks dynamically update the open, high, low, close, volume, and tick count of the current candle in real time.
-  4. Multiple grouped charts synchronize tick progression without drift.
-  5. Unit tests verify replay clock, stepping, and candle synthesis algorithms.
+  1. Hitting PLAY on a 5-minute chart shows the current forming candle updating Open, High, Low, Close, and Volume with each individual tick.
+  2. At the 5-minute boundary (e.g. 9:25 AM ET), the formed candle closes cleanly and the next candle begins forming.
+  3. Playback loop in `PlaybackManager.tsx` runs smoothly without dropped frames across all speeds (0.5x to 100x).
+  4. Scrubbing backward or forward correctly re-aggregates the active forming candle to that exact tick position.
 
-### Phase 8: Time & Sales Tape & Modern Financial UI Upgrade
-- **Goal**: Integrate a live Time & Sales order flow tape, sub-second timeframe switcher, dark terminal UI refresh, and end-to-end integration tests.
-- **Requirements**: UI-01, UI-02, UI-03, UI-04, TEST-03
+### Phase 12: Regression Test Suite & Verification
+- **Goal**: Provide automated unit and integration tests verifying all v3.0 capabilities, locking in guarantees against future regressions.
+- **Requirements**: TEST-04
 - **Success Criteria**:
-  1. Time & Sales / Tick Tape displays live streaming prints with price, size, timestamp, bid, ask, and uptick/downtick styling.
-  2. UI controls allow instant timeframe switching down to `1s`, `5s`, `15s`, and live symbol selection from `streaming.duckdb`.
-  3. Replay scrubber bar displays tick metrics (current tick, total ticks, timestamp) and allows smooth seeking.
-  4. Integration tests verify full UI interaction, replay controls, and Time & Sales streaming.
+  1. Test verifies that switching date or resetting always sets `currentTime` to 9:20 AM ET.
+  2. Test verifies that future candles beyond the replay cursor are strictly excluded.
+  3. Test verifies that advancing ticks updates 5-min chart candle values in real time.
+  4. Test verifies absence of the TICK/BAR toggle and full operational integrity of the pure tick UI.
+  5. Entire test suite (all 26+ test files) passes with 100% green status.
