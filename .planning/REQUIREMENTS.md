@@ -38,10 +38,10 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | TEST-01 | Phase 5 | Complete |
-| DATA-01 | Phase 6 | Pending |
-| DATA-02 | Phase 6 | Pending |
-| DATA-03 | Phase 6 | Pending |
-| DATA-04 | Phase 6 | Pending |
+| DATA-01 | Phase 6 | Complete |
+| DATA-02 | Phase 6 | Complete |
+| DATA-03 | Phase 6 | Complete |
+| DATA-04 | Phase 6 | Complete |
 | REPLAY-01 | Phase 7 | Pending |
 | REPLAY-02 | Phase 7 | Pending |
 | REPLAY-03 | Phase 7 | Pending |
