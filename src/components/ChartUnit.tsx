@@ -106,7 +106,10 @@ export default function ChartUnit({
     tradeBadgeRef,
     chartRef,
     priceSeriesRef,
-    onFocus: () => onSelect?.(),
+    onFocus: () => {
+      useWorkspaceStore.getState().setSelectedId(String(id));
+      onSelect?.();
+    },
   });
 
   // 5. Trade management
@@ -148,7 +151,10 @@ export default function ChartUnit({
         ...mergedStyle,
         borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,
       }}
-      onClick={() => onSelect?.()}
+      onClick={() => {
+        useWorkspaceStore.getState().setSelectedId(String(id));
+        onSelect?.();
+      }}
     >
       <ChartHeader 
         ticker={data.ticker}
