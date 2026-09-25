@@ -8,7 +8,19 @@ export interface HistoryPrependState {
   oldLogicalRange: LogicalRange | null;
 }
 
-/** Raw 1-minute bar from the database */
+/** Raw tick print from streaming database */
+export interface MarketTick {
+  time: string;          // ISO string or "YYYY-MM-DD HH:MM:SS.mmm"
+  symbol: string;
+  price: number;
+  volume: number;
+  bid?: number | null;
+  ask?: number | null;
+  source?: string;
+  session?: 'REG' | 'PRE' | 'POST' | string;
+}
+
+/** Raw 1-minute or sub-second bar */
 export interface RawBar {
   time: string;          // "2024-01-15 14:30:00" (UTC)
   open: number;
@@ -17,6 +29,7 @@ export interface RawBar {
   close: number;
   volume: number;
   session: 'REG' | 'PRE' | 'POST' | string;
+  tickCount?: number;
 }
 
 /** Resampled OHLCV bar (same shape, but time may be bucketed) */
@@ -30,13 +43,31 @@ export interface FormattedBar {
   low: number;
   close: number;
   volume: number;
+  tickCount?: number;
 }
 
 // --- Timeframes ---
 
-export type Timeframe = '1min' | '5min' | '15min' | '30min' | '1H' | '1D';
+export type Timeframe = '1s' | '5s' | '15s' | '30s' | '1min' | '5min' | '15min' | '30min' | '1H' | '1D';
+
+export const TF_SECONDS: Record<Timeframe, number> = {
+  '1s': 1,
+  '5s': 5,
+  '15s': 15,
+  '30s': 30,
+  '1min': 60,
+  '5min': 300,
+  '15min': 900,
+  '30min': 1800,
+  '1H': 3600,
+  '1D': 86400,
+};
 
 export const TF_MINUTES: Record<Timeframe, number> = {
+  '1s': 1 / 60,
+  '5s': 5 / 60,
+  '15s': 15 / 60,
+  '30s': 30 / 60,
   '1min': 1,
   '5min': 5,
   '15min': 15,

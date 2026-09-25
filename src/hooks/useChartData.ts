@@ -3,6 +3,8 @@ import type { IChartApi, ISeriesApi, LogicalRange, CandlestickData } from 'light
 import type { ChartBar, GroupColor, RawBar, Timeframe, HistoryPrependState } from '../types';
 import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
 import { resampleData } from '../lib/resampling';
+import { streamingClient } from '../lib/streamingClient';
+import { applyTickToCandles } from '../lib/candleSynthesizer';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
 
@@ -56,6 +58,7 @@ export function useChartData({
   const [showEth, setShowEth] = useState<boolean>(initialEth || false);
 
   const globalTime = usePlaybackStore((state) => state.currentTime);
+  const currentTick = usePlaybackStore((state) => state.currentTick);
 
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const earliestLoadedDateRef = useRef<string | null>(null);
@@ -76,18 +79,30 @@ export function useChartData({
       setLocalMasterData([]);
       setIsLoadingHistory(true);
       
-      let daysBack = 30;
-      if (timeframe === '1min') daysBack = 3;
-      else if (timeframe === '5min') daysBack = 15;
-      else if (timeframe === '15min') daysBack = 30;
-      else if (timeframe === '30min') daysBack = 60;
-      else if (timeframe === '1H') daysBack = 120;
-      else if (timeframe === '1D') daysBack = 365 * 2;
-      
-      const data = await fetchMarketData(ticker, selectedDate, daysBack);
+      let data: RawBar[] = [];
+      try {
+        data = await streamingClient.getCandles(ticker, { timeframe, limit: 5000 });
+      } catch {
+        // Fallback to local DB
+      }
+
+      if (cancelled) return;
+
+      if (!data || data.length === 0) {
+        let daysBack = 30;
+        if (['1s', '5s', '15s', '30s', '1min'].includes(timeframe)) daysBack = 3;
+        else if (timeframe === '5min') daysBack = 15;
+        else if (timeframe === '15min') daysBack = 30;
+        else if (timeframe === '30min') daysBack = 60;
+        else if (timeframe === '1H') daysBack = 120;
+        else if (timeframe === '1D') daysBack = 365 * 2;
+        
+        data = (await fetchMarketData(ticker, selectedDate, daysBack)) || [];
+      }
+
       if (cancelled) return;
       
-      console.log(`[useChartData] Fetched ${data?.length || 0} bars for ${ticker} at ${timeframe}`);
+      console.log(`[useChartData] Loaded ${data?.length || 0} bars for ${ticker} at ${timeframe}`);
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }
@@ -152,10 +167,14 @@ export function useChartData({
     return filtered;
   }, [localMasterData, timeframe, showEth, isReplayMode, globalTime]);
 
-  // Resample the filtered data to the target timeframe
+  // Resample the filtered data to the target timeframe and synthesize live tick
   const chartData = useMemo(() => {
-    return resampleData(filteredData, timeframe);
-  }, [filteredData, timeframe]);
+    let resampled = resampleData(filteredData, timeframe);
+    if (isReplayMode && currentTick && currentTick.symbol === ticker) {
+      resampled = applyTickToCandles(resampled, currentTick, timeframe);
+    }
+    return resampled;
+  }, [filteredData, timeframe, isReplayMode, currentTick, ticker]);
 
   return {
     ticker,
