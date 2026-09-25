@@ -1,0 +1,33 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": "v2.0",
+  "phases": [
+    {
+      "number": "1",
+      "name": "Viewport Stabilization",
+      "status": "complete"
+    },
+    {
+      "number": "2",
+      "name": "Selection & Grouping Hardening",
+      "status": "pending"
+    },
+    {
+      "number": "3",
+      "name": "Stability Guardrails",
+      "status": "complete"
+    },
+    {
+      "number": "4",
+      "name": "Systemic Hardening & Audit",
+      "status": "complete"
+    }
+  ],
+  "next": {
+    "command": "/gsd-discuss-phase",
+    "label": "Discuss the first phase",
+    "reason": "Project initialized — plan your first phase"
+  },
+  "updated_at": "2026-09-25T21:23:34.040Z"
+}
