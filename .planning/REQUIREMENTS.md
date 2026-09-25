@@ -34,4 +34,22 @@
 - Modifying the upstream `data-harvester` database (all queries are strictly read-only).
 
 ## Traceability
-*(To be populated by ROADMAP.md)*
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| TEST-01 | Phase 5 | Pending |
+| DATA-01 | Phase 6 | Pending |
+| DATA-02 | Phase 6 | Pending |
+| DATA-03 | Phase 6 | Pending |
+| DATA-04 | Phase 6 | Pending |
+| REPLAY-01 | Phase 7 | Pending |
+| REPLAY-02 | Phase 7 | Pending |
+| REPLAY-03 | Phase 7 | Pending |
+| REPLAY-04 | Phase 7 | Pending |
+| TEST-02 | Phase 7 | Pending |
+| UI-01 | Phase 8 | Pending |
+| UI-02 | Phase 8 | Pending |
+| UI-03 | Phase 8 | Pending |
+| UI-04 | Phase 8 | Pending |
+| TEST-03 | Phase 8 | Pending |
+

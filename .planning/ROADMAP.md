@@ -1,78 +1,38 @@
-# Stability Baseline Roadmap
+# Roadmap: Milestone v2.0 Tick-by-Tick Streaming Engine & Modern UI
 
-## Phases
+## Milestone Phases
 
-- [x] **Phase 1: Viewport Stabilization** - Eliminate violent viewport jumps and ensure deterministic chart loading.
-- [ ] **Phase 2: Selection & Grouping Hardening** - Ensure 100% reliable focus and symbol synchronization.
-- [x] **Phase 3: Stability Guardrails** - Build automated regression tests for critical stability paths.
-- [x] **Phase 4: Systemic Hardening & Audit** - Map architectural fragility and resolve systemic technical debt to ensure long-term maintainability.
+### Phase 5: Test Infrastructure Baseline & Fixes
+- **Goal**: Resolve test runner failures, establish mock environment stability, and verify existing test baseline passes cleanly.
+- **Requirements**: TEST-01
+- **Success Criteria**:
+  1. Vitest test runner executes all existing test suites without localStorage/zustand TypeError crashes.
+  2. Baseline suite passes cleanly with zero errors.
 
-## Phase Details
+### Phase 6: DuckDB Backend Service & Streaming API
+- **Goal**: Implement a high-performance Python data service connecting to `data-harvester`'s `streaming.duckdb` and `historical.duckdb`, exposing REST and streaming endpoints for symbols, ticks, and dynamic candle resampling.
+- **Requirements**: DATA-01, DATA-02, DATA-03, DATA-04
+- **Success Criteria**:
+  1. Service connects read-only to `../data-harvester/data/streaming.duckdb` and queries 37.8M+ ticks without lock contention.
+  2. Endpoints return symbol lists (`QQQ`, `US100`, `TSLA`, etc.) and metadata with sub-50ms latency.
+  3. Dynamic `time_bucket()` aggregation delivers candles across `1s`, `5s`, `15s`, `1m`, `5m`, `15m`, `1h`, `1d`.
+  4. Raw tick streaming and paginated chunk retrieval endpoints function with high throughput.
 
-### Phase 1: Viewport Stabilization
+### Phase 7: Tick-by-Tick Replay Engine & Live Candle Synthesis
+- **Goal**: Build the client-side tick replay state machine with millisecond precision, single-tick stepping forward/backward, variable speed playback, and dynamic candle building.
+- **Requirements**: REPLAY-01, REPLAY-02, REPLAY-03, REPLAY-04, TEST-02
+- **Success Criteria**:
+  1. User can step forward and backward by a single tick, updating the chart price and time indicator.
+  2. Playback speed can be set between 0.5x and 100x or instant.
+  3. Incoming ticks dynamically update the open, high, low, close, volume, and tick count of the current candle in real time.
+  4. Multiple grouped charts synchronize tick progression without drift.
+  5. Unit tests verify replay clock, stepping, and candle synthesis algorithms.
 
-**Goal**: Eliminate violent viewport jumps and ensure deterministic chart loading.
-**Depends on**: Nothing
-**Requirements**: STAB-01, STAB-02, STAB-03, STAB-04
-**Success Criteria** (what must be TRUE):
-
-  1. Ticker or timeframe changes occur without "single candle" snaps.
-  2. Infinite scroll data prepending preserves the visual anchor without viewport shifts.
-  3. Viewport remains stationary during replay ticks unless the user is at the right edge (Auto-Reveal).
-  4. `scrollToRealTime` executes only after data is fully hydrated and the initialization lock is released.
-
-**Plans**: TBD
-**UI hint**: yes
-
-### Phase 2: Selection & Grouping Hardening
-
-**Goal**: Ensure 100% reliable focus and symbol synchronization across the workspace.
-**Depends on**: Phase 1
-**Requirements**: SYNC-01, SYNC-02, SYNC-03, SYNC-04
-**Success Criteria** (what must be TRUE):
-
-  1. Clicking any element in a `ChartUnit` (header, canvas, buttons) immediately focuses that chart.
-  2. Grouped charts synchronize their ticker symbol immediately upon mount.
-  3. Ticker changes in a group leader propagate to all members without "one-render-later" lag.
-  4. Group membership changes are reflected visually and logically in real-time.
-
-**Plans**: TBD
-**UI hint**: yes
-
-### Phase 3: Stability Guardrails
-
-**Goal**: Build automated regression tests to prevent future regressions in viewport and grouping.
-**Depends on**: Phase 2
-**Requirements**: QUAL-01, QUAL-02
-**Success Criteria** (what must be TRUE):
-
-  1. Automated test suite verifies viewport stability during ticker/timeframe changes.
-  2. Automated test suite verifies viewport stability during data prepends (infinite scroll).
-  3. Automated test suite verifies group synchronization on mount and symbol updates.
-
-**Plans**:
-
-- [ ] 03-01-PLAN.md — Setup testing infrastructure (Playwright/MSW)
-- [ ] 03-02-PLAN.md — Logical viewport regression tests (Vitest)
-- [ ] 03-03-PLAN.md — Visual viewport regression tests (Playwright)
-- [ ] 03-04-PLAN.md — Logical group sync regression tests (Vitest)
-- [ ] 03-05-PLAN.md — Visual group sync regression tests (Playwright)
-
-### Phase 4: Systemic Hardening & Audit
-
-**Goal**: Map architectural fragility and resolve systemic technical debt to ensure long-term maintainability.
-**Depends on**: Phase 3
-**Requirements**: HARD-01, HARD-02, HARD-03, HARD-04
-**Success Criteria** (what must be TRUE):
-
-  1. `useChartLifecycle` is decomposed into specialized hooks.
-  2. All plugin renderers use strict interfaces instead of `any`.
-  3. Viewport stability is maintained during concurrent Prepend/Auto-Reveal operations.
-  4. Database operations are offloaded to a Web Worker to prevent main-thread blocking.
-
-**Plans**:
-
-- [x] 04-01-PLAN.md — Type hardening for plugin renderers
-- [x] 04-02-PLAN.md — Extraction of base chart and plugin init
-- [x] 04-03-PLAN.md — Extraction of drawings and prioritized viewport control
-- [ ] 04-04-PLAN.md — Migration of sql.js to Web Worker
+### Phase 8: Time & Sales Tape & Modern Financial UI Upgrade
+- **Goal**: Integrate a live Time & Sales order flow tape, sub-second timeframe switcher, dark terminal UI refresh, and end-to-end integration tests.
+- **Requirements**: UI-01, UI-02, UI-03, UI-04, TEST-03
+- **Success Criteria**:
+  1. Time & Sales / Tick Tape displays live streaming prints with price, size, timestamp, bid, ask, and uptick/downtick styling.
+  2. UI controls allow instant timeframe switching down to `1s`, `5s`, `15s`, and live symbol selection from `streaming.duckdb`.
+  3. Replay scrubber bar displays tick metrics (current tick, total ticks, timestamp) and allows smooth seeking.
+  4. Integration tests verify full UI interaction, replay controls, and Time & Sales streaming.
