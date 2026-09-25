@@ -58,7 +58,9 @@ class StreamingClient {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     } catch (e) {
-      console.warn('Could not fetch symbols from streaming service:', e);
+      if (typeof process === 'undefined' || process.env?.NODE_ENV !== 'test') {
+        console.warn('Could not fetch symbols from streaming service:', e);
+      }
       return [];
     }
   }
@@ -97,7 +99,9 @@ class StreamingClient {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     } catch (e) {
-      console.warn('Error fetching ticks:', e);
+      if (typeof process === 'undefined' || process.env?.NODE_ENV !== 'test') {
+        console.warn('Error fetching ticks:', e);
+      }
       return [];
     }
   }
@@ -134,7 +138,9 @@ class StreamingClient {
         tickCount: Number(row.tick_count || 1),
       }));
     } catch (e) {
-      console.warn('Error fetching dynamic candles from streaming service:', e);
+      if (typeof process === 'undefined' || process.env?.NODE_ENV !== 'test') {
+        console.warn('Error fetching dynamic candles from streaming service:', e);
+      }
       return [];
     }
   }

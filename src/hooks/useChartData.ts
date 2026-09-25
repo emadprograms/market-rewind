@@ -102,7 +102,9 @@ export function useChartData({
 
       if (cancelled) return;
       
-      console.log(`[useChartData] Loaded ${data?.length || 0} bars for ${ticker} at ${timeframe}`);
+      if (process.env.NODE_ENV !== 'test') {
+        console.log(`[useChartData] Loaded ${data?.length || 0} bars for ${ticker} at ${timeframe}`);
+      }
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }
