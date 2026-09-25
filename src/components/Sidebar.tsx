@@ -1,10 +1,9 @@
 import React from 'react';
-import { Activity, Database, UploadCloud, Calendar as CalendarIcon, RotateCcw, HardDrive, ExternalLink } from 'lucide-react';
+import { Activity, Database, Calendar as CalendarIcon, RotateCcw, ExternalLink, Zap } from 'lucide-react';
 
 interface SidebarProps {
   dbStatus: string;
   isDbLoaded: boolean;
-  handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   selectedDate: string;
   setSelectedDate: (date: string) => void;
   isSessionStarted: boolean;
@@ -29,7 +28,6 @@ const LAYOUTS = [
 export const Sidebar: React.FC<SidebarProps> = ({
   dbStatus,
   isDbLoaded,
-  handleFileUpload,
   selectedDate,
   setSelectedDate,
   isSessionStarted,
@@ -43,14 +41,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <Activity size={24} color="var(--accent-green)" />
       </div>
 
-      <div className={`status-badge ${isDbLoaded ? 'status-online' : ''}`} title={dbStatus} style={{ padding: '6px', borderRadius: '50%' }}>
-        <Database size={16} />
+      <div 
+        className={`status-badge ${isDbLoaded ? 'status-online' : ''}`} 
+        title={dbStatus} 
+        style={{ 
+          padding: '8px', 
+          borderRadius: '50%', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          backgroundColor: isDbLoaded ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+          color: isDbLoaded ? 'var(--accent-green)' : 'var(--accent-red)'
+        }}
+      >
+        {isDbLoaded ? <Zap size={18} /> : <Database size={18} />}
       </div>
-
-      <label className="upload-zone" title="Load market_data.db" style={{ padding: '8px', cursor: 'pointer', border: 'none' }}>
-        <UploadCloud size={20} className="file-icon" />
-        <input type="file" accept=".db,.sqlite" onChange={handleFileUpload} style={{ display: 'none' }} />
-      </label>
 
       <div style={{ position: 'relative', width: '24px', height: '24px', cursor: 'pointer' }} title="Target Date">
         <CalendarIcon size={20} style={{ position: 'absolute', top: 2, left: 2, color: 'var(--text-secondary)' }} />
@@ -89,12 +94,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-        <a href="https://github.com/emadprograms/market-rewind/releases/tag/latest-data" target="_blank" rel="noopener noreferrer" title="Latest Market Data">
-          <HardDrive size={16} color="var(--text-secondary)" />
-        </a>
-        <a href="https://github.com/emadprograms/market-rewind/releases/tag/latest-archive" target="_blank" rel="noopener noreferrer" title="Archive Historical Data">
-          <Database size={16} color="var(--text-secondary)" />
-        </a>
         <a href="https://github.com/emadprograms/market-rewind" target="_blank" rel="noopener noreferrer" title="Source Code">
           <ExternalLink size={16} color="var(--text-secondary)" />
         </a>

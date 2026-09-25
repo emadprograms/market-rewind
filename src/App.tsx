@@ -25,8 +25,7 @@ export default function App() {
     isLoading, 
     dbStatus, 
     isDbLoaded, 
-    isStreamingConnected,
-    handleFileUpload 
+    isStreamingConnected 
   } = useDatabase();
 
   const {
@@ -119,7 +118,6 @@ export default function App() {
       <Sidebar 
         dbStatus={dbStatus}
         isDbLoaded={isDbLoaded}
-        handleFileUpload={handleFileUpload}
         selectedDate={selectedDate}
         setSelectedDate={setSelectedDate}
         isSessionStarted={isSessionStarted}
@@ -137,7 +135,7 @@ export default function App() {
               </main>
             ) : !isDbLoaded ? (
               <main className="workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-                 Please upload your database file or ensure streaming backend is running.
+                 Please ensure DuckDB streaming service is running at localhost:8000.
               </main>
             ) : !isSessionStarted ? (
               <SessionConfig 

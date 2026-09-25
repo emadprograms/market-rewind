@@ -4,10 +4,10 @@
  */
 import type { MarketTick, RawBar, Timeframe } from '../types';
 
-const API_BASE_URL = typeof window !== 'undefined' ? (window.location.origin) : 'http://localhost:8765';
+const API_BASE_URL = typeof window !== 'undefined' ? (window.location.origin) : 'http://localhost:8000';
 const WS_BASE_URL = typeof window !== 'undefined' 
   ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host
-  : 'ws://localhost:8765';
+  : 'ws://localhost:8000';
 
 export interface SymbolMetadata {
   symbol: string;
@@ -41,7 +41,28 @@ class StreamingClient {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       this.isOnline = true;
-      return data as BackendStatus;
+
+      // Normalize between data-harvester format and standalone streaming_service format
+      const streamingInfo = data.streaming || data.streaming_db || {};
+      const historicalInfo = data.historical || data.historical_db || {};
+
+      const normalized: BackendStatus = {
+        status: data.status || 'OK',
+        streaming_db: {
+          path: streamingInfo.path || '',
+          exists: Boolean(streamingInfo.exists ?? true),
+          size_bytes: streamingInfo.size_bytes || (streamingInfo.size_mb ? Math.round(streamingInfo.size_mb * 1024 * 1024) : 0),
+          tick_count: streamingInfo.tick_count ?? streamingInfo.ticks_rows ?? 0,
+        },
+        historical_db: {
+          path: historicalInfo.path || '',
+          exists: Boolean(historicalInfo.exists ?? true),
+          size_bytes: historicalInfo.size_bytes || (historicalInfo.size_mb ? Math.round(historicalInfo.size_mb * 1024 * 1024) : 0),
+          candle_count: historicalInfo.candle_count ?? historicalInfo.market_data_rows ?? 0,
+        }
+      };
+
+      return normalized;
     } catch {
       this.isOnline = false;
       return null;
@@ -56,7 +77,20 @@ class StreamingClient {
     try {
       const res = await fetch(`${API_BASE_URL}/api/symbols`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.symbols || []);
+      return list.map((item: any) => {
+        if (typeof item === 'string') {
+          return { symbol: item, tick_count: 0, first_tick: null, last_tick: null };
+        }
+        const sym = item.symbol || item.display_name || item.massive_ticker || item.ticker || '';
+        return {
+          symbol: sym,
+          tick_count: item.tick_count || 0,
+          first_tick: item.first_tick || null,
+          last_tick: item.last_tick || null,
+        };
+      }).filter((s: SymbolMetadata) => Boolean(s.symbol));
     } catch (e) {
       if (typeof process === 'undefined' || process.env?.NODE_ENV !== 'test') {
         console.warn('Could not fetch symbols from streaming service:', e);
@@ -94,16 +128,48 @@ class StreamingClient {
     if (options.startTime) params.append('start_time', options.startTime);
     if (options.endTime) params.append('end_time', options.endTime);
 
+    let rawTicks: any[] = [];
+
+    // 1. Try standard /api/ticks
     try {
       const res = await fetch(`${API_BASE_URL}/api/ticks?${params.toString()}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (e) {
-      if (typeof process === 'undefined' || process.env?.NODE_ENV !== 'test') {
-        console.warn('Error fetching ticks:', e);
+      if (res.ok) {
+        rawTicks = await res.json();
       }
-      return [];
+    } catch {
+      // Fallback to tape endpoint
     }
+
+    // 2. Fallback to /api/stream/tape (data-harvester endpoint)
+    if (!rawTicks || rawTicks.length === 0) {
+      try {
+        const tapeRes = await fetch(`${API_BASE_URL}/api/stream/tape?symbol=${encodeURIComponent(symbol.toUpperCase())}&limit=${options.limit || 10000}`);
+        if (tapeRes.ok) {
+          const tapeData = await tapeRes.json();
+          rawTicks = tapeData.ticks || [];
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return (rawTicks || []).map((t: any) => {
+      let timeVal = 0;
+      if (typeof t.time === 'number') {
+        timeVal = t.time;
+      } else if (t.timestamp) {
+        timeVal = Math.floor(new Date(t.timestamp).getTime() / 1000);
+      }
+      return {
+        time: timeVal,
+        price: Number(t.price),
+        size: Number(t.volume ?? t.size ?? 1),
+        side: (t.side as 'buy' | 'sell' | 'neutral') || (t.price >= (t.ask || t.price) ? 'buy' : t.price <= (t.bid || t.price) ? 'sell' : 'neutral'),
+        bid: t.bid ? Number(t.bid) : undefined,
+        ask: t.ask ? Number(t.ask) : undefined,
+        symbol: t.symbol || symbol.toUpperCase(),
+      };
+    });
   }
 
   async getCandles(
@@ -123,26 +189,56 @@ class StreamingClient {
     if (options.startTime) params.append('start_time', options.startTime);
     if (options.endTime) params.append('end_time', options.endTime);
 
+    let rawList: any[] = [];
+
+    // 1. Try /api/streaming/candles (data-harvester DuckDB stream)
     try {
-      const res = await fetch(`${API_BASE_URL}/api/candles?${params.toString()}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      return (data || []).map((row: any) => ({
-        time: row.time.replace('T', ' ').slice(0, 19),
+      const tf = options.timeframe === '1m' || !options.timeframe ? '1m' : options.timeframe;
+      const res = await fetch(`${API_BASE_URL}/api/streaming/candles?symbol=${encodeURIComponent(symbol.toUpperCase())}&interval=${tf}&limit=${options.limit || 5000}`);
+      if (res.ok) {
+        const data = await res.json();
+        rawList = data.candles || [];
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 2. Try standard /api/candles
+    if (!rawList || rawList.length === 0) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/candles?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          rawList = Array.isArray(data) ? data : (data.candles || []);
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    return (rawList || []).map((row: any) => {
+      let timeStr = '';
+      if (row.time_str) {
+        timeStr = row.time_str;
+      } else if (typeof row.time === 'string') {
+        timeStr = row.time.replace('T', ' ').slice(0, 19);
+      } else if (typeof row.time === 'number') {
+        timeStr = new Date(row.time * 1000).toISOString().replace('T', ' ').slice(0, 19);
+      } else if (row.timestamp) {
+        timeStr = String(row.timestamp).replace('T', ' ').slice(0, 19);
+      }
+
+      return {
+        time: timeStr,
         open: Number(row.open),
         high: Number(row.high),
         low: Number(row.low),
         close: Number(row.close),
         volume: Number(row.volume || 0),
-        session: 'REG',
+        session: row.session || 'REG',
         tickCount: Number(row.tick_count || 1),
-      }));
-    } catch (e) {
-      if (typeof process === 'undefined' || process.env?.NODE_ENV !== 'test') {
-        console.warn('Error fetching dynamic candles from streaming service:', e);
-      }
-      return [];
-    }
+      };
+    });
   }
 
   createReplayWebSocket(handlers: {
