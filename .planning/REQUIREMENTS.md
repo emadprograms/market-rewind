@@ -1,58 +1,37 @@
-# Requirements: Market Rewind Stability Baseline
+# Milestone v2.0 Requirements: Tick-by-Tick Streaming Engine & Modern UI
 
-**Defined:** 2026-06-01
-**Core Value:** The system must be deterministic and stable; a user should be able to replay markets and manage layouts without unpredictable viewport jumps or synchronization failures.
+## Requirements
 
-## v1 Requirements
+### Data Layer & DuckDB Integration
+- [ ] **DATA-01**: Direct Python backend service connecting read-only to `../data-harvester/data/streaming.duckdb` (37.8M+ ticks) and `historical.duckdb`.
+- [ ] **DATA-02**: Fast REST/WebSocket API endpoints exposing available symbols, time ranges, and tick counts.
+- [ ] **DATA-03**: Dynamic candlestick resampling via DuckDB `time_bucket()` supporting sub-second (`1s`, `5s`, `15s`) and minute/hourly intervals (`1m`, `5m`, `15m`, `30m`, `1h`, `1d`).
+- [ ] **DATA-04**: High-throughput raw tick streaming and paginated chunk retrieval for deep historical replay without browser memory exhaustion.
 
-### Viewport Stability (STAB)
-- [ ] **STAB-01**: Charts must load without "single candle" snaps upon ticker or timeframe changes.
-- [ ] **STAB-02**: Infinite scroll data prepending must preserve the visual anchor without violent viewport jumps.
-- [ ] **STAB-03**: `scrollToRealTime` must only execute after data is fully hydrated and the initialization lock is released.
-- [ ] **STAB-04**: The viewport must remain stable during replay ticks unless the user is at the right edge (Auto-Reveal).
+### Tick-by-Tick Replay Engine
+- [ ] **REPLAY-01**: Millisecond-accurate replay clock with play, pause, seek, and single-tick stepping (step forward, step backward).
+- [ ] **REPLAY-02**: Configurable replay speed multiplier (0.5x, 1x, 5x, 10x, 50x, 100x, Max/Instant).
+- [ ] **REPLAY-03**: Real-time candle synthesizer: incoming ticks update the current candle's open, high, low, close, volume, and tick count in real time on the chart.
+- [ ] **REPLAY-04**: Synchronized multi-chart tick replay across grouped charts (e.g. 1-second and 1-minute charts of the same ticker advancing in lockstep).
 
-### Selection & Grouping (SYNC)
-- [ ] **SYNC-01**: Clicking any element within a `ChartUnit` (header, canvas, buttons) must immediately select that chart.
-- [ ] **SYNC-02**: Charts assigned to a group must synchronize their ticker symbol immediately upon component mount.
-- [ ] **SYNC-03**: Ticker changes in a group leader must propagate to all group members without "one-render-later" lags.
-- [ ] **SYNC-04**: Group membership changes must be reflected visually and logically in real-time.
+### Modern UI & Order Flow Visuals
+- [ ] **UI-01**: Real-time Time & Sales / Tick Tape widget displaying tick timestamp, symbol, price, size, bid, ask, and uptick/downtick color coding.
+- [ ] **UI-02**: Modernized dark-mode terminal layout with enhanced playback scrubber, live tick metrics (current tick, total ticks, timestamp), and quick-switch symbol dropdown populated from live DB.
+- [ ] **UI-03**: Sub-second and high-frequency timeframe selector buttons in chart headers (`1s`, `5s`, `15s`, `1m`, `5m`, `15m`, `1h`, `1d`).
+- [ ] **UI-04**: Bid/Ask spread and current market price badge overlay on charts.
 
-### Quality & Maintenance (QUAL)
-- [ ] **QUAL-01**: Implement a regression test suite specifically for Viewport Stability (simulating ticker changes and scroll prepends).
-- [ ] **QUAL-02**: Implement a regression test suite for Group Synchronization (simulating mount and ticker updates).
-- [ ] **QUAL-03**: Produce a `FRAGILITY.md` map documenting high-risk interactions between hooks (`useChartData` $ightarrow$ `useChartLifecycle` $ightarrow$ `useWorkspace`).
-- [ ] **QUAL-04**: Perform a Technical Debt Audit and resolve critical systemic fragility (e.g., "God Hook" patterns in `useChartLifecycle`).
+### Quality, Tests & Guardrails
+- [ ] **TEST-01**: Fix existing unit and integration test suites (resolve jsdom zustand localStorage mock issue).
+- [ ] **TEST-02**: Unit tests for tick parsing, candle aggregation, and replay store state transitions.
+- [ ] **TEST-03**: Integration tests for tick playback stepping, speed adjustment, and Time & Sales rendering.
 
-## v2 Requirements
-- [ ] **QUAL-05**: Integration tests for end-to-end replay scenarios.
-- [ ] **QUAL-06**: Automated performance regression benchmarks for chart rendering.
+## Future Requirements (Deferred)
+- **FUT-01**: Level 2 DOM (Depth of Market) ladder visualization.
+- **FUT-02**: Multi-symbol replay synchronizer with simulated cross-asset order flow.
 
 ## Out of Scope
-- New feature requests.
-- UI redesigns not related to stability (e.g., theme changes).
+- Direct live broker execution (focus is offline high-fidelity tick replay).
+- Modifying the upstream `data-harvester` database (all queries are strictly read-only).
 
 ## Traceability
-
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| STAB-01 | Phase 1 | Pending |
-| STAB-02 | Phase 1 | Pending |
-| STAB-03 | Phase 1 | Pending |
-| STAB-04 | Phase 1 | Pending |
-| SYNC-01 | Phase 2 | Pending |
-| SYNC-02 | Phase 2 | Pending |
-| SYNC-03 | Phase 2 | Pending |
-| SYNC-04 | Phase 2 | Pending |
-| QUAL-01 | Phase 3 | Pending |
-| QUAL-02 | Phase 3 | Pending |
-| QUAL-03 | Phase 4 | Pending |
-| QUAL-04 | Phase 4 | Pending |
-
-**Coverage:**
-- v1 requirements: 12 total
-- Mapped to phases: 12
-- Unmapped: 0 ✓
-
----
-*Requirements defined: 2026-06-01*
-*Last updated: 2026-06-01 after initialization*
+*(To be populated by ROADMAP.md)*
