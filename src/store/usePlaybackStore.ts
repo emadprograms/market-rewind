@@ -35,9 +35,13 @@ interface PlaybackState {
   reset: () => void;
 }
 
-export const isoToMs = (iso: string): number => {
+export const isoToMs = (iso: string | number): number => {
   if (!iso) return 0;
-  const normalized = iso.includes('T') ? iso : iso.replace(' ', 'T');
+  if (typeof iso === 'number') {
+    return iso < 1e11 ? iso * 1000 : iso;
+  }
+  const str = String(iso);
+  const normalized = str.includes('T') ? str : str.replace(' ', 'T');
   return new Date(normalized.includes('Z') ? normalized : normalized + 'Z').getTime();
 };
 

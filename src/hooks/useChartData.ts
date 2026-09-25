@@ -159,11 +159,16 @@ export function useChartData({
   const filteredData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
     
-    let filtered = (showEth && timeframe !== '1D') ? localMasterData : localMasterData.filter(d => d.session === 'REG');
+    let filtered = (timeframe === '1D' || showEth) 
+      ? localMasterData 
+      : localMasterData.filter(d => !d.session || d.session === 'REG' || d.session.includes('REG'));
     
     if (isReplayMode && globalTime) {
-      filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
-      
+      if (timeframe === '1D') {
+        filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime + 86400000);
+      } else {
+        filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
+      }
     }
     
     return filtered;

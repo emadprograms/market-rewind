@@ -153,12 +153,14 @@ class StreamingClient {
       }
     }
 
-    return (rawTicks || []).map((t: any) => {
+    const mapped = (rawTicks || []).map((t: any) => {
       let timeVal = 0;
       if (typeof t.time === 'number') {
         timeVal = t.time;
       } else if (t.timestamp) {
-        timeVal = Math.floor(new Date(t.timestamp).getTime() / 1000);
+        const str = String(t.timestamp).includes('T') ? String(t.timestamp) : String(t.timestamp).replace(' ', 'T');
+        const utcStr = str.endsWith('Z') ? str : str + 'Z';
+        timeVal = Math.floor(new Date(utcStr).getTime() / 1000);
       }
       return {
         time: timeVal,
@@ -170,6 +172,9 @@ class StreamingClient {
         symbol: t.symbol || symbol.toUpperCase(),
       };
     });
+
+    mapped.sort((a, b) => a.time - b.time);
+    return mapped;
   }
 
   async getCandles(
@@ -181,39 +186,83 @@ class StreamingClient {
       limit?: number;
     } = {}
   ): Promise<RawBar[]> {
-    const params = new URLSearchParams({
-      symbol: symbol.toUpperCase(),
-      timeframe: options.timeframe || '1min',
-      limit: String(options.limit || 5000),
-    });
-    if (options.startTime) params.append('start_time', options.startTime);
-    if (options.endTime) params.append('end_time', options.endTime);
+    const sym = symbol.toUpperCase();
+    const tf = options.timeframe || '1min';
+    const TIMEFRAME_TO_API: Record<string, string> = {
+      '1s': '1s',
+      '5s': '5s',
+      '15s': '15s',
+      '30s': '30s',
+      '1min': '1m',
+      '5min': '5m',
+      '15min': '15m',
+      '30min': '30m',
+      '1H': '1h',
+      '1D': '1d',
+    };
+    const apiTf = TIMEFRAME_TO_API[tf] || (tf.toLowerCase().includes('d') ? '1d' : tf.toLowerCase().includes('h') ? '1h' : '1m');
+    const limit = options.limit || 5000;
+    const isSubSecond = ['1s', '5s', '15s', '30s'].includes(tf);
 
     let rawList: any[] = [];
 
-    // 1. Try /api/streaming/candles (data-harvester DuckDB stream)
-    try {
-      const tf = options.timeframe === '1m' || !options.timeframe ? '1m' : options.timeframe;
-      const res = await fetch(`${API_BASE_URL}/api/streaming/candles?symbol=${encodeURIComponent(symbol.toUpperCase())}&interval=${tf}&limit=${options.limit || 5000}`);
-      if (res.ok) {
-        const data = await res.json();
-        rawList = data.candles || [];
-      }
-    } catch {
-      // Fallback
-    }
-
-    // 2. Try standard /api/candles
-    if (!rawList || rawList.length === 0) {
+    if (isSubSecond) {
+      // Sub-second timeframes only exist in streaming DuckDB
       try {
+        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?symbol=${encodeURIComponent(sym)}&tf=${apiTf}&timeframe=${apiTf}&limit=${limit}`);
+        if (res.ok) {
+          const data = await res.json();
+          rawList = data.candles || [];
+        }
+      } catch {
+        // ignore
+      }
+    } else {
+      // Standard timeframes: query historical DuckDB for historical context
+      let histCandles: any[] = [];
+      try {
+        const params = new URLSearchParams({
+          symbol: sym,
+          tf: apiTf,
+          timeframe: apiTf,
+          limit: String(limit),
+        });
+        if (options.startTime) params.append('start', options.startTime);
+        if (options.endTime) params.append('end', options.endTime);
+
         const res = await fetch(`${API_BASE_URL}/api/candles?${params.toString()}`);
         if (res.ok) {
           const data = await res.json();
-          rawList = Array.isArray(data) ? data : (data.candles || []);
+          histCandles = Array.isArray(data) ? data : (data.candles || []);
         }
       } catch {
-        // Fallback
+        // ignore
       }
+
+      // Also fetch live/streaming candles for today
+      let streamCandles: any[] = [];
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?symbol=${encodeURIComponent(sym)}&tf=${apiTf}&timeframe=${apiTf}&limit=1000`);
+        if (res.ok) {
+          const data = await res.json();
+          streamCandles = data.candles || [];
+        }
+      } catch {
+        // ignore
+      }
+
+      // Combine historical + streaming without duplicates
+      const candleMap = new Map<string, any>();
+      for (const c of histCandles) {
+        const key = c.time_str || String(c.time);
+        candleMap.set(key, c);
+      }
+      for (const c of streamCandles) {
+        const key = c.time_str || String(c.time);
+        candleMap.set(key, c);
+      }
+
+      rawList = Array.from(candleMap.values());
     }
 
     return (rawList || []).map((row: any) => {
@@ -238,7 +287,7 @@ class StreamingClient {
         session: row.session || 'REG',
         tickCount: Number(row.tick_count || 1),
       };
-    });
+    }).sort((a, b) => a.time.localeCompare(b.time));
   }
 
   createReplayWebSocket(handlers: {

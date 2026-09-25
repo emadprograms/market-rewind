@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { usePlaybackStore } from '../store/usePlaybackStore';
+import { streamingClient } from '../lib/streamingClient';
 import { fetchMarketData } from '../lib/db';
 import type { RawBar } from '../types';
 
@@ -16,12 +17,29 @@ export function useMarketSimulator(
   const masterData = usePlaybackStore((state) => state.masterData);
 
   const loadMarketData = useCallback(async () => {
-    const data = await fetchMarketData(sessionTicker, selectedDate, 1);
-    setMasterData(data as RawBar[]);
+    let data: RawBar[] = [];
+    try {
+      data = await streamingClient.getCandles(sessionTicker, {
+        timeframe: '1min',
+        limit: 5000,
+      });
+    } catch {
+      // Fallback
+    }
+
+    if (!data || data.length === 0) {
+      try {
+        data = (await fetchMarketData(sessionTicker, selectedDate, 1)) || [];
+      } catch {
+        data = [];
+      }
+    }
+
+    setMasterData(data);
     
     if (data.length > 0) {
       const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
-      const startBar = data.find((d: any) => d.time >= targetTimeStr) || data[data.length - 1];
+      const startBar = data.find((d: any) => d.time >= targetTimeStr) || data[0];
       if (startBar) {
         setCurrentTime(new Date(startBar.time.replace(' ', 'T') + 'Z').getTime());
       }
