@@ -24,10 +24,10 @@ Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizi
 - [x] **REPLAY-03**: Remove `synthesizeTicksFromBars` and artificial 4,200 bar caps; load and stream genuine ticks from `streaming.duckdb`.
 
 ### Category 4: Global Multi-Asset Playback Synchronization (SYNC)
-- [ ] **SYNC-01**: Implement Universal Replay Clock: Playback engine manages a unified timestamp timeline that coordinates all open charts in the workspace.
-- [ ] **SYNC-02**: Multi-Ticker Tick Transport: Playback store/engine loads and buffers tick streams for all active tickers in the workspace.
-- [ ] **SYNC-03**: Multi-Chart Real-Time Candle Forming: Ensure every chart in the workspace (AAPL, AMD, NVDA, etc.) dynamically updates forming candles and last prices as global playback advances.
-- [ ] **SYNC-04**: Group & Selection Stream Sync: When a chart changes symbol or group color, it immediately synchronizes with the active replay timestamp and streams ticks for that symbol.
+- [x] **SYNC-01**: Implement Universal Replay Clock: Playback engine manages a unified timestamp timeline that coordinates all open charts in the workspace.
+- [x] **SYNC-02**: Multi-Ticker Tick Transport: Playback store/engine loads and buffers tick streams for all active tickers in the workspace.
+- [x] **SYNC-03**: Multi-Chart Real-Time Candle Forming: Ensure every chart in the workspace (AAPL, AMD, NVDA, etc.) dynamically updates forming candles and last prices as global playback advances.
+- [x] **SYNC-04**: Group & Selection Stream Sync: When a chart changes symbol or group color, it immediately synchronizes with the active replay timestamp and streams ticks for that symbol.
 
 ---
 
@@ -52,7 +52,7 @@ Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizi
 | REPLAY-01 | Phase 15 | Complete |
 | REPLAY-02 | Phase 15 | Complete |
 | REPLAY-03 | Phase 15 | Complete |
-| SYNC-01 | Phase 16 | Pending |
-| SYNC-02 | Phase 16 | Pending |
-| SYNC-03 | Phase 16 | Pending |
-| SYNC-04 | Phase 16 | Pending |
+| SYNC-01 | Phase 16 | Complete |
+| SYNC-02 | Phase 16 | Complete |
+| SYNC-03 | Phase 16 | Complete |
+| SYNC-04 | Phase 16 | Complete |

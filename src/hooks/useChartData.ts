@@ -8,6 +8,9 @@ import { applyTickToCandles, getBucketTimestamp } from '../lib/candleSynthesizer
 import { buildCandleFromTickSlice } from '../lib/tickSynthesizer';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
+import type { MarketTick } from '../types';
+
+const EMPTY_TICKS: MarketTick[] = [];
 
 interface UseChartDataParams {
   initialTicker: string;
@@ -59,9 +62,42 @@ export function useChartData({
   const [showEth, setShowEth] = useState<boolean>(initialEth || false);
 
   const globalTime = usePlaybackStore((state) => state.currentTime);
-  const currentTick = usePlaybackStore((state) => state.currentTick);
-  const bufferedTicks = usePlaybackStore((state) => state.bufferedTicks);
-  const currentTickIndex = usePlaybackStore((state) => state.currentTickIndex);
+  const latestTick = usePlaybackStore((state) => 
+    state.latestTickBySymbol?.[ticker.toUpperCase()] || 
+    (state.currentTick?.symbol?.toUpperCase() === ticker.toUpperCase() ? state.currentTick : null)
+  );
+  const symbolTicks = usePlaybackStore((state) => 
+    state.ticksBySymbol?.[ticker.toUpperCase()] || EMPTY_TICKS
+  );
+
+  // Dynamic Ticker Playback Synchronization (SYNC-04)
+  useEffect(() => {
+    if (!isReplayMode || !selectedDate || !ticker) return;
+    const sym = ticker.toUpperCase();
+    const existingTicks = usePlaybackStore.getState().ticksBySymbol?.[sym];
+    if (existingTicks && existingTicks.length > 0) return;
+
+    let cancelled = false;
+    async function loadTicksForNewSymbol() {
+      try {
+        const startTime = `${selectedDate} 09:20:00`;
+        const endTime = `${selectedDate} 23:59:59`;
+        const newTicks = await streamingClient.getTicks(sym, {
+          startTime,
+          endTime,
+          limit: 100000,
+          direction: 'asc',
+        });
+        if (!cancelled && newTicks && newTicks.length > 0) {
+          usePlaybackStore.getState().addSymbolTicks(sym, newTicks);
+        }
+      } catch {
+        // Symbol ticks not available
+      }
+    }
+    loadTicksForNewSymbol();
+    return () => { cancelled = true; };
+  }, [ticker, isReplayMode, selectedDate]);
 
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const earliestLoadedDateRef = useRef<string | null>(null);
@@ -166,7 +202,7 @@ export function useChartData({
         const currentBucketStartMs = Math.floor(globalTime / (durationSec * 1000)) * (durationSec * 1000);
         
         // When live ticks are active for this ticker, exclude any historical bar in or after the current bucket
-        if (currentTick && currentTick.symbol === ticker) {
+        if (latestTick) {
           filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() < currentBucketStartMs);
         } else {
           filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
@@ -175,43 +211,45 @@ export function useChartData({
     }
     
     return filtered;
-  }, [localMasterData, timeframe, showEth, isReplayMode, globalTime, currentTick, ticker]);
+  }, [localMasterData, timeframe, showEth, isReplayMode, globalTime, latestTick]);
 
   // Resample the filtered data to the target timeframe and synthesize live tick
   const chartData = useMemo(() => {
     let resampled = resampleData(filteredData, timeframe);
 
-    if (isReplayMode && globalTime && currentTick && currentTick.symbol === ticker && bufferedTicks.length > 0) {
+    if (isReplayMode && globalTime && latestTick && symbolTicks && symbolTicks.length > 0) {
       const durationSec = TF_SECONDS[timeframe] || 60;
       const currentBucketStartMs = Math.floor(globalTime / (durationSec * 1000)) * (durationSec * 1000);
       const bucketTime = getBucketTimestamp(currentBucketStartMs, timeframe);
 
-      // Find the first tick belonging to the current bucket
-      let firstTickInBucket = -1;
-      for (let i = currentTickIndex; i >= 0; i--) {
-        const tMs = isoToMs(bufferedTicks[i].time);
-        if (tMs < currentBucketStartMs) break;
-        firstTickInBucket = i;
+      // Find all ticks for this ticker in the current bucket up to globalTime
+      const bucketTicks: MarketTick[] = [];
+      for (let i = 0; i < symbolTicks.length; i++) {
+        const tMs = isoToMs(symbolTicks[i].time);
+        if (tMs > globalTime) break;
+        if (tMs >= currentBucketStartMs) {
+          bucketTicks.push(symbolTicks[i]);
+        }
       }
 
-      if (firstTickInBucket !== -1 && firstTickInBucket <= currentTickIndex) {
+      if (bucketTicks.length > 0) {
         const formingCandle = buildCandleFromTickSlice(
-          bufferedTicks,
-          firstTickInBucket,
-          currentTickIndex,
+          bucketTicks,
+          0,
+          bucketTicks.length - 1,
           bucketTime,
-          currentTick.session || 'REG'
+          latestTick.session || 'REG'
         );
         if (formingCandle) {
           resampled = [...resampled, formingCandle];
         }
       }
-    } else if (isReplayMode && currentTick && currentTick.symbol === ticker) {
-      resampled = applyTickToCandles(resampled, currentTick, timeframe);
+    } else if (isReplayMode && latestTick) {
+      resampled = applyTickToCandles(resampled, latestTick, timeframe);
     }
 
     return resampled;
-  }, [filteredData, timeframe, isReplayMode, globalTime, currentTick, currentTickIndex, bufferedTicks, ticker]);
+  }, [filteredData, timeframe, isReplayMode, globalTime, latestTick, symbolTicks]);
 
   return {
     ticker,

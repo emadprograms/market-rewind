@@ -13,6 +13,8 @@ interface PlaybackState {
 
   // Tick Replay State
   bufferedTicks: MarketTick[];
+  ticksBySymbol: Record<string, MarketTick[]>;
+  latestTickBySymbol: Record<string, MarketTick>;
   currentTickIndex: number;
   currentTick: MarketTick | null;
   totalTicks: number;
@@ -26,6 +28,7 @@ interface PlaybackState {
   setMasterData: (data: RawBar[]) => void;
   setBufferedTicks: (ticks: MarketTick[]) => void;
   addTicks: (ticks: MarketTick[]) => void;
+  addSymbolTicks: (symbol: string, ticks: MarketTick[]) => void;
   
   tick: (stepCount?: number) => void;
   stepForward: () => void;
@@ -88,6 +91,8 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   masterData: [],
 
   bufferedTicks: [],
+  ticksBySymbol: {},
+  latestTickBySymbol: {},
   currentTickIndex: 0,
   currentTick: null,
   totalTicks: 0,
@@ -100,10 +105,27 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   setMasterData: (data) => set({ masterData: data }),
 
   setBufferedTicks: (ticks) => {
+    const ticksBySymbol: Record<string, MarketTick[]> = {};
+    const latestTickBySymbol: Record<string, MarketTick> = {};
+
+    for (const t of ticks) {
+      const sym = (t.symbol || 'SPY').toUpperCase();
+      if (!ticksBySymbol[sym]) {
+        ticksBySymbol[sym] = [];
+      }
+      ticksBySymbol[sym].push(t);
+    }
+
     const firstTick = ticks[0] || null;
+    if (firstTick && firstTick.symbol) {
+      latestTickBySymbol[firstTick.symbol.toUpperCase()] = firstTick;
+    }
     const initialMs = firstTick ? isoToMs(firstTick.time) : null;
+
     set((state) => ({
       bufferedTicks: ticks,
+      ticksBySymbol,
+      latestTickBySymbol,
       totalTicks: ticks.length,
       currentTickIndex: 0,
       currentTick: firstTick,
@@ -113,25 +135,80 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
 
   addTicks: (newTicks) => {
     set((state) => {
-      const combined = [...state.bufferedTicks, ...newTicks];
+      const combined = [...state.bufferedTicks, ...newTicks].sort(
+        (a, b) => isoToMs(a.time) - isoToMs(b.time)
+      );
+      const ticksBySymbol: Record<string, MarketTick[]> = {};
+      for (const t of combined) {
+        const sym = (t.symbol || 'SPY').toUpperCase();
+        if (!ticksBySymbol[sym]) ticksBySymbol[sym] = [];
+        ticksBySymbol[sym].push(t);
+      }
       return {
         bufferedTicks: combined,
+        ticksBySymbol,
+        totalTicks: combined.length,
+      };
+    });
+  },
+
+  addSymbolTicks: (symbol: string, newTicks: MarketTick[]) => {
+    set((state) => {
+      const sym = symbol.toUpperCase();
+      const existing = state.ticksBySymbol[sym] || [];
+      const mergedSymbol = [...existing, ...newTicks].sort(
+        (a, b) => isoToMs(a.time) - isoToMs(b.time)
+      );
+      
+      const updatedTicksBySymbol = {
+        ...state.ticksBySymbol,
+        [sym]: mergedSymbol,
+      };
+
+      const combined = [...state.bufferedTicks, ...newTicks].sort(
+        (a, b) => isoToMs(a.time) - isoToMs(b.time)
+      );
+
+      const updatedLatest = { ...state.latestTickBySymbol };
+      if (state.currentTime) {
+        for (let i = mergedSymbol.length - 1; i >= 0; i--) {
+          if (isoToMs(mergedSymbol[i].time) <= state.currentTime) {
+            updatedLatest[sym] = mergedSymbol[i];
+            break;
+          }
+        }
+      } else if (mergedSymbol.length > 0) {
+        updatedLatest[sym] = mergedSymbol[0];
+      }
+
+      return {
+        bufferedTicks: combined,
+        ticksBySymbol: updatedTicksBySymbol,
+        latestTickBySymbol: updatedLatest,
         totalTicks: combined.length,
       };
     });
   },
 
   tick: (stepCount = 1) => {
-    const { isPaused, bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
+    const { isPaused, bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData, latestTickBySymbol } = get();
     if (isPaused) return;
 
     if (bufferedTicks.length > 0) {
       if (currentTickIndex < bufferedTicks.length - 1) {
         const nextIndex = Math.min(bufferedTicks.length - 1, currentTickIndex + Math.max(1, stepCount));
+        const updatedLatest = { ...latestTickBySymbol };
+        for (let i = currentTickIndex + 1; i <= nextIndex; i++) {
+          const t = bufferedTicks[i];
+          if (t && t.symbol) {
+            updatedLatest[t.symbol.toUpperCase()] = t;
+          }
+        }
         const nextTick = bufferedTicks[nextIndex];
         set({
           currentTickIndex: nextIndex,
           currentTick: nextTick,
+          latestTickBySymbol: updatedLatest,
           currentTime: isoToMs(nextTick.time),
         });
       } else {
@@ -148,15 +225,20 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   stepForward: () => {
-    const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
+    const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData, latestTickBySymbol } = get();
 
     if (bufferedTicks.length > 0) {
       if (currentTickIndex < bufferedTicks.length - 1) {
         const nextIndex = currentTickIndex + 1;
         const nextTick = bufferedTicks[nextIndex];
+        const updatedLatest = { ...latestTickBySymbol };
+        if (nextTick && nextTick.symbol) {
+          updatedLatest[nextTick.symbol.toUpperCase()] = nextTick;
+        }
         set({
           currentTickIndex: nextIndex,
           currentTick: nextTick,
+          latestTickBySymbol: updatedLatest,
           currentTime: isoToMs(nextTick.time),
           isPaused: true,
         });
@@ -174,9 +256,17 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       if (currentTickIndex > 0) {
         const prevIndex = currentTickIndex - 1;
         const prevTick = bufferedTicks[prevIndex];
+        const updatedLatest: Record<string, MarketTick> = {};
+        for (let i = 0; i <= prevIndex; i++) {
+          const t = bufferedTicks[i];
+          if (t && t.symbol) {
+            updatedLatest[t.symbol.toUpperCase()] = t;
+          }
+        }
         set({
           currentTickIndex: prevIndex,
           currentTick: prevTick,
+          latestTickBySymbol: updatedLatest,
           currentTime: isoToMs(prevTick.time),
           isPaused: true,
         });
@@ -192,9 +282,17 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     if (bufferedTicks.length === 0) return;
     const clampedIndex = Math.max(0, Math.min(index, bufferedTicks.length - 1));
     const targetTick = bufferedTicks[clampedIndex];
+    const updatedLatest: Record<string, MarketTick> = {};
+    for (let i = 0; i <= clampedIndex; i++) {
+      const t = bufferedTicks[i];
+      if (t && t.symbol) {
+        updatedLatest[t.symbol.toUpperCase()] = t;
+      }
+    }
     set({
       currentTickIndex: clampedIndex,
       currentTick: targetTick,
+      latestTickBySymbol: updatedLatest,
       currentTime: isoToMs(targetTick.time),
     });
   },
@@ -221,9 +319,18 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     }
 
     const targetTick = bufferedTicks[closestIndex];
+    const updatedLatest: Record<string, MarketTick> = {};
+    for (let i = 0; i <= closestIndex; i++) {
+      const t = bufferedTicks[i];
+      if (t && t.symbol) {
+        updatedLatest[t.symbol.toUpperCase()] = t;
+      }
+    }
+
     set({
       currentTickIndex: closestIndex,
       currentTick: targetTick,
+      latestTickBySymbol: updatedLatest,
       currentTime: targetMs,
     });
   },
@@ -235,6 +342,8 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       currentTickIndex: 0,
       currentTick: null,
       bufferedTicks: [],
+      ticksBySymbol: {},
+      latestTickBySymbol: {},
       totalTicks: 0,
     });
   },

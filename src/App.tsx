@@ -9,6 +9,7 @@ import { usePortfolio } from './hooks/usePortfolio';
 import { useDrawings } from './hooks/useDrawings';
 import { useMarketSimulator } from './hooks/useMarketSimulator';
 import { usePlaybackStore, isoToMs } from './store/usePlaybackStore';
+import { useWorkspaceStore } from './store/useWorkspaceStore';
 import { streamingClient } from './lib/streamingClient';
 
 // Components
@@ -99,15 +100,31 @@ export default function App() {
       const endTime = `${selectedDate} 23:59:59`;
       const targetMs = new Date(startTime.replace(' ', 'T') + 'Z').getTime();
 
-      const ticks = await streamingClient.getTicks(sessionTicker, {
-        startTime,
-        endTime,
-        limit: 100000,
-        direction: 'asc',
-      });
+      // Collect all active tickers across workspace (charts, groups, session)
+      const ws = useWorkspaceStore.getState();
+      const activeSymbols = Array.from(new Set([
+        sessionTicker,
+        ...Object.values(ws.tickers || {}),
+        ...Object.values(ws.groupTickers || {}),
+      ].filter(Boolean)));
 
-      if (ticks && ticks.length > 0) {
-        setBufferedTicks(ticks);
+      const results = await Promise.all(
+        activeSymbols.map(sym =>
+          streamingClient.getTicks(sym, {
+            startTime,
+            endTime,
+            limit: 100000,
+            direction: 'asc',
+          }).catch(() => [])
+        )
+      );
+
+      const allTicks = results.flat().sort(
+        (a, b) => isoToMs(a.time) - isoToMs(b.time)
+      );
+
+      if (allTicks && allTicks.length > 0) {
+        setBufferedTicks(allTicks);
         usePlaybackStore.getState().seekTickTime(targetMs);
         usePlaybackStore.getState().setCurrentTime(targetMs);
         usePlaybackStore.getState().setPaused(true);
