@@ -105,6 +105,20 @@ export function useChartData({
     localMasterDataRef.current = localMasterData;
   }, [localMasterData]);
 
+  // Pre-cache bar timestamps (once per localMasterData change, NOT per frame)
+  const barTimestampsMs = useMemo(() => {
+    if (!localMasterData || localMasterData.length === 0) return [];
+    return localMasterData.map(d =>
+      new Date(d.time.replace(' ', 'T') + (d.time.includes('Z') ? '' : 'Z')).getTime()
+    );
+  }, [localMasterData]);
+
+  // Pre-cache tick timestamps (once per symbolTicks change, NOT per frame)
+  const tickTimestampsMs = useMemo(() => {
+    if (!symbolTicks || symbolTicks.length === 0) return [];
+    return symbolTicks.map(t => isoToMs(t.time));
+  }, [symbolTicks]);
+
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const earliestLoadedDateRef = useRef<string | null>(null);
   const lastFetchedEndTimeRef = useRef<string | null>(null);
@@ -239,43 +253,61 @@ export function useChartData({
     
     let filtered = (timeframe === '1D' || showEth) 
       ? localMasterData 
-      : localMasterData.filter(d => !d.session || d.session === 'REG' || d.session.includes('REG'));
+      : localMasterData.filter((d, i) => !d.session || d.session === 'REG' || d.session.includes('REG'));
     
+    // Build index map: if we filtered by session, we need to map filtered indices to original barTimestampsMs indices
+    let filteredTimestamps: number[];
+    if (filtered === localMasterData) {
+      filteredTimestamps = barTimestampsMs;
+    } else {
+      // Re-derive only for session-filtered bars (session filter is rare and stable)
+      filteredTimestamps = filtered.map(d =>
+        new Date(d.time.replace(' ', 'T') + (d.time.includes('Z') ? '' : 'Z')).getTime()
+      );
+    }
+
     if (isReplayMode && globalTime) {
       if (timeframe === '1D') {
         const endOfReplayDay = new Date(new Date(globalTime).toISOString().slice(0, 10) + 'T23:59:59.999Z').getTime();
-        filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= endOfReplayDay);
+        filtered = filtered.filter((_, i) => filteredTimestamps[i] <= endOfReplayDay);
       } else {
         const durationSec = TF_SECONDS[timeframe] || 60;
         const currentBucketStartMs = Math.floor(globalTime / (durationSec * 1000)) * (durationSec * 1000);
         
         // When live ticks are active for this ticker, exclude any historical bar in or after the current bucket
         if (latestTick) {
-          filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() < currentBucketStartMs);
+          filtered = filtered.filter((_, i) => filteredTimestamps[i] < currentBucketStartMs);
         } else {
-          filtered = filtered.filter(d => new Date(d.time.replace(' ', 'T') + 'Z').getTime() <= globalTime);
+          filtered = filtered.filter((_, i) => filteredTimestamps[i] <= globalTime);
         }
       }
     }
     
     return filtered;
-  }, [localMasterData, timeframe, showEth, isReplayMode, globalTime, latestTick]);
+  }, [localMasterData, barTimestampsMs, timeframe, showEth, isReplayMode, globalTime, latestTick]);
 
   // Resample the filtered data to the target timeframe and synthesize live tick
   const chartData = useMemo(() => {
     let resampled = resampleData(filteredData, timeframe);
 
-    if (isReplayMode && globalTime && latestTick && symbolTicks && symbolTicks.length > 0) {
+    if (isReplayMode && globalTime && latestTick && symbolTicks && symbolTicks.length > 0 && tickTimestampsMs.length > 0) {
       const durationSec = TF_SECONDS[timeframe] || 60;
       const currentBucketStartMs = Math.floor(globalTime / (durationSec * 1000)) * (durationSec * 1000);
       const bucketTime = getBucketTimestamp(currentBucketStartMs, timeframe);
 
-      // Find all ticks for this ticker in the current bucket up to globalTime
+      // Binary search for the first tick >= currentBucketStartMs using pre-cached timestamps
+      let lo = 0, hi = tickTimestampsMs.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (tickTimestampsMs[mid] < currentBucketStartMs) lo = mid + 1;
+        else hi = mid;
+      }
+
+      // Collect bucket ticks from binary search start to globalTime
       const bucketTicks: MarketTick[] = [];
-      for (let i = 0; i < symbolTicks.length; i++) {
-        const tMs = isoToMs(symbolTicks[i].time);
-        if (tMs > globalTime) break;
-        if (tMs >= currentBucketStartMs) {
+      for (let i = lo; i < symbolTicks.length; i++) {
+        if (tickTimestampsMs[i] > globalTime) break;
+        if (tickTimestampsMs[i] >= currentBucketStartMs) {
           bucketTicks.push(symbolTicks[i]);
         }
       }
@@ -298,7 +330,7 @@ export function useChartData({
 
     console.log(`[useChartData chartData] ${ticker} (${timeframe}) count=${resampled.length}: ${resampled[0]?.time} -> ${resampled[resampled.length - 1]?.time}`);
     return resampled;
-  }, [filteredData, timeframe, isReplayMode, globalTime, latestTick, symbolTicks]);
+  }, [filteredData, timeframe, isReplayMode, globalTime, latestTick, symbolTicks, tickTimestampsMs]);
 
   return {
     ticker,

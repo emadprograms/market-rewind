@@ -197,8 +197,14 @@ export function useChartLifecycle({
   // 3. Update Chart Data
   useEffect(() => {
     if (initPriceSeriesRef.current && initVolumeSeriesRef.current && initChartRef.current && chartData.length > 0) {
-      const startUpdate = performance.now();
-      const rawFormatted: any[] = chartData.map(d => {
+      const isSameContext = lastTickerRef.current === ticker && 
+                            lastTfRef.current === timeframe && 
+                            lastEthRef.current === showEth;
+      
+      const hasPendingPrepend = pendingHistoryPrependRef.current !== null;
+      const canIncrement = isSameContext && chartData.length >= lastDataCountRef.current && lastDataCountRef.current > 0 && !hasPendingPrepend;
+
+      const formatBar = (d: RawBar) => {
         const isoString = d.time.replace(' ', 'T') + (d.time.includes('Z') ? '' : 'Z');
         return {
           time: Math.floor(new Date(isoString).getTime() / 1000) as Time,
@@ -208,37 +214,26 @@ export function useChartLifecycle({
           close: d.close,
           volume: d.volume,
         };
-      });
+      };
 
-      rawFormatted.sort((a, b) => (a.time as number) - (b.time as number));
-
-      const formatted: any[] = [];
-      for (const bar of rawFormatted) {
-        if (formatted.length === 0) {
-          formatted.push(bar);
-        } else {
-          const last = formatted[formatted.length - 1];
-          if ((bar.time as number) > (last.time as number)) {
-            formatted.push(bar);
-          } else if ((bar.time as number) === (last.time as number)) {
-            formatted[formatted.length - 1] = bar;
+      const formatAllBars = (bars: RawBar[]) => {
+        const raw = bars.map(formatBar);
+        raw.sort((a, b) => (a.time as number) - (b.time as number));
+        const res: any[] = [];
+        for (const bar of raw) {
+          if (res.length === 0) {
+            res.push(bar);
+          } else {
+            const last = res[res.length - 1];
+            if ((bar.time as number) > (last.time as number)) {
+              res.push(bar);
+            } else if ((bar.time as number) === (last.time as number)) {
+              res[res.length - 1] = bar;
+            }
           }
         }
-      }
-
-      if (vpPluginRef.current) {
-          vpPluginRef.current.setData(formatted);
-      }
-
-      const isSameContext = lastTickerRef.current === ticker && 
-                            lastTfRef.current === timeframe && 
-                            lastEthRef.current === showEth;
-      
-      // Use incremental update() when context is unchanged and bars are only added/appended.
-      // This avoids the full setData() call that causes visible chart jitter/flicker.
-      // Must NOT use incremental path for history prepends — update() can only append, not prepend.
-      const hasPendingPrepend = pendingHistoryPrependRef.current !== null;
-      const canIncrement = isSameContext && formatted.length >= lastDataCountRef.current && lastDataCountRef.current > 0 && !hasPendingPrepend;
+        return res;
+      };
 
       // Capture viewport range BEFORE any data mutation for accurate sync
       const capturedRange = initChartRef.current.timeScale().getVisibleLogicalRange();
@@ -248,18 +243,19 @@ export function useChartLifecycle({
           const prevCount = lastDataCountRef.current;
           // Update the last existing bar (it may have been the partial edge bar last time)
           if (prevCount > 0) {
-            const lastBar = formatted[prevCount - 1];
+            const lastBar = formatBar(chartData[prevCount - 1]);
             initPriceSeriesRef.current.update({ time: lastBar.time, open: lastBar.open, high: lastBar.high, low: lastBar.low, close: lastBar.close });
             initVolumeSeriesRef.current.update({ time: lastBar.time, value: lastBar.volume, color: lastBar.close >= lastBar.open ? '#26a69a' : '#ef5350' });
           }
           // Append any new bars beyond what was previously shown
-          for (let i = prevCount; i < formatted.length; i++) {
-            const bar = formatted[i];
+          for (let i = prevCount; i < chartData.length; i++) {
+            const bar = formatBar(chartData[i]);
             initPriceSeriesRef.current.update({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
             initVolumeSeriesRef.current.update({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? '#26a69a' : '#ef5350' });
           }
         } catch {
           // If incremental update fails (e.g. timestamp format mismatch or non-increasing time), safely fallback to setData
+          const formatted = formatAllBars(chartData);
           initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
             time, open, high, low, close
           })));
@@ -269,6 +265,10 @@ export function useChartLifecycle({
         }
       } else {
         // Full setData for context changes (ticker, timeframe, ETH toggle, or history prepend)
+        const formatted = formatAllBars(chartData);
+        if (vpPluginRef.current) {
+          vpPluginRef.current.setData(formatted);
+        }
         initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
           time, open, high, low, close
         })));
@@ -282,7 +282,7 @@ export function useChartLifecycle({
       // Only sync viewport for non-incremental updates (history prepend, context changes).
       // For incremental replay steps, let candles fill the rightOffset space naturally.
       // The checkAutoReveal logic (Section 4) handles auto-scrolling when bars reach the edge.
-      if (!canIncrement && isSameContext && formatted.length > lastDataCountRef.current) {
+      if (!canIncrement && isSameContext && chartData.length > lastDataCountRef.current) {
         requestAnimationFrame(() => {
           syncViewport(isSameContext, capturedRange);
         });
@@ -291,7 +291,7 @@ export function useChartLifecycle({
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
-      lastDataCountRef.current = formatted.length;
+      lastDataCountRef.current = chartData.length;
 
       if (!isHydrated) {
         requestAnimationFrame(() => {
