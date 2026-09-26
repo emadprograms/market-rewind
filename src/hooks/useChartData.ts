@@ -100,8 +100,15 @@ export function useChartData({
     return () => { cancelled = true; };
   }, [ticker, isReplayMode, selectedDate]);
 
+  const localMasterDataRef = useRef(localMasterData);
+  useEffect(() => {
+    localMasterDataRef.current = localMasterData;
+  }, [localMasterData]);
+
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const earliestLoadedDateRef = useRef<string | null>(null);
+  const lastFetchedEndTimeRef = useRef<string | null>(null);
+  const hasMoreHistoryRef = useRef(true);
   const pendingHistoryPrependRef = useRef<HistoryPrependState | null>(null);
 
   const dataTimeframeRef = useRef(timeframe);
@@ -118,20 +125,20 @@ export function useChartData({
     async function load() {
       setLocalMasterData([]);
       setIsLoadingHistory(true);
+      lastFetchedEndTimeRef.current = null;
+      hasMoreHistoryRef.current = true;
       
       let data: RawBar[] = [];
       const endBoundary = selectedDate ? `${selectedDate} 23:59:59` : undefined;
       try {
-        data = await streamingClient.getCandles(ticker, { timeframe, endTime: endBoundary, limit: 5000 });
+        data = await streamingClient.getCandles(ticker, { timeframe, endTime: endBoundary, limit: 10000 });
       } catch {
         // Fallback to local DB
       }
 
       if (cancelled) return;
 
-      if (process.env.NODE_ENV !== 'test') {
-        console.log(`[useChartData] Loaded ${data?.length || 0} bars for ${ticker} at ${timeframe}`);
-      }
+      console.log(`[useChartData] ${ticker} (${timeframe}) loaded ${data?.length || 0} bars: ${data?.[0]?.time} -> ${data?.[data?.length - 1]?.time}`);
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }
@@ -145,29 +152,40 @@ export function useChartData({
 
   // Infinite Scroll Listener
   useEffect(() => {
-    if (!chartRef.current || !localMasterData || localMasterData.length === 0) return;
-    
-    const timeScale = chartRef.current.timeScale();
-    
+    let isSubscribed = false;
+    let timeScale: any = null;
+
     const onVisibleLogicalRangeChanged = async (newLogicalRange: LogicalRange | null) => {
       if (!newLogicalRange) return;
       
-      if (newLogicalRange.from < 100 && !isLoadingHistory && earliestLoadedDateRef.current) {
+      const currentEarliest = earliestLoadedDateRef.current;
+      // When scrolled near the left edge of loaded bars, fetch previous chunk
+      if (
+        newLogicalRange.from < 50 &&
+        !isLoadingHistory &&
+        currentEarliest &&
+        hasMoreHistoryRef.current &&
+        lastFetchedEndTimeRef.current !== currentEarliest
+      ) {
+        lastFetchedEndTimeRef.current = currentEarliest;
         setIsLoadingHistory(true);
         try {
-          const oldLogicalRange = timeScale.getVisibleLogicalRange();
+          const oldLogicalRange = timeScale ? timeScale.getVisibleLogicalRange() : null;
           const currentChartBars = priceSeriesRef.current ? (priceSeriesRef.current.data() as CandlestickData[]) : [];
           
           const chunk = await streamingClient.getCandles(ticker, {
             timeframe,
-            endTime: earliestLoadedDateRef.current,
-            limit: 1000,
+            endTime: currentEarliest,
+            limit: 5000,
           });
           
-          if (chunk && chunk.length > 0) {
-            earliestLoadedDateRef.current = chunk[0].time;
+          // Deduplicate: only take chunk candles strictly before the earliest loaded candle
+          const cleanChunk = (chunk || []).filter(c => c.time < currentEarliest);
+
+          if (cleanChunk.length > 0) {
+            earliestLoadedDateRef.current = cleanChunk[0].time;
             
-            let newData = [...chunk, ...localMasterData];
+            let newData = [...cleanChunk, ...localMasterDataRef.current];
             
             pendingHistoryPrependRef.current = {
                 oldFirstTime: currentChartBars.length > 0 ? (currentChartBars[0].time as number) : null,
@@ -175,16 +193,45 @@ export function useChartData({
             };
             
             setLocalMasterData(newData as RawBar[]);
+          } else {
+            hasMoreHistoryRef.current = false;
           }
         } finally {
           setIsLoadingHistory(false);
         }
       }
     };
-    
-    timeScale.subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
-    return () => timeScale.unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
-  }, [localMasterData, isLoadingHistory, ticker, chartRef, priceSeriesRef]);
+
+    const attachListener = () => {
+      if (!chartRef.current || isSubscribed) return false;
+      timeScale = chartRef.current.timeScale();
+      timeScale.subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+      isSubscribed = true;
+      return true;
+    };
+
+    if (!attachListener()) {
+      const interval = setInterval(() => {
+        if (attachListener()) {
+          clearInterval(interval);
+        }
+      }, 50);
+      const timer = setTimeout(() => clearInterval(interval), 3000);
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timer);
+        if (isSubscribed && timeScale) {
+          timeScale.unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+        }
+      };
+    }
+
+    return () => {
+      if (isSubscribed && timeScale) {
+        timeScale.unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+      }
+    };
+  }, [ticker, timeframe, chartRef, priceSeriesRef]);
 
   // Filter data based on playback time first (strict temporal isolation)
   const filteredData = useMemo(() => {
@@ -249,6 +296,7 @@ export function useChartData({
       resampled = applyTickToCandles(resampled, latestTick, timeframe);
     }
 
+    console.log(`[useChartData chartData] ${ticker} (${timeframe}) count=${resampled.length}: ${resampled[0]?.time} -> ${resampled[resampled.length - 1]?.time}`);
     return resampled;
   }, [filteredData, timeframe, isReplayMode, globalTime, latestTick, symbolTicks]);
 

@@ -249,7 +249,7 @@ class DuckDBService:
         timeframe: str = "1m",
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        limit: int = 5000,
+        limit: int = 15000,
         direction: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -337,7 +337,7 @@ class DuckDBService:
         timeframe: str,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        limit: int = 5000,
+        limit: int = 15000,
         direction: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Queries 1-minute historical candles from historical.duckdb with optional resampling."""

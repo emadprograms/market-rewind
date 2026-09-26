@@ -42,7 +42,20 @@ export function useChartViewport({
           pendingHistoryPrependRef.current = null;
           return;
         }
-        const newFirstIndex = chartData.findIndex(d => d.time === oldFirstTime);
+        const matchTime = (dTime: any, targetTime: any): boolean => {
+          if (dTime === targetTime) return true;
+          if (!dTime || !targetTime) return false;
+          const targetMs = typeof targetTime === 'number'
+            ? (targetTime > 1e11 ? targetTime : targetTime * 1000)
+            : new Date(String(targetTime).replace(' ', 'T') + (String(targetTime).includes('Z') ? '' : 'Z')).getTime();
+          const dMs = typeof dTime === 'number'
+            ? (dTime > 1e11 ? dTime : dTime * 1000)
+            : new Date(String(dTime).replace(' ', 'T') + (String(dTime).includes('Z') ? '' : 'Z')).getTime();
+          if (isNaN(targetMs) || isNaN(dMs)) return false;
+          return Math.floor(dMs / 1000) === Math.floor(targetMs / 1000);
+        };
+
+        const newFirstIndex = chartData.findIndex(d => matchTime(d.time, oldFirstTime));
         if (newFirstIndex > 0 && prependRange) {
             const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
             ts.setVisibleLogicalRange(newRange);
@@ -68,7 +81,19 @@ export function useChartViewport({
       }
     } else if (pendingHistoryPrependRef.current) {
         const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
-        const newFirstIndex = chartData.findIndex(d => d.time === oldFirstTime);
+        const matchTime = (dTime: any, targetTime: any): boolean => {
+          if (dTime === targetTime) return true;
+          if (!dTime || !targetTime) return false;
+          const targetMs = typeof targetTime === 'number'
+            ? (targetTime > 1e11 ? targetTime : targetTime * 1000)
+            : new Date(String(targetTime).replace(' ', 'T') + (String(targetTime).includes('Z') ? '' : 'Z')).getTime();
+          const dMs = typeof dTime === 'number'
+            ? (dTime > 1e11 ? dTime : dTime * 1000)
+            : new Date(String(dTime).replace(' ', 'T') + (String(dTime).includes('Z') ? '' : 'Z')).getTime();
+          if (isNaN(targetMs) || isNaN(dMs)) return false;
+          return Math.floor(dMs / 1000) === Math.floor(targetMs / 1000);
+        };
+        const newFirstIndex = chartData.findIndex(d => matchTime(d.time, oldFirstTime));
         if (newFirstIndex > 0 && prependRange) {
             const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
             ts.setVisibleLogicalRange(newRange);

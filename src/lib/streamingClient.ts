@@ -219,7 +219,7 @@ class StreamingClient {
       '1D': '1d',
     };
     const apiTf = TIMEFRAME_TO_API[tf] || (tf.toLowerCase().includes('d') ? '1d' : tf.toLowerCase().includes('h') ? '1h' : '1m');
-    const limit = options.limit || 5000;
+    const limit = options.limit || 15000;
 
     let rawList: any[] = [];
 

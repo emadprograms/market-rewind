@@ -210,7 +210,7 @@ class StreamingApp:
         timeframe = request.query.get("timeframe") or request.query.get("tf", "1m")
         start_time = request.query.get("start_time") or request.query.get("start")
         end_time = request.query.get("end_time") or request.query.get("end")
-        limit = int(request.query.get("limit", 5000))
+        limit = int(request.query.get("limit", 15000))
         direction = request.query.get("direction")
 
         candles = self.db.query_candles(
