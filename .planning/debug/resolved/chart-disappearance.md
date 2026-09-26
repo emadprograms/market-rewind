@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: "charts load and then immediately disappear as if covered by some black screen"
 ---
 

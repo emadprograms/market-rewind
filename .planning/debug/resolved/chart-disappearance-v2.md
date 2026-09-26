@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: "the chart now disaapears sometimes after the previous group fix. grouping works but chart sometimes disappears"
 created: 2024-05-20T10:00:00Z
 updated: 2024-05-20T10:00:00Z

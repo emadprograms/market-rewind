@@ -1,5 +1,5 @@
 ---
-status: verifying
+status: resolved
 trigger: "the chart disappearance is still causing issues, the chart flickers, it like.. comes and goes."
 created: 2026-06-02T17:15:00Z
 updated: 2026-06-03T09:15:00Z

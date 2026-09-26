@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: grouping still doesn't work properly
 updated: 2026-06-02T15:25:00Z
 ---

@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: "when I click next, one chart loads. then when I click next another chart loads."
 created: 2025-06-03T12:00:00Z
 updated: 2025-06-03T12:00:00Z

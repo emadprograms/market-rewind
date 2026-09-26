@@ -6,16 +6,9 @@ Market Rewind is a high-performance local-first market replay and charting analy
 ## Core Value
 High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
 
-## Current Milestone: v3.1 Pure Streaming DuckDB Replay Engine, Global Multi-Asset Sync & Playwright Hardening
+## Current Milestone: Complete (v3.1 Shipped & Archived)
 
 **Goal:** Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizing real-time market playback across all active charts and groups simultaneously, with strict date boundaries, removal of legacy SQLite/Vercel artifacts, and a comprehensive test-first Playwright/unit test suite.
-
-**Target features:**
-- **CLEAN-01**: Remove all `sql.js`, SQLite WASM workers (`db.worker.ts`), and `historical.duckdb` dependencies; remove Vercel artifacts.
-- **TICK-06**: Strict date reset and temporal isolation — prevent unconstrained tape fallbacks that leak future dates; cleanly handle non-trading days and pre-market gaps.
-- **TICK-07**: Pure real-time tick replay — eliminate synthetic 4-micro-tick caps (4,200 bars) and stream raw ticks directly from `streaming.duckdb`.
-- **SYNC-05**: Global multi-asset playback synchronization — pressing PLAY advances a universal timeline across all open charts (AAPL, AMD, SPY, etc.) and group-assigned charts simultaneously.
-- **TEST-05**: Comprehensive test-first suite — dedicated Playwright E2E and Vitest unit tests verifying all bug reproductions and expected playback behaviors.
 
 ## Validated Requirements
 - ✓ Basic market replay engine (v1.0)
@@ -32,6 +25,12 @@ High-fidelity, deterministic tick-by-tick market replay with sub-second timefram
 - ✓ **TICK-03**: Strict Temporal Isolation (v3.0)
 - ✓ **TICK-04**: Real-Time Candle Forming (v3.0)
 - ✓ **TEST-04**: Automated Regression Test Suite (v3.0)
+- ✓ **CLEAN-01 – CLEAN-03**: Legacy SQLite & DuckDB Cleanup (v3.1)
+- ✓ **TEST-01 – TEST-04**: Test-First Playwright/Vitest Bug Harness (v3.1)
+- ✓ **REPLAY-01 – REPLAY-03**: Strict Date Reset & Pure Tick Replay (v3.1)
+- ✓ **SYNC-01 – SYNC-04**: Global Multi-Asset Playback Synchronization (v3.1)
+- ✓ **PERF-01**: O(1) Incremental Candle Updates (<0.05ms) (v3.1)
+- ✓ **TAPE-01**: High-Frequency Millisecond Time & Sales Streaming (v3.1)
 
 ## Key Decisions
 
