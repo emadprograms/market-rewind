@@ -3,8 +3,6 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/regression',
   testMatch: '**/*.spec.ts',
-  // Generates tests/regression/fixtures/seed.db (deterministic; no binary in git)
-  globalSetup: './tests/regression/global-setup.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

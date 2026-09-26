@@ -1,18 +1,12 @@
-import path from 'path';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Shared constants and helpers for the Playwright regression suite.
- *
- * Paths are resolved from `process.cwd()` so they work identically under
- * Playwright's ESM and CJS module loading, and assume `playwright test` is
- * invoked from the repository root (as `npm run test:regression` does).
+ * All tests connect directly to the streaming DuckDB service (localhost:8000).
  */
 
 export const SEED_DATE = '2026-09-25';
-export const SEED_SYMBOLS = ['AAPL', 'MSFT', 'SPY'] as const;
-export const SEED_DB_DIR = path.resolve(process.cwd(), 'tests/regression/fixtures');
-export const SEED_DB_PATH = path.join(SEED_DB_DIR, 'seed.db');
+export const SEED_SYMBOLS = ['AAPL', 'MSFT', 'SPY', 'AMD'] as const;
 
 /** The root `.chart-card` element for the chart at `index` (layout '2v' → 2 charts). */
 export function chartCard(page: Page, index: number): Locator {
@@ -26,32 +20,38 @@ export function headerTicker(card: Locator): Locator {
 
 /**
  * Boot flow shared by every E2E scenario:
- * configure session on SEED_DATE → start simulator.
- * Supports both direct DuckDB streaming and legacy file input fixture if present.
- * Uses auto-retrying assertions instead of fixed sleeps.
+ * configure session on target date and ticker → start simulator.
  */
-export async function uploadSeedAndStartSession(page: Page): Promise<void> {
+export async function startSession(
+  page: Page, 
+  ticker: string = 'SPY', 
+  date: string = SEED_DATE
+): Promise<void> {
   await page.goto('/');
-  const fileInput = page.locator('input[type="file"]');
-  if (await fileInput.count() > 0) {
-    await fileInput.setInputFiles(SEED_DB_PATH);
-  }
-  await expect(page.getByText('Configure Session')).toBeVisible();
-  await page.locator('.session-card select').first().selectOption('SPY');
-  await page.locator('.session-card input[type="date"]').fill(SEED_DATE);
+  await expect(page.getByText('Configure Session')).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('.session-card select option')).not.toHaveCount(0);
+  await page.locator('.session-card select').first().selectOption(ticker);
+  await page.locator('.session-card input[type="date"]').fill(date);
   await page.getByRole('button', { name: /Initialize Market Simulator/i }).click();
   await expect(page.locator('.chart-card')).toHaveCount(2);
-  // Header hydrated with the session ticker before any interaction
-  await expect(headerTicker(chartCard(page, 0))).toHaveText('SPY');
-  await expect(headerTicker(chartCard(page, 1))).toHaveText('SPY');
+  await expect(headerTicker(chartCard(page, 0))).toHaveText(ticker);
+  await expect(headerTicker(chartCard(page, 1))).toHaveText(ticker);
 }
 
-/** Change a chart's ticker through its real UI (header dropdown → item click). */
+/** Backward compatibility alias */
+export const uploadSeedAndStartSession = startSession;
+
 export async function changeTicker(card: Locator, ticker: string): Promise<void> {
-  await card.locator('.chart-controls .custom-select').first().click();
+  const select = card.locator('.chart-controls .custom-select').first();
+  await select.click();
+  const searchInput = card.locator('.dropdown-search input');
+  if (await searchInput.isVisible()) {
+    await searchInput.fill(ticker);
+  }
   await card
-    .locator('.dropdown-menu .dropdown-item')
+    .locator('.dropdown-items .dropdown-item')
     .filter({ hasText: new RegExp(`^${ticker}$`) })
+    .first()
     .click();
 }
 

@@ -4,10 +4,15 @@
  */
 import type { MarketTick, RawBar, Timeframe } from '../types';
 
-const API_BASE_URL = typeof window !== 'undefined' ? (window.location.origin) : 'http://localhost:8000';
-const WS_BASE_URL = typeof window !== 'undefined' 
-  ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host
-  : 'ws://localhost:8000';
+const isTestEnv = typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || Boolean(process.env?.VITEST));
+const API_BASE_URL = isTestEnv 
+  ? 'http://localhost:8000' 
+  : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000');
+const WS_BASE_URL = isTestEnv
+  ? 'ws://localhost:8000'
+  : (typeof window !== 'undefined' 
+    ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host
+    : 'ws://localhost:8000');
 
 export interface SymbolMetadata {
   symbol: string;

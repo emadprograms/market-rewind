@@ -13,10 +13,10 @@ Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizi
 - [x] **CLEAN-03**: Clean up Vercel configs, unused deployment references, and legacy local database file upload logic.
 
 ### Category 2: Test-First Harness & Verification (TEST)
-- [ ] **TEST-01**: Create Playwright E2E and Vitest unit tests reproducing the Date Reset bug (asserting Sept 7, 2026 or holidays never loads Sept 24/25 data or leaks future ticks).
-- [ ] **TEST-02**: Create Playwright E2E and Vitest unit tests reproducing the Multi-Asset Playback freeze (asserting playing replay updates both AAPL and AMD charts simultaneously).
-- [ ] **TEST-03**: Create Playwright E2E and Vitest unit tests for Group Switching (asserting a chart grouped to AMD displays and updates AMD even if session ticker was initialized as AAPL).
-- [ ] **TEST-04**: Create unit and regression tests asserting genuine tick streaming without 4-micro-tick synthesis or artificial 4,200 bar limits.
+- [x] **TEST-01**: Create Playwright E2E and Vitest unit tests reproducing the Date Reset bug (asserting Sept 7, 2026 or holidays never loads Sept 24/25 data or leaks future ticks).
+- [x] **TEST-02**: Create Playwright E2E and Vitest unit tests reproducing the Multi-Asset Playback freeze (asserting playing replay updates both AAPL and AMD charts simultaneously).
+- [x] **TEST-03**: Create Playwright E2E and Vitest unit tests for Group Switching (asserting a chart grouped to AMD displays and updates AMD even if session ticker was initialized as AAPL).
+- [x] **TEST-04**: Create unit and regression tests asserting genuine tick streaming without 4-micro-tick synthesis or artificial 4,200 bar limits.
 
 ### Category 3: Date Reset & Pure Tick Replay (REPLAY)
 - [ ] **REPLAY-01**: Eliminate unconstrained `/api/stream/tape` fallback in `streamingClient.ts`; enforce strict temporal bounding `[startTime, endTime]` with zero future data leakage.
@@ -45,10 +45,10 @@ Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizi
 | CLEAN-01 | Phase 13 | Complete |
 | CLEAN-02 | Phase 13 | Complete |
 | CLEAN-03 | Phase 13 | Complete |
-| TEST-01 | Phase 14 | Pending |
-| TEST-02 | Phase 14 | Pending |
-| TEST-03 | Phase 14 | Pending |
-| TEST-04 | Phase 14 | Pending |
+| TEST-01 | Phase 14 | Complete |
+| TEST-02 | Phase 14 | Complete |
+| TEST-03 | Phase 14 | Complete |
+| TEST-04 | Phase 14 | Complete |
 | REPLAY-01 | Phase 15 | Pending |
 | REPLAY-02 | Phase 15 | Pending |
 | REPLAY-03 | Phase 15 | Pending |
