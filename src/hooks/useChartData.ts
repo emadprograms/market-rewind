@@ -8,6 +8,7 @@ import { applyTickToCandles, getBucketTimestamp } from '../lib/candleSynthesizer
 import { buildCandleFromTickSlice } from '../lib/tickSynthesizer';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
+import { getUtcTimeFromEt } from '../lib/timezones';
 import type { MarketTick } from '../types';
 
 const EMPTY_TICKS: MarketTick[] = [];
@@ -80,7 +81,7 @@ export function useChartData({
     let cancelled = false;
     async function loadTicksForNewSymbol() {
       try {
-        const startTime = `${selectedDate} 09:20:00`;
+        const startTime = getUtcTimeFromEt(selectedDate, '09:20');
         const endTime = `${selectedDate} 23:59:59`;
         const newTicks = await streamingClient.getTicks(sym, {
           startTime,

@@ -1,36 +1,72 @@
 import React, { useEffect, useRef } from 'react';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 
+const scheduleFrame = (cb: FrameRequestCallback): number => {
+  if (typeof requestAnimationFrame !== 'undefined') {
+    return requestAnimationFrame(cb);
+  }
+  return setTimeout(() => cb(performance.now()), 16) as unknown as number;
+};
+
+const cancelFrame = (id: number) => {
+  if (typeof cancelAnimationFrame !== 'undefined') {
+    cancelAnimationFrame(id);
+  } else {
+    clearTimeout(id);
+  }
+};
+
 export function PlaybackManager() {
   const isPaused = usePlaybackStore((state) => state.isPaused);
   const playbackSpeed = usePlaybackStore((state) => state.playbackSpeed);
-  const tick = usePlaybackStore((state) => state.tick);
-  
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const advanceSimulationTime = usePlaybackStore((state) => state.advanceSimulationTime);
+
+  const lastWallTimeRef = useRef<number | null>(null);
+  const frameIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isPaused) {
-      if (timerRef.current) clearInterval(timerRef.current);
+      lastWallTimeRef.current = null;
+      if (frameIdRef.current !== null) {
+        cancelFrame(frameIdRef.current);
+        frameIdRef.current = null;
+      }
       return;
     }
 
-    let intervalMs = 1000 / playbackSpeed;
-    let ticksPerStep = 1;
+    lastWallTimeRef.current = performance.now();
 
-    // At high speeds (e.g. 50x, 100x), cap interval at ~30ms (~33fps) and batch ticks per frame
-    if (intervalMs < 30) {
-      intervalMs = 30;
-      ticksPerStep = Math.max(1, Math.round(playbackSpeed / 33));
-    }
+    const loop = (wallNow: number) => {
+      if (lastWallTimeRef.current !== null) {
+        const dtWallMs = wallNow - lastWallTimeRef.current;
+        lastWallTimeRef.current = wallNow;
 
-    timerRef.current = setInterval(() => {
-      tick(ticksPerStep);
-    }, intervalMs);
+        // Cap dt to prevent huge jumps when browser tab is backgrounded/restored (max 250ms per frame)
+        const clampedDt = Math.max(0, Math.min(dtWallMs, 250));
+        const dtMarketMs = clampedDt * playbackSpeed;
+
+        const currentMarketMs = usePlaybackStore.getState().currentTime;
+        if (currentMarketMs !== null) {
+          advanceSimulationTime(currentMarketMs + dtMarketMs);
+        }
+      } else {
+        lastWallTimeRef.current = wallNow;
+      }
+
+      if (!usePlaybackStore.getState().isPaused) {
+        frameIdRef.current = scheduleFrame(loop);
+      }
+    };
+
+    frameIdRef.current = scheduleFrame(loop);
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (frameIdRef.current !== null) {
+        cancelFrame(frameIdRef.current);
+        frameIdRef.current = null;
+      }
     };
-  }, [isPaused, playbackSpeed, tick]);
+  }, [isPaused, playbackSpeed, advanceSimulationTime]);
 
   return null;
 }

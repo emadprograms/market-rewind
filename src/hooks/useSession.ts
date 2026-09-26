@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getUtcTimeFromEt } from '../lib/timezones';
 
 const DEFAULT_DATE = '2026-09-25';
 

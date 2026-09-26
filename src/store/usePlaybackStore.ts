@@ -12,6 +12,7 @@ interface PlaybackState {
   masterData: RawBar[];
 
   // Tick Replay State
+  isLoadingTicks: boolean;
   bufferedTicks: MarketTick[];
   ticksBySymbol: Record<string, MarketTick[]>;
   latestTickBySymbol: Record<string, MarketTick>;
@@ -20,6 +21,7 @@ interface PlaybackState {
   totalTicks: number;
 
   // Actions
+  setIsLoadingTicks: (loading: boolean) => void;
   setReplayMode: (mode: ReplayMode) => void;
   setCurrentTime: (time: number | null) => void;
   setPaused: (paused: boolean) => void;
@@ -31,6 +33,7 @@ interface PlaybackState {
   addSymbolTicks: (symbol: string, ticks: MarketTick[]) => void;
   
   tick: (stepCount?: number) => void;
+  advanceSimulationTime: (targetTimeMs: number) => void;
   stepForward: () => void;
   stepBackward: () => void;
   seekTickIndex: (index: number) => void;
@@ -90,6 +93,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   stepMinutes: 1,
   masterData: [],
 
+  isLoadingTicks: false,
   bufferedTicks: [],
   ticksBySymbol: {},
   latestTickBySymbol: {},
@@ -97,6 +101,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   currentTick: null,
   totalTicks: 0,
 
+  setIsLoadingTicks: (loading) => set({ isLoadingTicks: loading }),
   setReplayMode: (mode) => set({ replayMode: mode }),
   setCurrentTime: (time) => set({ currentTime: time }),
   setPaused: (paused) => set({ isPaused: paused }),
@@ -224,6 +229,60 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     }
   },
 
+  advanceSimulationTime: (targetTimeMs: number) => {
+    const { bufferedTicks, currentTickIndex, latestTickBySymbol } = get();
+
+    if (bufferedTicks.length === 0) {
+      set({ currentTime: targetTimeMs });
+      return;
+    }
+
+    const firstTickMs = bufferedTicks.length > 0 ? isoToMs(bufferedTicks[0].time) : 0;
+    if (targetTimeMs < firstTickMs) {
+      set({ currentTime: targetTimeMs });
+      return;
+    }
+
+    const currentTickTime = bufferedTicks[currentTickIndex] ? isoToMs(bufferedTicks[currentTickIndex].time) : 0;
+    if (targetTimeMs < currentTickTime) {
+      get().seekTickTime(targetTimeMs);
+      return;
+    }
+
+    let nextIdx = currentTickIndex;
+    const updatedLatest = { ...latestTickBySymbol };
+
+    while (nextIdx + 1 < bufferedTicks.length) {
+      const candidate = bufferedTicks[nextIdx + 1];
+      const candidateMs = isoToMs(candidate.time);
+      if (candidateMs <= targetTimeMs) {
+        nextIdx++;
+        if (candidate && candidate.symbol) {
+          updatedLatest[candidate.symbol.toUpperCase()] = candidate;
+        }
+      } else {
+        break;
+      }
+    }
+
+    const curr = bufferedTicks[nextIdx];
+    if (curr && curr.symbol && isoToMs(curr.time) <= targetTimeMs) {
+      updatedLatest[curr.symbol.toUpperCase()] = curr;
+    }
+
+    const lastTickMs = isoToMs(bufferedTicks[bufferedTicks.length - 1].time);
+    const reachedEnd = nextIdx >= bufferedTicks.length - 1 && targetTimeMs >= lastTickMs;
+    const nextTick = bufferedTicks[nextIdx] || null;
+
+    set({
+      currentTime: targetTimeMs,
+      currentTickIndex: nextIdx,
+      currentTick: nextTick,
+      latestTickBySymbol: updatedLatest,
+      ...(reachedEnd ? { isPaused: true } : {}),
+    });
+  },
+
   stepForward: () => {
     const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData, latestTickBySymbol } = get();
 
@@ -345,6 +404,11 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       ticksBySymbol: {},
       latestTickBySymbol: {},
       totalTicks: 0,
+      isLoadingTicks: false,
     });
   },
 }));
+
+if (typeof window !== 'undefined') {
+  (window as any).usePlaybackStore = usePlaybackStore;
+}

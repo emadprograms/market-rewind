@@ -95,10 +95,14 @@ export default function App() {
   // Buffer live ticks when session begins or date/ticker changes
   const loadStreamingTicks = useCallback(async () => {
     if (!sessionTicker) return;
+    const { setIsLoadingTicks, setBufferedTicks } = usePlaybackStore.getState();
+    setIsLoadingTicks(true);
     try {
-      const startTime = getUtcTimeFromEt(selectedDate, '09:20');
+      const queryStartEt = entryTime && entryTime < '09:20' ? entryTime : '09:20';
+      const startTime = getUtcTimeFromEt(selectedDate, queryStartEt);
       const endTime = `${selectedDate} 23:59:59`;
-      const targetMs = new Date(startTime.replace(' ', 'T') + 'Z').getTime();
+      const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime || '09:20');
+      const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
 
       // Collect all active tickers across workspace (charts, groups, session)
       const ws = useWorkspaceStore.getState();
@@ -137,8 +141,10 @@ export default function App() {
     } catch (e) {
       console.warn('Could not load streaming ticks into replay buffer:', e);
       setBufferedTicks([]);
+    } finally {
+      setIsLoadingTicks(false);
     }
-  }, [sessionTicker, selectedDate, getUtcTimeFromEt, setBufferedTicks]);
+  }, [sessionTicker, selectedDate, entryTime, getUtcTimeFromEt]);
 
   useEffect(() => {
     if (isSessionStarted) {

@@ -25,13 +25,17 @@ export function headerTicker(card: Locator): Locator {
 export async function startSession(
   page: Page, 
   ticker: string = 'SPY', 
-  date: string = SEED_DATE
+  date: string = SEED_DATE,
+  entryTime?: string
 ): Promise<void> {
   await page.goto('/');
   await expect(page.getByText('Configure Session')).toBeVisible({ timeout: 20000 });
   await expect(page.locator('.session-card select option')).not.toHaveCount(0);
   await page.locator('.session-card select').first().selectOption(ticker);
   await page.locator('.session-card input[type="date"]').fill(date);
+  if (entryTime) {
+    await page.locator('.session-card input[type="time"]').fill(entryTime);
+  }
   await page.getByRole('button', { name: /Initialize Market Simulator/i }).click();
   await expect(page.locator('.chart-card')).toHaveCount(2);
   await expect(headerTicker(chartCard(page, 0))).toHaveText(ticker);
@@ -39,6 +43,10 @@ export async function startSession(
   // Verify that charts actually have loaded candle bars (not blank 0 bars)
   await expect(chartCard(page, 0)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
   await expect(chartCard(page, 1)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
+  // Verify that replay session time has initialized and transport is ready
+  await expect(page.locator('.playback-bar')).toHaveAttribute('data-ticks-loading', 'false', { timeout: 15000 });
+  await expect(page.locator('.time-display')).not.toHaveText('--:--:--', { timeout: 15000 });
+  await expect(page.getByRole('button', { name: /PLAY/i })).toBeEnabled({ timeout: 15000 });
 }
 
 /** Backward compatibility alias */

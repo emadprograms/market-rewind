@@ -78,13 +78,27 @@ class ReplaySession:
     async def play_loop(self):
         try:
             while self.is_playing and self.current_index < len(self.ticks_buffer) - 1:
+                prev_tick = self.ticks_buffer[self.current_index] if self.current_index >= 0 else None
                 self.current_index += 1
                 tick = self.ticks_buffer[self.current_index]
                 await self.ws.send_str(json_dumps({"type": "tick", "tick": tick, "index": self.current_index}))
 
-                # Dynamic delay based on replay speed (base delay ~50ms / speed)
-                delay = max(0.005, 0.05 / self.speed)
-                await asyncio.sleep(delay)
+                # Real-time proportional delay based on market timestamp delta
+                delay = 0.005
+                if prev_tick and "time" in prev_tick and "time" in tick:
+                    try:
+                        t1_str = str(prev_tick["time"]).replace(" ", "T")
+                        t2_str = str(tick["time"]).replace(" ", "T")
+                        t1 = datetime.fromisoformat(t1_str)
+                        t2 = datetime.fromisoformat(t2_str)
+                        delta_sec = max(0.0, (t2 - t1).total_seconds())
+                        # Cap max pause at 3.0s (scaled by replay speed)
+                        delay = min(3.0, delta_sec) / self.speed
+                    except Exception:
+                        delay = 0.01 / self.speed
+
+                if delay > 0.001:
+                    await asyncio.sleep(delay)
 
             if self.current_index >= len(self.ticks_buffer) - 1:
                 self.is_playing = False

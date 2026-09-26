@@ -30,6 +30,7 @@ export function PlaybackBar({
   const masterData = usePlaybackStore((state) => state.masterData);
 
   // Tick Replay Store State
+  const isLoadingTicks = usePlaybackStore((state) => state.isLoadingTicks);
   const bufferedTicks = usePlaybackStore((state) => state.bufferedTicks);
   const currentTickIndex = usePlaybackStore((state) => state.currentTickIndex);
   const currentTick = usePlaybackStore((state) => state.currentTick);
@@ -70,7 +71,11 @@ export function PlaybackBar({
   const canPlay = bufferedTicks.length > 0 || masterData.length > 0;
 
   return (
-    <div className="playback-bar" style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+    <div 
+      className="playback-bar" 
+      data-ticks-loading={isLoadingTicks ? "true" : "false"}
+      style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}
+    >
       
       {/* PnL metrics */}
       <div style={{
@@ -150,12 +155,12 @@ export function PlaybackBar({
         <button 
           className="btn-primary" 
           onClick={togglePlay} 
-          disabled={!canPlay || bufferedTicks.length === 0}
+          disabled={!canPlay || bufferedTicks.length === 0 || isLoadingTicks}
           title={bufferedTicks.length === 0 ? "Market Closed: No tick data recorded for this date" : undefined}
           style={{ padding: '4px 12px', fontSize: '11px', fontWeight: 700 }}
         >
-          {!isPaused ? <Pause size={16} /> : <Play size={16} />}
-          {!isPaused ? 'PAUSE' : 'PLAY'}
+          {isLoadingTicks ? 'LOADING...' : (!isPaused ? <Pause size={16} /> : <Play size={16} />)}
+          {isLoadingTicks ? '' : (!isPaused ? 'PAUSE' : 'PLAY')}
         </button>
         <button 
           className="btn-icon" 
