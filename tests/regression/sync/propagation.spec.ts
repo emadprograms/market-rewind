@@ -1,62 +1,61 @@
 import { test, expect } from '@playwright/test';
+import {
+  uploadSeedAndStartSession,
+  chartCard,
+  headerTicker,
+  changeTicker,
+  joinGroup,
+  collectPageErrors,
+} from '../e2e-utils';
 
+/**
+ * E2E guardrails for group ticker synchronization (QUAL-02).
+ *
+ * Every step goes through the real UI (header dropdowns, group picker) and
+ * every outcome is a hard assertion — a missing element fails the test rather
+ * than silently skipping the interaction.
+ */
 test.describe('Group Synchronization Propagation', () => {
-  test('Scenario 1: Real-time Propagation between grouped charts', async ({ page }) => {
-    await page.goto('/');
-    
-    // 1. Create two charts (assuming a "Add Chart" button exists)
-    const addChartBtn = page.locator('button:has-text("Add Chart"), button:has-text("New Chart")').first();
-    if (await addChartBtn.isVisible()) {
-      await addChartBtn.click();
-    }
-    
-    // 2. Assign them to the same group (e.g., 'red')
-    // This is highly dependent on UI selectors. We look for group selection buttons.
-    const groupBtn = page.locator('button[data-group="red"], .group-btn-red').first();
-    if (await groupBtn.isVisible()) {
-      await groupBtn.click();
-    }
+  test('SYNC-03: ticker change in a group leader propagates to all members', async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await uploadSeedAndStartSession(page);
 
-    // 3. Change ticker in Chart 1
-    const tickerInput = page.locator('input[placeholder*="Ticker"]').first();
-    if (await tickerInput.isVisible()) {
-      await tickerInput.fill('ETH');
-      await page.keyboard.press('Enter');
-    }
+    // Put both charts into the red group
+    await joinGroup(chartCard(page, 0), 'red');
+    await joinGroup(chartCard(page, 1), 'red');
 
-    // 4. Verify Chart 2's header updates
-    const allTickers = page.locator('div[class*="ChartHeader"] span:has-text("ETH")');
-    await expect(allTickers).toHaveCount(2);
+    // Change the ticker on chart 0 — chart 1 must follow in real time
+    await changeTicker(chartCard(page, 0), 'AAA');
+    await expect(headerTicker(chartCard(page, 0))).toHaveText('AAA');
+    await expect(headerTicker(chartCard(page, 1))).toHaveText('AAA');
+
+    // And again in the other direction to catch one-way-sync bugs
+    await changeTicker(chartCard(page, 1), 'BBB');
+    await expect(headerTicker(chartCard(page, 1))).toHaveText('BBB');
+    await expect(headerTicker(chartCard(page, 0))).toHaveText('BBB');
+
+    expect(pageErrors).toEqual([]);
   });
 
-  test('Scenario 2: Mount Sync for new chart joining existing group', async ({ page }) => {
-    await page.goto('/');
-    
-    // 1. Establish a group with a specific ticker
-    const tickerInput = page.locator('input[placeholder*="Ticker"]').first();
-    if (await tickerInput.isVisible()) {
-      await tickerInput.fill('SOL');
-      await page.keyboard.press('Enter');
-    }
-    const groupBtn = page.locator('button[data-group="red"], .group-btn-red').first();
-    if (await groupBtn.isVisible()) {
-      await groupBtn.click();
-    }
+  test('SYNC-02: chart joining an existing group immediately adopts the group ticker', async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await uploadSeedAndStartSession(page);
 
-    // 2. Add a new chart
-    const addChartBtn = page.locator('button:has-text("Add Chart"), button:has-text("New Chart")').first();
-    if (await addChartBtn.isVisible()) {
-      await addChartBtn.click();
-    }
+    // Establish the red group on chart 0 with a non-default ticker
+    await joinGroup(chartCard(page, 0), 'red');
+    await changeTicker(chartCard(page, 0), 'BBB');
+    await expect(headerTicker(chartCard(page, 0))).toHaveText('BBB');
 
-    // 3. Assign it to the group
-    const newChartGroupBtn = page.locator('button[data-group="red"], .group-btn-red').last();
-    if (await newChartGroupBtn.isVisible()) {
-      await newChartGroupBtn.click();
-    }
+    // Chart 1 (still on SPY) joins the group → must adopt BBB on mount-join
+    await joinGroup(chartCard(page, 1), 'red');
+    await expect(headerTicker(chartCard(page, 1))).toHaveText('BBB');
 
-    // 4. Verify the new chart adopts 'SOL'
-    const solHeaders = page.locator('div[class*="ChartHeader"] span:has-text("SOL")');
-    await expect(solHeaders).toHaveCount(2);
+    // Leaving the group must decouple chart 1 from future group changes (SYNC-04)
+    await joinGroup(chartCard(page, 1), 'none');
+    await changeTicker(chartCard(page, 0), 'AAA');
+    await expect(headerTicker(chartCard(page, 0))).toHaveText('AAA');
+    await expect(headerTicker(chartCard(page, 1))).toHaveText('BBB');
+
+    expect(pageErrors).toEqual([]);
   });
 });

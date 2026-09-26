@@ -37,3 +37,4 @@ code
 .gemini/
 playwright-report/
 test-results/
+tests/regression/fixtures/*.db
