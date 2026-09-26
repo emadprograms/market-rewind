@@ -83,6 +83,23 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
       ]);
     });
 
+    it('should correctly parse candles when backend returns a direct JSON array', async () => {
+      const mockStreamCandles = [
+        { time: '2026-09-25T20:45:00', open: 341.015, high: 341.065, low: 341.0, close: 341.055, volume: 7.0, tick_count: 7 },
+        { time: '2026-09-25T20:50:00', open: 341.07, high: 341.215, low: 341.04, close: 341.195, volume: 19.0, tick_count: 19 },
+      ];
+
+      global.fetch = vi.fn().mockImplementation(async () => ({
+        ok: true,
+        json: async () => mockStreamCandles,
+      }));
+
+      const candles = await streamingClient.getCandles('AAPL', { timeframe: '5min' });
+      expect(candles).toHaveLength(2);
+      expect(candles[0].open).toBe(341.015);
+      expect(candles[1].close).toBe(341.195);
+    });
+
     it('should map timeframe strings to valid Data Harvester query parameters', async () => {
       const requestedUrls: string[] = [];
       global.fetch = vi.fn().mockImplementation(async (url: string) => {

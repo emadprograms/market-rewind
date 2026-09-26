@@ -152,6 +152,8 @@ export default function ChartUnit({
     <div 
       ref={cardRef}
       className={`chart-card ${isMaximized ? 'is-maximized' : ''} ${isSelected ? 'is-selected' : ''}`} 
+      data-bars-count={data.chartData.length}
+      data-ticker={data.ticker}
       style={{
         ...mergedStyle,
         borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,

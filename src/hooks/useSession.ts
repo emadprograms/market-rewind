@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const TODAY = new Date().toISOString().split('T')[0];
+const DEFAULT_DATE = '2026-09-25';
 
 export function useSession(tickers: string[]) {
-  const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('lastUsedDate') || TODAY);
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const saved = localStorage.getItem('lastUsedDate');
+    if (!saved || saved > DEFAULT_DATE) return DEFAULT_DATE;
+    return saved;
+  });
   const [sessionTicker, setSessionTicker] = useState<string>(() => localStorage.getItem('lastUsedTicker') || 'SPY');
   const [entryTime, setEntryTime] = useState('09:20');
   const [isSessionStarted, setIsSessionStarted] = useState(false);

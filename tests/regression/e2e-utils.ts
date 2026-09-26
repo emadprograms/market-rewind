@@ -36,6 +36,9 @@ export async function startSession(
   await expect(page.locator('.chart-card')).toHaveCount(2);
   await expect(headerTicker(chartCard(page, 0))).toHaveText(ticker);
   await expect(headerTicker(chartCard(page, 1))).toHaveText(ticker);
+  // Verify that charts actually have loaded candle bars (not blank 0 bars)
+  await expect(chartCard(page, 0)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
+  await expect(chartCard(page, 1)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
 }
 
 /** Backward compatibility alias */

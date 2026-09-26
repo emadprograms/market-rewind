@@ -242,7 +242,7 @@ class StreamingClient {
       }
       if (res.ok) {
         const data = await res.json();
-        rawList = data.candles || [];
+        rawList = Array.isArray(data) ? data : (data.candles || []);
       }
     } catch (e) {
       console.warn(`Failed to fetch streaming candles for ${symbol}:`, e);

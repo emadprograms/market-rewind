@@ -149,6 +149,7 @@ class StreamingApp:
         self.app.router.add_get("/api/symbols/{symbol}", self.handle_symbol_summary)
         self.app.router.add_get("/api/ticks", self.handle_ticks)
         self.app.router.add_get("/api/candles", self.handle_candles)
+        self.app.router.add_get("/api/streaming/candles", self.handle_candles)
         self.app.router.add_get("/ws/replay", self.handle_ws_replay)
 
     async def handle_status(self, request):
@@ -192,17 +193,19 @@ class StreamingApp:
         if not symbol:
             return web.Response(text=json_dumps({"error": "Missing required parameter 'symbol'"}), status=400, content_type="application/json")
 
-        timeframe = request.query.get("timeframe", "1m")
-        start_time = request.query.get("start_time")
-        end_time = request.query.get("end_time")
+        timeframe = request.query.get("timeframe") or request.query.get("tf", "1m")
+        start_time = request.query.get("start_time") or request.query.get("start")
+        end_time = request.query.get("end_time") or request.query.get("end")
         limit = int(request.query.get("limit", 5000))
+        direction = request.query.get("direction")
 
         candles = self.db.query_candles(
             symbol=symbol,
             timeframe=timeframe,
             start_time=start_time,
             end_time=end_time,
-            limit=limit
+            limit=limit,
+            direction=direction,
         )
         return web.Response(text=json_dumps(candles), content_type="application/json")
 

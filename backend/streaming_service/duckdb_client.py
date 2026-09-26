@@ -249,11 +249,14 @@ class DuckDBService:
         timeframe: str = "1m",
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        limit: int = 5000
+        limit: int = 5000,
+        direction: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Dynamically aggregates ticks into OHLCV candles using DuckDB time_bucket().
         If no ticks match and timeframe is 1m+, attempts fallback to historical.duckdb.
+        When querying historical window up to end_time (start_time is None), queries the latest
+        candles before end_time (DESC) and reverses them to return in chronological ASC order.
         """
         interval = INTERVAL_MAP.get(timeframe.lower(), "1 minute")
         candles: List[Dict[str, Any]] = []
@@ -273,6 +276,8 @@ class DuckDBService:
 
                 where_stmt = " AND ".join(where_clauses)
                 clamped_limit = min(max(1, limit), 50000)
+                order_desc = (direction.lower() == "desc") if direction else (start_time is None and end_time is not None)
+                order_dir = "DESC" if order_desc else "ASC"
 
                 query = f"""
                     SELECT 
@@ -286,10 +291,13 @@ class DuckDBService:
                     FROM ticks
                     WHERE {where_stmt}
                     GROUP BY bucket_time
-                    ORDER BY bucket_time ASC
+                    ORDER BY bucket_time {order_dir}
                     LIMIT {clamped_limit}
                 """
                 rows = conn.execute(query, params).fetchall()
+                if order_desc:
+                    rows.reverse()
+
                 candles = [
                     {
                         "time": row[0].isoformat() if hasattr(row[0], "isoformat") else str(row[0]),
@@ -305,9 +313,21 @@ class DuckDBService:
             finally:
                 conn.close()
 
-        # If candles is empty and historical DB exists, attempt fallback for 1m+ bars
-        if not candles and self.has_historical:
-            candles = self._query_historical_candles(symbol, timeframe, start_time, end_time, limit)
+        # If fewer candles than requested limit were found and historical DB exists, backfill from historical
+        if self.has_historical and len(candles) < clamped_limit:
+            remaining_limit = clamped_limit - len(candles)
+            hist_end_time = candles[0]["time"] if candles else end_time
+            hist_candles = self._query_historical_candles(
+                symbol=symbol,
+                timeframe=timeframe,
+                start_time=start_time,
+                end_time=hist_end_time,
+                limit=remaining_limit,
+                direction=direction
+            )
+            if candles and hist_candles and hist_candles[-1]["time"] == candles[0]["time"]:
+                hist_candles = hist_candles[:-1]
+            candles = hist_candles + candles
 
         return candles
 
@@ -317,7 +337,8 @@ class DuckDBService:
         timeframe: str,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        limit: int = 5000
+        limit: int = 5000,
+        direction: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Queries 1-minute historical candles from historical.duckdb with optional resampling."""
         interval = INTERVAL_MAP.get(timeframe.lower(), "1 minute")
@@ -335,6 +356,8 @@ class DuckDBService:
 
             where_stmt = " AND ".join(where_clauses)
             clamped_limit = min(max(1, limit), 50000)
+            order_desc = (direction.lower() == "desc") if direction else (start_time is None and end_time is not None)
+            order_dir = "DESC" if order_desc else "ASC"
 
             query = f"""
                 SELECT 
@@ -348,10 +371,13 @@ class DuckDBService:
                 FROM market_data
                 WHERE {where_stmt}
                 GROUP BY bucket_time
-                ORDER BY bucket_time ASC
+                ORDER BY bucket_time {order_dir}
                 LIMIT {clamped_limit}
             """
             rows = conn.execute(query, params).fetchall()
+            if order_desc:
+                rows.reverse()
+
             return [
                 {
                     "time": row[0].isoformat() if hasattr(row[0], "isoformat") else str(row[0]),

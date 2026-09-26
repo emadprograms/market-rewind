@@ -170,43 +170,63 @@ export default function App() {
               <main className="workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
                  Please ensure DuckDB streaming service is running at localhost:8000.
               </main>
-            ) : !isSessionStarted ? (
-              <SessionConfig 
-                tickers={tickers}
-                sessionTicker={sessionTicker}
-                setSessionTicker={setSessionTicker}
-                selectedDate={selectedDate}
-                setSelectedDate={setSelectedDate}
-                entryTime={entryTime}
-                setEntryTime={setEntryTime}
-                onStartSession={startSession}
-              />
             ) : (
-              <ChartWorkspace 
-                layoutMode={layoutMode}
-                maximizedId={maximizedId}
-                panelSizes={panelSizes}
-                activeGutter={activeGutter}
-                tickers={tickers}
-                sessionTicker={sessionTicker}
-                selectedDate={selectedDate}
-                isSessionStarted={isSessionStarted}
-                drawings={drawings}
-                chartGroups={chartGroups}
-                groupTickers={groupTickers}
-                workspaceRef={workspaceRef}
-                selectedChartId={selectedChartId}
-                onSelectChart={handleSelectChart}
-                onToggleMaximize={toggleMaximize}
-                onUpdateDrawings={handleUpdateDrawings}
-                onPnLUpdate={handlePnLUpdate}
-                onTickerChange={handleTickerChange}
-                onTimeframeChange={handleTimeframeChange}
-                onGroupChange={handleGroupChange}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerEnd={handlePointerEnd}
-              />
+              <>
+                <ChartWorkspace 
+                  layoutMode={layoutMode}
+                  maximizedId={maximizedId}
+                  panelSizes={panelSizes}
+                  activeGutter={activeGutter}
+                  tickers={tickers}
+                  sessionTicker={sessionTicker}
+                  selectedDate={selectedDate}
+                  isSessionStarted={isSessionStarted}
+                  drawings={drawings}
+                  chartGroups={chartGroups}
+                  groupTickers={groupTickers}
+                  workspaceRef={workspaceRef}
+                  selectedChartId={selectedChartId}
+                  onSelectChart={handleSelectChart}
+                  onToggleMaximize={toggleMaximize}
+                  onUpdateDrawings={handleUpdateDrawings}
+                  onPnLUpdate={handlePnLUpdate}
+                  onTickerChange={handleTickerChange}
+                  onTimeframeChange={handleTimeframeChange}
+                  onGroupChange={handleGroupChange}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerEnd={handlePointerEnd}
+                />
+                {!isSessionStarted && (
+                  <div 
+                    className="session-config-overlay"
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      backgroundColor: 'rgba(10, 14, 23, 0.75)',
+                      backdropFilter: 'blur(3px)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 5000,
+                    }}
+                  >
+                    <SessionConfig 
+                      tickers={tickers}
+                      sessionTicker={sessionTicker}
+                      setSessionTicker={setSessionTicker}
+                      selectedDate={selectedDate}
+                      setSelectedDate={setSelectedDate}
+                      entryTime={entryTime}
+                      setEntryTime={setEntryTime}
+                      onStartSession={startSession}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
 
