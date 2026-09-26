@@ -30,6 +30,7 @@ describe('Time and Sales Integration Tests', () => {
   });
 
   it('should display tick rows with prices and highlight current active tick', () => {
+    usePlaybackStore.setState({ currentTickIndex: 2 });
     const { container } = render(<TimeAndSales isOpen={true} onClose={vi.fn()} symbol="NVDA" />);
     
     expect(screen.getByText('180.00')).toBeInTheDocument();

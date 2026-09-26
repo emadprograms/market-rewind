@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
-import { usePlaybackStore } from '../store/usePlaybackStore';
+import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
+import { getTzForTicker } from '../lib/timezones';
 import { X, Activity } from 'lucide-react';
 
 interface TimeAndSalesProps {
@@ -15,23 +16,37 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
 
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll the list to center on current active tick
+  // Auto-scroll the list to bottom to follow live tape executions without jitter
   useEffect(() => {
     if (!listRef.current) return;
-    const activeRow = listRef.current.querySelector('.tick-row.is-active') as HTMLElement;
-    if (activeRow && typeof activeRow.scrollIntoView === 'function') {
-      activeRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [currentTickIndex]);
 
   if (!isOpen) return null;
 
-  // Window of ticks around current index
-  const startIdx = Math.max(0, currentTickIndex - 30);
-  const endIdx = Math.min(bufferedTicks.length, currentTickIndex + 30);
+  const displaySymbol = symbol || currentTick?.symbol || (bufferedTicks[0]?.symbol) || 'LIVE';
+  const tz = getTzForTicker(displaySymbol);
+
+  // Filter or window to the last 80 executed trades up to currentTickIndex (no future ticks)
+  const maxDisplay = 80;
+  const startIdx = Math.max(0, currentTickIndex - maxDisplay + 1);
+  const endIdx = Math.min(bufferedTicks.length, currentTickIndex + 1);
   const visibleTicks = bufferedTicks.slice(startIdx, endIdx);
 
-  const displaySymbol = symbol || currentTick?.symbol || (bufferedTicks[0]?.symbol) || 'LIVE';
+  const formatTapeTime = (isoTime: string) => {
+    const ms = isoToMs(isoTime);
+    if (!ms) return '--:--:--';
+    const date = new Date(ms);
+    const timeStr = date.toLocaleTimeString('en-US', {
+      timeZone: tz,
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    const millis = String(date.getMilliseconds()).padStart(3, '0');
+    return `${timeStr}.${millis}`;
+  };
 
   return (
     <div className="time-and-sales-panel" style={{
@@ -84,7 +99,7 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
       {/* Column Headers */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '70px 65px 45px 45px',
+        gridTemplateColumns: '85px 60px 42px 45px',
         padding: '6px 8px',
         backgroundColor: '#181b24',
         borderBottom: '1px solid #2a2e39',
@@ -115,7 +130,7 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
             color: '#787b86',
             fontSize: '11px',
           }}>
-            No live ticks buffered.<br/>Load symbol ticks to start.
+            No live ticks executed yet.<br/>Start replay to stream tape.
           </div>
         ) : (
           visibleTicks.map((tick, relIdx) => {
@@ -124,17 +139,13 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
             const isUptick = prevTick ? tick.price >= prevTick.price : true;
             const isActive = absIdx === currentTickIndex;
 
-            const timeStr = tick.time.includes('T') 
-              ? tick.time.split('T')[1].slice(0, 12) 
-              : tick.time.split(' ')[1] || tick.time;
-
             return (
               <div 
                 key={`${tick.time}-${absIdx}`}
                 className={`tick-row ${isActive ? 'is-active' : ''}`}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '70px 65px 45px 45px',
+                  gridTemplateColumns: '85px 60px 42px 45px',
                   padding: '3px 8px',
                   backgroundColor: isActive ? 'rgba(41, 98, 255, 0.25)' : 'transparent',
                   borderLeft: isActive ? '3px solid #2962ff' : '3px solid transparent',
@@ -143,7 +154,7 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
                   userSelect: 'none',
                 }}
               >
-                <div style={{ color: '#d1d4dc', fontSize: '10px' }}>{timeStr.slice(0, 8)}</div>
+                <div style={{ color: '#d1d4dc', fontSize: '9.5px' }}>{formatTapeTime(tick.time)}</div>
                 <div style={{ textAlign: 'right', fontWeight: 600 }}>{tick.price.toFixed(2)}</div>
                 <div style={{ textAlign: 'right', color: '#d1d4dc' }}>{Math.round(tick.volume || 1)}</div>
                 <div style={{ textAlign: 'right', color: '#787b86', fontSize: '9px' }}>
