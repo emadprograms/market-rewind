@@ -1,46 +1,73 @@
 import { test, expect } from '@playwright/test';
+import {
+  uploadSeedAndStartSession,
+  chartCard,
+  headerTicker,
+  changeTicker,
+  collectPageErrors,
+} from '../e2e-utils';
 
+/**
+ * E2E stability smoke tests for the viewport (QUAL-01).
+ *
+ * Note: the precise anchor-shift *math* (STAB-01/02/03) is asserted logically
+ * by tests/regression/viewport/stability.test.ts via the mocked chart API —
+ * that is where pixel/range correctness belongs. These specs verify the same
+ * behaviors end-to-end through the real stack (DB worker → hook → canvas):
+ * rapid input must not crash or desync the UI, and scrolling into history
+ * (which triggers real FETCH_HISTORICAL_CHUNK prepends) must leave the app
+ * stable and functional.
+ */
 test.describe('Viewport Visual Stability', () => {
-  test('Scenario 1: Rapid Ticker Swap should be stable', async ({ page }) => {
-    await page.goto('/');
-    
-    const tickers = ['BTC', 'ETH', 'SOL', 'AAPL'];
-    for (const ticker of tickers) {
-      // Simulate ticker change by typing into the ticker input (assuming a selector for it)
-      // Since we don't have exact selectors, we use a generic search for "Ticker" or a common pattern
-      const input = page.locator('input[placeholder*="Ticker"], input[aria-label*="Ticker"]').first();
-      if (await input.isVisible()) {
-        await input.fill(ticker);
-        await page.keyboard.press('Enter');
-        // Small wait for the chart to update
-        await page.waitForTimeout(200);
-      }
+  test('STAB-01: rapid ticker swaps do not crash or desync the chart', async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await uploadSeedAndStartSession(page);
+
+    const card = chartCard(page, 0);
+    const swaps = ['AAA', 'BBB', 'AAA', 'BBB', 'AAA'] as const;
+    for (const ticker of swaps) {
+      await changeTicker(card, ticker);
+      await expect(headerTicker(card)).toHaveText(ticker);
     }
-    
-    // Verify the page hasn't crashed or shown an error overlay
-    const errorOverlay = page.locator('text=Error, text=Exception');
-    await expect(errorOverlay).not.toBeVisible();
+
+    // UI still fully functional: both charts present, canvas alive, no crash overlay
+    await expect(page.locator('.chart-card')).toHaveCount(2);
+    await expect(card.locator('canvas').first()).toBeVisible();
+    await expect(headerTicker(chartCard(page, 1))).toHaveText('SPY');
+    await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
   });
 
-  test('Scenario 2: Viewport Anchor stability during prepend', async ({ page }) => {
-    await page.goto('/');
-    
-    // 1. Scroll to a historical area
-    const chartCanvas = page.locator('canvas').first();
-    await chartCanvas.hover();
-    await page.mouse.wheel(0, 500);
-    await page.waitForTimeout(500);
-    
-    // 2. Trigger a data prepend
-    // Since we can't easily trigger a prepend from the UI without a specific button,
-    // we simulate it by navigating to a different timeframe and back, or interacting with a mock.
-    // For this E2E test, we verify that the current scroll position is stable.
-    const boundingBox = await chartCanvas.boundingBox();
-    if (boundingBox) {
-      const center = { x: boundingBox.x + boundingBox.width / 2, y: boundingBox.y + boundingBox.height / 2 };
-      await page.mouse.move(center.x, center.y);
+  test('STAB-02: scrolling into deep history stays stable (real prepend)', async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await uploadSeedAndStartSession(page);
+
+    const card = chartCard(page, 0);
+    const canvas = card.locator('canvas').first();
+    await expect(canvas).toBeVisible();
+
+    const boxBefore = await canvas.boundingBox();
+    expect(boxBefore).not.toBeNull();
+
+    // Drag right repeatedly: viewport travels into the past, past the initial
+    // 30-day fetch window, forcing the worker to prepend historical chunks.
+    const cx = boxBefore!.x + boxBefore!.width / 2;
+    const cy = boxBefore!.y + boxBefore!.height / 2;
+    for (let i = 0; i < 10; i++) {
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx + 320, cy, { steps: 5 });
+      await page.mouse.up();
     }
-    
-    await expect(page).not.toHaveScreenshot('viewport-jump.png', { maxDiffPixels: 100 });
+
+    // App remains healthy: layout intact, header correct, canvas same size
+    // (a "violent jump" regression would blur/crash or re-layout the pane)
+    await expect(page.locator('.chart-card')).toHaveCount(2);
+    await expect(headerTicker(card)).toHaveText('SPY');
+    const boxAfter = await canvas.boundingBox();
+    expect(boxAfter).not.toBeNull();
+    expect(boxAfter!.width).toBeCloseTo(boxBefore!.width, 0);
+    await expect(page.locator('vite-error-overlay')).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
   });
 });

@@ -10,6 +10,7 @@
     "backend:test": "PYTHONPATH=. ../data-harvester/.venv/bin/pytest backend/streaming_service/tests",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:regression": "playwright test",
     "build": "vite build",
     "preview": "vite preview"
   },
