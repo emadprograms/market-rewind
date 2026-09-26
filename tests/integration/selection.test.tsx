@@ -39,11 +39,6 @@ vi.mock('../../src/hooks/useKeyboardShortcuts', () => ({
   })),
 }));
 
-vi.mock('../../src/lib/db', () => ({
-  fetchMarketData: vi.fn().mockResolvedValue([]),
-  fetchHistoricalChunk: vi.fn().mockResolvedValue([]),
-}));
-
 describe('Selection Integration Tests', () => {
   const mockProps = {
     selectedDate: '2024-01-01',

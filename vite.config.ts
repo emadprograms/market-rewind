@@ -18,7 +18,4 @@ export default defineConfig({
       },
     },
   },
-  optimizeDeps: {
-    exclude: ['sql.js']
-  }
 })

@@ -8,9 +8,9 @@ Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizi
 ## Active Requirements
 
 ### Category 1: Legacy & Architecture Cleanup (CLEAN)
-- [ ] **CLEAN-01**: Remove `sql.js`, `@types/sql.js`, `public/sql-wasm.wasm`, and `src/lib/workers/db.worker.ts` from package dependencies, build configs, and codebase.
-- [ ] **CLEAN-02**: Remove all dependencies on `historical.duckdb`; configure backend and frontend to query and dynamically aggregate all timeframes (sub-second to daily) exclusively from `streaming.duckdb`.
-- [ ] **CLEAN-03**: Clean up Vercel configs, unused deployment references, and legacy local database file upload logic.
+- [x] **CLEAN-01**: Remove `sql.js`, `@types/sql.js`, `public/sql-wasm.wasm`, and `src/lib/workers/db.worker.ts` from package dependencies, build configs, and codebase.
+- [x] **CLEAN-02**: Remove all dependencies on `historical.duckdb`; configure backend and frontend to query and dynamically aggregate all timeframes (sub-second to daily) exclusively from `streaming.duckdb`.
+- [x] **CLEAN-03**: Clean up Vercel configs, unused deployment references, and legacy local database file upload logic.
 
 ### Category 2: Test-First Harness & Verification (TEST)
 - [ ] **TEST-01**: Create Playwright E2E and Vitest unit tests reproducing the Date Reset bug (asserting Sept 7, 2026 or holidays never loads Sept 24/25 data or leaks future ticks).
@@ -42,9 +42,9 @@ Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizi
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLEAN-01 | Phase 13 | Pending |
-| CLEAN-02 | Phase 13 | Pending |
-| CLEAN-03 | Phase 13 | Pending |
+| CLEAN-01 | Phase 13 | Complete |
+| CLEAN-02 | Phase 13 | Complete |
+| CLEAN-03 | Phase 13 | Complete |
 | TEST-01 | Phase 14 | Pending |
 | TEST-02 | Phase 14 | Pending |
 | TEST-03 | Phase 14 | Pending |

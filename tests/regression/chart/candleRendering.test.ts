@@ -42,29 +42,18 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
     });
   });
 
-  describe('Multi-Day Historical Candle Merging', () => {
-    it('should request historical database and blend with streaming candles on standard timeframes', async () => {
-      // Mock historical candles (3 days)
-      const mockHistCandles = [
-        { time: 1790035200, time_str: '2026-09-22 00:00:00', open: 774.0, high: 775.1, low: 771.4, close: 773.7, volume: 1000, source: 'MASSIVE', session: 'POST, PRE, REG' },
-        { time: 1790121600, time_str: '2026-09-23 00:00:00', open: 774.3, high: 774.7, low: 766.5, close: 767.3, volume: 1200, source: 'MASSIVE', session: 'POST, PRE, REG' },
-        { time: 1790208000, time_str: '2026-09-24 00:00:00', open: 764.5, high: 768.9, low: 761.8, close: 765.9, volume: 1100, source: 'MASSIVE', session: 'POST, PRE, REG' },
-      ];
-
-      // Mock streaming candle for today
+  describe('Pure Streaming Candle Fetching & Aggregation', () => {
+    it('should query streaming.duckdb endpoint and return daily candles on standard timeframes', async () => {
+      // Mock streaming candles across 4 days directly from streaming.duckdb
       const mockStreamCandles = [
+        { time: 1790035200, time_str: '2026-09-22 00:00:00', open: 774.0, high: 775.1, low: 771.4, close: 773.7, volume: 1000, source: 'DATABENTO', session: 'POST, PRE, REG' },
+        { time: 1790121600, time_str: '2026-09-23 00:00:00', open: 774.3, high: 774.7, low: 766.5, close: 767.3, volume: 1200, source: 'DATABENTO', session: 'POST, PRE, REG' },
+        { time: 1790208000, time_str: '2026-09-24 00:00:00', open: 764.5, high: 768.9, low: 761.8, close: 765.9, volume: 1100, source: 'DATABENTO', session: 'POST, PRE, REG' },
         { time: 1790294400, time_str: '2026-09-25 00:00:00', open: 771.0, high: 772.2, low: 770.1, close: 771.4, volume: 500, source: 'CAPITAL_STREAM', session: 'REG', tick_count: 500 },
       ];
 
       global.fetch = vi.fn().mockImplementation(async (url: string) => {
-        if (url.includes('/api/candles')) {
-          expect(url).toContain('tf=1d');
-          return {
-            ok: true,
-            json: async () => ({ candles: mockHistCandles, count: mockHistCandles.length }),
-          };
-        }
-        if (url.includes('/api/streaming/candles')) {
+        if (url.includes('/api/streaming/candles') || url.includes('/api/candles')) {
           expect(url).toContain('tf=1d');
           return {
             ok: true,
@@ -131,9 +120,6 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
       ];
 
       global.fetch = vi.fn().mockImplementation(async (url: string) => {
-        if (url.includes('/api/ticks')) {
-          return { ok: false, status: 404 };
-        }
         if (url.includes('/api/stream/tape')) {
           return {
             ok: true,
@@ -143,7 +129,7 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
         return { ok: false };
       });
 
-      const ticks = await streamingClient.getTicks('QQQ', { limit: 10 });
+      const ticks = await streamingClient.getLiveTape('QQQ', 10);
       expect(ticks).toHaveLength(3);
 
       // Verify oldest tick is first (ascending chronological order)

@@ -1,6 +1,6 @@
 /**
  * Streaming Client for Market Rewind.
- * Communicates with the DuckDB streaming backend service (REST & WebSocket).
+ * Pure DuckDB streaming client communicating with streaming.duckdb backend service.
  */
 import type { MarketTick, RawBar, Timeframe } from '../types';
 
@@ -24,12 +24,6 @@ export interface BackendStatus {
     size_bytes: number;
     tick_count: number;
   };
-  historical_db: {
-    path: string;
-    exists: boolean;
-    size_bytes: number;
-    candle_count: number;
-  };
 }
 
 class StreamingClient {
@@ -42,9 +36,7 @@ class StreamingClient {
       const data = await res.json();
       this.isOnline = true;
 
-      // Normalize between data-harvester format and standalone streaming_service format
       const streamingInfo = data.streaming || data.streaming_db || {};
-      const historicalInfo = data.historical || data.historical_db || {};
 
       const normalized: BackendStatus = {
         status: data.status || 'OK',
@@ -54,12 +46,6 @@ class StreamingClient {
           size_bytes: streamingInfo.size_bytes || (streamingInfo.size_mb ? Math.round(streamingInfo.size_mb * 1024 * 1024) : 0),
           tick_count: streamingInfo.tick_count ?? streamingInfo.ticks_rows ?? 0,
         },
-        historical_db: {
-          path: historicalInfo.path || '',
-          exists: Boolean(historicalInfo.exists ?? true),
-          size_bytes: historicalInfo.size_bytes || (historicalInfo.size_mb ? Math.round(historicalInfo.size_mb * 1024 * 1024) : 0),
-          candle_count: historicalInfo.candle_count ?? historicalInfo.market_data_rows ?? 0,
-        }
       };
 
       return normalized;
@@ -109,6 +95,11 @@ class StreamingClient {
     }
   }
 
+  /**
+   * Queries raw ticks from streaming.duckdb.
+   * Strictly enforces date/time bounding. If no ticks match the requested range,
+   * returns an empty array (never falls back to unconstrained future tape).
+   */
   async getTicks(
     symbol: string,
     options: {
@@ -130,28 +121,14 @@ class StreamingClient {
 
     let rawTicks: any[] = [];
 
-    // 1. Try standard /api/ticks
     try {
       const res = await fetch(`${API_BASE_URL}/api/ticks?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         rawTicks = Array.isArray(data) ? data : (data.ticks || []);
       }
-    } catch {
-      // Fallback to tape endpoint
-    }
-
-    // 2. Fallback to /api/stream/tape (data-harvester endpoint)
-    if (!rawTicks || rawTicks.length === 0) {
-      try {
-        const tapeRes = await fetch(`${API_BASE_URL}/api/stream/tape?symbol=${encodeURIComponent(symbol.toUpperCase())}&limit=${options.limit || 10000}`);
-        if (tapeRes.ok) {
-          const tapeData = await tapeRes.json();
-          rawTicks = Array.isArray(tapeData) ? tapeData : (tapeData.ticks || []);
-        }
-      } catch {
-        // ignore
-      }
+    } catch (e) {
+      console.warn(`Failed to fetch ticks for ${symbol}:`, e);
     }
 
     const mapped: MarketTick[] = (rawTicks || []).map((t: any) => {
@@ -184,6 +161,35 @@ class StreamingClient {
     return mapped;
   }
 
+  /**
+   * Fetches latest live tape ticks specifically for Time & Sales drawer.
+   */
+  async getLiveTape(symbol: string, limit: number = 50): Promise<MarketTick[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/stream/tape?symbol=${encodeURIComponent(symbol.toUpperCase())}&limit=${limit}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const raw = Array.isArray(data) ? data : (data.ticks || []);
+      return raw.map((t: any) => ({
+        time: (t.timestamp || t.time || '').replace('T', ' '),
+        price: Number(t.price),
+        volume: Number(t.volume ?? t.size ?? 1),
+        bid: t.bid !== undefined && t.bid !== null ? Number(t.bid) : undefined,
+        ask: t.ask !== undefined && t.ask !== null ? Number(t.ask) : undefined,
+        symbol: t.symbol || symbol.toUpperCase(),
+        session: t.session || 'REG',
+        source: t.source || 'CAPITAL',
+      })).filter((t: any) => Boolean(t.time) && !isNaN(t.price))
+        .sort((a: any, b: any) => a.time.localeCompare(b.time));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Fetches candles aggregated directly from streaming.duckdb via time_bucket().
+   * Runs exclusively on streaming.duckdb for all timeframes (sub-second to daily).
+   */
   async getCandles(
     symbol: string,
     options: {
@@ -209,85 +215,32 @@ class StreamingClient {
     };
     const apiTf = TIMEFRAME_TO_API[tf] || (tf.toLowerCase().includes('d') ? '1d' : tf.toLowerCase().includes('h') ? '1h' : '1m');
     const limit = options.limit || 5000;
-    const isSubSecond = ['1s', '5s', '15s', '30s'].includes(tf);
 
     let rawList: any[] = [];
 
-    if (isSubSecond) {
-      // Sub-second timeframes only exist in streaming DuckDB
-      try {
-        const streamParams = new URLSearchParams({
-          symbol: sym,
-          tf: apiTf,
-          timeframe: apiTf,
-          limit: String(limit),
-        });
-        if (options.startTime) streamParams.append('start', options.startTime);
-        if (options.endTime) streamParams.append('end', options.endTime);
+    // Query streaming candles directly
+    try {
+      const streamParams = new URLSearchParams({
+        symbol: sym,
+        tf: apiTf,
+        timeframe: apiTf,
+        limit: String(limit),
+        source: 'streaming',
+      });
+      if (options.startTime) streamParams.append('start', options.startTime);
+      if (options.endTime) streamParams.append('end', options.endTime);
 
-        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          rawList = data.candles || [];
-        }
-      } catch {
-        // ignore
+      let res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
+      if (!res.ok) {
+        // Fallback to /api/candles with source=streaming
+        res = await fetch(`${API_BASE_URL}/api/candles?${streamParams.toString()}`);
       }
-    } else {
-      // Standard timeframes: query historical DuckDB for historical context
-      let histCandles: any[] = [];
-      try {
-        const params = new URLSearchParams({
-          symbol: sym,
-          tf: apiTf,
-          timeframe: apiTf,
-          limit: String(limit),
-        });
-        if (options.startTime) params.append('start', options.startTime);
-        if (options.endTime) params.append('end', options.endTime);
-
-        const res = await fetch(`${API_BASE_URL}/api/candles?${params.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          histCandles = Array.isArray(data) ? data : (data.candles || []);
-        }
-      } catch {
-        // ignore
+      if (res.ok) {
+        const data = await res.json();
+        rawList = data.candles || [];
       }
-
-      // Also fetch live/streaming candles (matching requested range if provided)
-      let streamCandles: any[] = [];
-      try {
-        const streamParams = new URLSearchParams({
-          symbol: sym,
-          tf: apiTf,
-          timeframe: apiTf,
-          limit: '1000',
-        });
-        if (options.startTime) streamParams.append('start', options.startTime);
-        if (options.endTime) streamParams.append('end', options.endTime);
-
-        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          streamCandles = data.candles || [];
-        }
-      } catch {
-        // ignore
-      }
-
-      // Combine historical + streaming without duplicates
-      const candleMap = new Map<string, any>();
-      for (const c of histCandles) {
-        const key = c.time_str || String(c.time);
-        candleMap.set(key, c);
-      }
-      for (const c of streamCandles) {
-        const key = c.time_str || String(c.time);
-        candleMap.set(key, c);
-      }
-
-      rawList = Array.from(candleMap.values());
+    } catch (e) {
+      console.warn(`Failed to fetch streaming candles for ${symbol}:`, e);
     }
 
     return (rawList || []).map((row: any) => {

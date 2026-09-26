@@ -1,7 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 import { streamingClient } from '../lib/streamingClient';
-import { fetchMarketData } from '../lib/db';
 import type { RawBar } from '../types';
 
 export function useMarketSimulator(
@@ -30,15 +29,7 @@ export function useMarketSimulator(
       // Fallback
     }
 
-    if (!data || data.length === 0) {
-      try {
-        data = (await fetchMarketData(sessionTicker, selectedDate, 1)) || [];
-      } catch {
-        data = [];
-      }
-    }
-
-    setMasterData(data);
+    setMasterData(data || []);
     
     // Always anchor replay cursor to exactly 9:20 AM ET of selectedDate
     const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);

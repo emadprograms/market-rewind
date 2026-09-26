@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { IChartApi, ISeriesApi, LogicalRange, CandlestickData } from 'lightweight-charts';
 import type { ChartBar, GroupColor, RawBar, Timeframe, HistoryPrependState } from '../types';
 import { TF_SECONDS } from '../types';
-import { fetchMarketData, fetchHistoricalChunk } from '../lib/db';
 import { resampleData } from '../lib/resampling';
 import { streamingClient } from '../lib/streamingClient';
 import { applyTickToCandles, getBucketTimestamp } from '../lib/candleSynthesizer';
@@ -93,20 +92,6 @@ export function useChartData({
 
       if (cancelled) return;
 
-      if (!data || data.length === 0) {
-        let daysBack = 30;
-        if (['1s', '5s', '15s', '30s', '1min'].includes(timeframe)) daysBack = 3;
-        else if (timeframe === '5min') daysBack = 15;
-        else if (timeframe === '15min') daysBack = 30;
-        else if (timeframe === '30min') daysBack = 60;
-        else if (timeframe === '1H') daysBack = 120;
-        else if (timeframe === '1D') daysBack = 365 * 2;
-        
-        data = (await fetchMarketData(ticker, selectedDate, daysBack)) || [];
-      }
-
-      if (cancelled) return;
-      
       if (process.env.NODE_ENV !== 'test') {
         console.log(`[useChartData] Loaded ${data?.length || 0} bars for ${ticker} at ${timeframe}`);
       }
@@ -136,7 +121,11 @@ export function useChartData({
           const oldLogicalRange = timeScale.getVisibleLogicalRange();
           const currentChartBars = priceSeriesRef.current ? (priceSeriesRef.current.data() as CandlestickData[]) : [];
           
-          const chunk = await fetchHistoricalChunk(ticker, earliestLoadedDateRef.current, 30);
+          const chunk = await streamingClient.getCandles(ticker, {
+            timeframe,
+            endTime: earliestLoadedDateRef.current,
+            limit: 1000,
+          });
           
           if (chunk && chunk.length > 0) {
             earliestLoadedDateRef.current = chunk[0].time;
