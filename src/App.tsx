@@ -10,7 +10,6 @@ import { useDrawings } from './hooks/useDrawings';
 import { useMarketSimulator } from './hooks/useMarketSimulator';
 import { usePlaybackStore, isoToMs } from './store/usePlaybackStore';
 import { streamingClient } from './lib/streamingClient';
-import { synthesizeTicksFromBars } from './lib/tickSynthesizer';
 
 // Components
 import { Sidebar } from './components/Sidebar';
@@ -100,60 +99,27 @@ export default function App() {
       const endTime = `${selectedDate} 23:59:59`;
       const targetMs = new Date(startTime.replace(' ', 'T') + 'Z').getTime();
 
-      let ticks = await streamingClient.getTicks(sessionTicker, {
+      const ticks = await streamingClient.getTicks(sessionTicker, {
         startTime,
         endTime,
         limit: 100000,
         direction: 'asc',
       });
 
-      // If raw ticks exist but first tick starts after 9:20 AM ET (e.g. 13:28):
-      // Fetch 1m candles for 13:20 to first tick time, synthesize micro-ticks, and prepend them
-      if (ticks && ticks.length > 0) {
-        const firstTickMs = isoToMs(ticks[0].time);
-        if (firstTickMs > targetMs + 30000) {
-          try {
-            const gapCandles = await streamingClient.getCandles(sessionTicker, {
-              timeframe: '1min',
-              startTime,
-              endTime: ticks[0].time.slice(0, 19),
-              limit: 100,
-            });
-            if (gapCandles && gapCandles.length > 0) {
-              const gapTicks = synthesizeTicksFromBars(gapCandles, sessionTicker);
-              ticks = [...gapTicks, ...ticks];
-            }
-          } catch {
-            // ignore gap fetch error
-          }
-        }
-      }
-
-      // If no raw ticks exist for this date at all, synthesize from 1-minute historical candles
-      if (!ticks || ticks.length === 0) {
-        try {
-          const dayCandles = await streamingClient.getCandles(sessionTicker, {
-            timeframe: '1min',
-            startTime,
-            endTime,
-            limit: 5000,
-          });
-          if (dayCandles && dayCandles.length > 0) {
-            ticks = synthesizeTicksFromBars(dayCandles, sessionTicker);
-          }
-        } catch {
-          // ignore
-        }
-      }
-
       if (ticks && ticks.length > 0) {
         setBufferedTicks(ticks);
         usePlaybackStore.getState().seekTickTime(targetMs);
         usePlaybackStore.getState().setCurrentTime(targetMs);
         usePlaybackStore.getState().setPaused(true);
+      } else {
+        // Market closed / No ticks recorded for this date (e.g. holiday or weekend)
+        setBufferedTicks([]);
+        usePlaybackStore.getState().setCurrentTime(targetMs);
+        usePlaybackStore.getState().setPaused(true);
       }
     } catch (e) {
       console.warn('Could not load streaming ticks into replay buffer:', e);
+      setBufferedTicks([]);
     }
   }, [sessionTicker, selectedDate, getUtcTimeFromEt, setBufferedTicks]);
 

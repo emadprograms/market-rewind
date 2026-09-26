@@ -19,9 +19,9 @@ Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizi
 - [x] **TEST-04**: Create unit and regression tests asserting genuine tick streaming without 4-micro-tick synthesis or artificial 4,200 bar limits.
 
 ### Category 3: Date Reset & Pure Tick Replay (REPLAY)
-- [ ] **REPLAY-01**: Eliminate unconstrained `/api/stream/tape` fallback in `streamingClient.ts`; enforce strict temporal bounding `[startTime, endTime]` with zero future data leakage.
-- [ ] **REPLAY-02**: Provide clean session status / empty-state messaging when a selected date is a market holiday or weekend without streaming ticks, preventing ghost data or foreign date loads.
-- [ ] **REPLAY-03**: Remove `synthesizeTicksFromBars` and artificial 4,200 bar caps; load and stream genuine ticks from `streaming.duckdb`.
+- [x] **REPLAY-01**: Eliminate unconstrained `/api/stream/tape` fallback in `streamingClient.ts`; enforce strict temporal bounding `[startTime, endTime]` with zero future data leakage.
+- [x] **REPLAY-02**: Provide clean session status / empty-state messaging when a selected date is a market holiday or weekend without streaming ticks, preventing ghost data or foreign date loads.
+- [x] **REPLAY-03**: Remove `synthesizeTicksFromBars` and artificial 4,200 bar caps; load and stream genuine ticks from `streaming.duckdb`.
 
 ### Category 4: Global Multi-Asset Playback Synchronization (SYNC)
 - [ ] **SYNC-01**: Implement Universal Replay Clock: Playback engine manages a unified timestamp timeline that coordinates all open charts in the workspace.
@@ -49,9 +49,9 @@ Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizi
 | TEST-02 | Phase 14 | Complete |
 | TEST-03 | Phase 14 | Complete |
 | TEST-04 | Phase 14 | Complete |
-| REPLAY-01 | Phase 15 | Pending |
-| REPLAY-02 | Phase 15 | Pending |
-| REPLAY-03 | Phase 15 | Pending |
+| REPLAY-01 | Phase 15 | Complete |
+| REPLAY-02 | Phase 15 | Complete |
+| REPLAY-03 | Phase 15 | Complete |
 | SYNC-01 | Phase 16 | Pending |
 | SYNC-02 | Phase 16 | Pending |
 | SYNC-03 | Phase 16 | Pending |
