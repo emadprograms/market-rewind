@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Pure Streaming DuckDB Replay Engine, Global Multi-Asset Sync & Playwright Hardening
 status: planning
-last_updated: "2026-09-26T07:27:52.196Z"
+last_updated: "2026-09-26T10:29:00.000Z"
 last_activity: 2026-09-26
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -15,7 +15,7 @@ progress:
 
 # Project State
 
-## Project Status: Milestone v3.0 COMPLETED & ARCHIVED
+## Project Status: Milestone v3.1 INITIALIZED
 
 ## Completed Milestones
 
@@ -23,16 +23,16 @@ progress:
 - **Milestone v2.0**: Tick-by-Tick Streaming Engine & Modern UI (Shipped 2026-09-26)
 - **Milestone v3.0**: Pure Tick-by-Tick Replay & Temporal Isolation Engine (Shipped 2026-09-26)
 
-## Milestone v3.0 Phases Summary
-
-- Phase 9: Playback Bar Modernization & Pure Tick Mode ✅ (Archived to `milestones/v3.0-phases/`)
-- Phase 10: Temporal Isolation & Canonical 9:20 AM ET Date Reset ✅ (Archived to `milestones/v3.0-phases/`)
-- Phase 11: Real-Time Tick-by-Tick Candle Forming & Playback Engine ✅ (Archived to `milestones/v3.0-phases/`)
-- Phase 12: Regression Test Suite & Verification ✅ (Archived to `milestones/v3.0-phases/`)
+## Current Milestone v3.1 Phases
+- Phase 13: Legacy & Historical Cleanup
+- Phase 14: Test-First Harness & Bug Reproduction
+- Phase 15: Date Reset Hardening & Pure Tick Replay
+- Phase 16: Global Multi-Asset Playback Synchronization
+- Phase 17: End-to-End Verification & Hardening
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 13 — Legacy & Historical Cleanup
 Plan: —
-Status: Defining requirements
-Last activity: 2026-09-26 — Milestone v3.1 started
+Status: Ready to execute
+Last activity: 2026-09-26 — Milestone v3.1 roadmap initialized
