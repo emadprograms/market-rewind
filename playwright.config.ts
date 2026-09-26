@@ -9,7 +9,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  reporter: [['list'], ['html', { open: 'never' }]],
   // SQLite WASM load + worker boot can be slow on cold CI machines
   timeout: 60_000,
   expect: { timeout: 15_000 },

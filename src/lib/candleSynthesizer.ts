@@ -22,7 +22,7 @@ export function getBucketTimestamp(time: string | number, timeframe: Timeframe):
     const yyyy = date.getUTCFullYear();
     const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
     const dd = String(date.getUTCDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd} 00:00:00`;
+    return `${yyyy}-${mm}-${dd} 12:00:00`;
   }
 
   const bucketStartMs = Math.floor(ms / (durationSec * 1000)) * (durationSec * 1000);

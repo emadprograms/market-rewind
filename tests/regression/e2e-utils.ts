@@ -9,8 +9,8 @@ import { expect, type Locator, type Page } from '@playwright/test';
  * invoked from the repository root (as `npm run test:regression` does).
  */
 
-export const SEED_DATE = '2024-01-10';
-export const SEED_SYMBOLS = ['AAA', 'BBB', 'SPY'] as const;
+export const SEED_DATE = '2026-09-25';
+export const SEED_SYMBOLS = ['AAPL', 'MSFT', 'SPY'] as const;
 export const SEED_DB_DIR = path.resolve(process.cwd(), 'tests/regression/fixtures');
 export const SEED_DB_PATH = path.join(SEED_DB_DIR, 'seed.db');
 
@@ -26,13 +26,18 @@ export function headerTicker(card: Locator): Locator {
 
 /**
  * Boot flow shared by every E2E scenario:
- * upload the seeded database → configure session on SEED_DATE → start simulator.
- * Uses auto-retrying assertions instead of fixed sleeps (see phase 03 research).
+ * configure session on SEED_DATE → start simulator.
+ * Supports both direct DuckDB streaming and legacy file input fixture if present.
+ * Uses auto-retrying assertions instead of fixed sleeps.
  */
 export async function uploadSeedAndStartSession(page: Page): Promise<void> {
   await page.goto('/');
-  await page.locator('input[type="file"]').setInputFiles(SEED_DB_PATH);
+  const fileInput = page.locator('input[type="file"]');
+  if (await fileInput.count() > 0) {
+    await fileInput.setInputFiles(SEED_DB_PATH);
+  }
   await expect(page.getByText('Configure Session')).toBeVisible();
+  await page.locator('.session-card select').first().selectOption('SPY');
   await page.locator('.session-card input[type="date"]').fill(SEED_DATE);
   await page.getByRole('button', { name: /Initialize Market Simulator/i }).click();
   await expect(page.locator('.chart-card')).toHaveCount(2);

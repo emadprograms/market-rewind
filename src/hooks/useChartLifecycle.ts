@@ -198,8 +198,8 @@ export function useChartLifecycle({
   useEffect(() => {
     if (initPriceSeriesRef.current && initVolumeSeriesRef.current && initChartRef.current && chartData.length > 0) {
       const startUpdate = performance.now();
-      const formatted: any[] = chartData.map(d => {
-        const isoString = d.time.replace(' ', 'T') + 'Z';
+      const rawFormatted: any[] = chartData.map(d => {
+        const isoString = d.time.replace(' ', 'T') + (d.time.includes('Z') ? '' : 'Z');
         return {
           time: Math.floor(new Date(isoString).getTime() / 1000) as Time,
           open: d.open,
@@ -209,6 +209,22 @@ export function useChartLifecycle({
           volume: d.volume,
         };
       });
+
+      rawFormatted.sort((a, b) => (a.time as number) - (b.time as number));
+
+      const formatted: any[] = [];
+      for (const bar of rawFormatted) {
+        if (formatted.length === 0) {
+          formatted.push(bar);
+        } else {
+          const last = formatted[formatted.length - 1];
+          if ((bar.time as number) > (last.time as number)) {
+            formatted.push(bar);
+          } else if ((bar.time as number) === (last.time as number)) {
+            formatted[formatted.length - 1] = bar;
+          }
+        }
+      }
 
       if (vpPluginRef.current) {
           vpPluginRef.current.setData(formatted);
@@ -228,18 +244,28 @@ export function useChartLifecycle({
       const capturedRange = initChartRef.current.timeScale().getVisibleLogicalRange();
 
       if (canIncrement) {
-        const prevCount = lastDataCountRef.current;
-        // Update the last existing bar (it may have been the partial edge bar last time)
-        if (prevCount > 0) {
-          const lastBar = formatted[prevCount - 1];
-          initPriceSeriesRef.current.update({ time: lastBar.time, open: lastBar.open, high: lastBar.high, low: lastBar.low, close: lastBar.close });
-          initVolumeSeriesRef.current.update({ time: lastBar.time, value: lastBar.volume, color: lastBar.close >= lastBar.open ? '#26a69a' : '#ef5350' });
-        }
-        // Append any new bars beyond what was previously shown
-        for (let i = prevCount; i < formatted.length; i++) {
-          const bar = formatted[i];
-          initPriceSeriesRef.current.update({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
-          initVolumeSeriesRef.current.update({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? '#26a69a' : '#ef5350' });
+        try {
+          const prevCount = lastDataCountRef.current;
+          // Update the last existing bar (it may have been the partial edge bar last time)
+          if (prevCount > 0) {
+            const lastBar = formatted[prevCount - 1];
+            initPriceSeriesRef.current.update({ time: lastBar.time, open: lastBar.open, high: lastBar.high, low: lastBar.low, close: lastBar.close });
+            initVolumeSeriesRef.current.update({ time: lastBar.time, value: lastBar.volume, color: lastBar.close >= lastBar.open ? '#26a69a' : '#ef5350' });
+          }
+          // Append any new bars beyond what was previously shown
+          for (let i = prevCount; i < formatted.length; i++) {
+            const bar = formatted[i];
+            initPriceSeriesRef.current.update({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
+            initVolumeSeriesRef.current.update({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? '#26a69a' : '#ef5350' });
+          }
+        } catch {
+          // If incremental update fails (e.g. timestamp format mismatch or non-increasing time), safely fallback to setData
+          initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+            time, open, high, low, close
+          })));
+          initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
+            time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
+          })));
         }
       } else {
         // Full setData for context changes (ticker, timeframe, ETH toggle, or history prepend)

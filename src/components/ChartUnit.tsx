@@ -113,6 +113,7 @@ export default function ChartUnit({
     activeTrade: null, // handled inside trade manager and trade plugin directly
     tradeBadgeRef,
     chartRef,
+    priceSeriesRef,
     onFocus: handleSelect,
   });
 
