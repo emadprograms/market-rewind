@@ -36,4 +36,10 @@ progress:
 Phase: All Milestone v3.1 Phases Completed
 Plan: —
 Status: Milestone v3.1 Complete
-Last activity: 2026-09-26 — Phase 17 completed (End-to-End Verification & Hardening)
+Last activity: 2026-09-26 — Completed quick task 260926-ki3: playback-perf-tests-and-fixes
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260926-ki3 | playback-perf-tests-and-fixes | 2026-09-26 | 3f9a2c1 | [.planning/quick/260926-ki3-playback-perf-tests-and-fixes](./quick/260926-ki3-playback-perf-tests-and-fixes/) |
