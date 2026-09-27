@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Pure Streaming DuckDB Replay Engine, Global Multi-Asset Sync & Playwright Hardening
 status: completed
-last_updated: "2026-09-26T11:00:00.000Z"
-last_activity: 2026-09-26
+last_updated: "2026-09-27T08:35:00.000Z"
+last_activity: 2026-09-27
 progress:
   total_phases: 5
   completed_phases: 5
@@ -15,7 +15,7 @@ progress:
 
 # Project State
 
-## Project Status: Milestone v3.1 Completed ✅
+## Project Status: All Milestones Completed & Archived ✅ (v1.0, v2.0, v3.0, v3.1)
 
 ## Completed Milestones
 
@@ -24,19 +24,21 @@ progress:
 - **Milestone v3.0**: Pure Tick-by-Tick Replay & Temporal Isolation Engine (Shipped 2026-09-26)
 - **Milestone v3.1**: Pure Streaming DuckDB Replay Engine, Global Multi-Asset Sync & Playwright Hardening (Shipped 2026-09-26)
 
-## Current Milestone v3.1 Phases
-- Phase 13: Legacy & Historical Cleanup ✅
-- Phase 14: Test-First Harness & Bug Reproduction ✅
-- Phase 15: Date Reset Hardening & Pure Tick Replay ✅
-- Phase 16: Global Multi-Asset Playback Synchronization ✅
-- Phase 17: End-to-End Verification & Hardening ✅
+## Project Reference
+
+See: [.planning/PROJECT.md](./PROJECT.md) (updated 2026-09-26)
+See: [.planning/MILESTONES.md](./MILESTONES.md)
+See: [.planning/RETROSPECTIVE.md](./RETROSPECTIVE.md)
+
+**Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
+**Current focus:** Ready for Next Milestone Definition (`/gsd-new-milestone`)
 
 ## Current Position
 
-Phase: Milestone v3.1 Complete (Audited & Archived)
+Phase: All Milestones Closed & Archived (17/17 phases complete, 100% verified)
 Plan: —
-Status: Milestone v3.1 Complete (Ready for Next Milestone)
-Last activity: 2026-09-26 — Milestone v3.1 audited and closed (14/14 requirements satisfied, 15/15 Playwright E2E passing, 145/145 Vitest passing)
+Status: Ready for Next Milestone Definition
+Last activity: 2026-09-27 — Milestone archives consolidated, MILESTONES.md and RETROSPECTIVE.md established, open/pending requirements archived and reset.
 
 ### Quick Tasks Completed
 
