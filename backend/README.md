@@ -5,7 +5,7 @@ This directory contains the backend services and legacy data pipelines for Marke
 ## Architecture Overview
 
 ```
-data-harvester (Active Service on Port 8000)
+data-harvester (Active Service on Port 8420)
    ├── data/streaming.duckdb  (42.6M+ ticks, tick-by-tick streaming)
    └── data/historical.duckdb (8.8M+ 1-min OHLCV bars)
          │

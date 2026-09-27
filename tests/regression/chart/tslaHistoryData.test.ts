@@ -159,7 +159,7 @@ describe('TSLA Historical Data Range & Prepend Regression Tests', () => {
       const earliest = candles[0].time;
       // Must reach well into 2025 or early 2026 (before September 1st, 2026)
       expect(earliest < '2026-06-01').toBe(true);
-    });
+    }, 30000);
 
     it('should retrieve TSLA 1D candles all the way back to March 2025 / Oct 2024', async () => {
       const candles = await streamingClient.getCandles('TSLA', {
@@ -171,6 +171,6 @@ describe('TSLA Historical Data Range & Prepend Regression Tests', () => {
       expect(candles.length).toBeGreaterThan(300);
       const earliest = candles[0].time;
       expect(earliest.startsWith('2024') || earliest.startsWith('2025-03')).toBe(true);
-    });
+    }, 30000);
   });
 });

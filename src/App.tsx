@@ -174,7 +174,7 @@ export default function App() {
               </main>
             ) : !isDbLoaded ? (
               <main className="workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-                 Please ensure DuckDB streaming service is running at localhost:8000.
+                 Please ensure DuckDB streaming service is running at localhost:8420.
               </main>
             ) : (
               <>

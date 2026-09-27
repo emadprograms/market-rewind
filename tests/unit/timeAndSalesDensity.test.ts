@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { usePlaybackStore, isoToMs } from '../../src/store/usePlaybackStore';
+import { streamingClient } from '../../src/lib/streamingClient';
 import type { MarketTick } from '../../src/types';
 
 describe('Time and Sales Tick Density & Timing Regression Tests', () => {
@@ -18,10 +19,12 @@ describe('Time and Sales Tick Density & Timing Regression Tests', () => {
   });
 
   it('demonstrates that 1st second of TSLA on 2026-09-08 has 49 authentic ticks and 2nd second has 10 ticks', async () => {
-    // Query backend API directly to verify exact tick counts
-    const url = 'http://localhost:8000/api/ticks?symbol=TSLA&start_time=2026-09-08%2013:30:00&end_time=2026-09-08%2013:30:02&limit=100000&direction=asc';
-    const res = await fetch(url);
-    const ticks: MarketTick[] = await res.json();
+    const ticks = await streamingClient.getTicks('TSLA', {
+      startTime: '2026-09-08 13:30:00',
+      endTime: '2026-09-08 13:30:02',
+      limit: 100000,
+      direction: 'asc',
+    });
 
     const sec0 = ticks.filter(t => t.time.includes('13:30:00'));
     const sec1 = ticks.filter(t => t.time.includes('13:30:01'));
@@ -40,9 +43,12 @@ describe('Time and Sales Tick Density & Timing Regression Tests', () => {
   });
 
   it('verifies advanceSimulationTime accurately steps through all 49 ticks within 1 second of simulation time', async () => {
-    const url = 'http://localhost:8000/api/ticks?symbol=TSLA&start_time=2026-09-08%2013:30:00&end_time=2026-09-08%2013:30:05&limit=100000&direction=asc';
-    const res = await fetch(url);
-    const ticks: MarketTick[] = await res.json();
+    const ticks = await streamingClient.getTicks('TSLA', {
+      startTime: '2026-09-08 13:30:00',
+      endTime: '2026-09-08 13:30:05',
+      limit: 100000,
+      direction: 'asc',
+    });
 
     usePlaybackStore.getState().setBufferedTicks(ticks);
     const startMs = isoToMs('2026-09-08T13:30:00.000000Z');

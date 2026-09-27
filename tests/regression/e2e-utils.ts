@@ -2,7 +2,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Shared constants and helpers for the Playwright regression suite.
- * All tests connect directly to the streaming DuckDB service (localhost:8000).
+ * All tests connect directly to the streaming DuckDB service (localhost:8420).
  */
 
 export const SEED_DATE = '2026-09-25';

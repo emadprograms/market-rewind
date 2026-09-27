@@ -40,7 +40,7 @@ export function useDatabase() {
       await new Promise(r => setTimeout(r, 400));
     }
 
-    setDbStatus('Streaming DuckDB offline. Start service on port 8000.');
+    setDbStatus('Streaming DuckDB offline. Start service on port 8420.');
     setIsDbLoaded(false);
     setIsStreamingConnected(false);
     setIsLoading(false);

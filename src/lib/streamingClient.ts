@@ -4,15 +4,18 @@
  */
 import type { MarketTick, RawBar, Timeframe } from '../types';
 
+const defaultStreamingUrl = (typeof process !== 'undefined' && process.env?.VITE_STREAMING_URL) || 'http://localhost:8420';
+const defaultWsUrl = (typeof process !== 'undefined' && process.env?.VITE_WS_URL) || 'ws://localhost:8420';
+
 const isTestEnv = typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || Boolean(process.env?.VITEST));
 const API_BASE_URL = isTestEnv 
-  ? 'http://localhost:8000' 
-  : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000');
+  ? defaultStreamingUrl 
+  : (typeof window !== 'undefined' ? window.location.origin : defaultStreamingUrl);
 const WS_BASE_URL = isTestEnv
-  ? 'ws://localhost:8000'
+  ? defaultWsUrl
   : (typeof window !== 'undefined' 
     ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host
-    : 'ws://localhost:8000');
+    : defaultWsUrl);
 
 export interface SymbolMetadata {
   symbol: string;
