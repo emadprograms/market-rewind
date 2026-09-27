@@ -28,6 +28,9 @@ test.describe('TEST-02: Playwright Multi-Asset Playback Synchronization', () => 
     await expect(card0.locator('canvas').first()).toBeVisible();
     await expect(card1.locator('canvas').first()).toBeVisible();
 
+    // Wait for tick loading to finish before asserting play button
+    await expect(page.locator('.playback-bar')).toHaveAttribute('data-ticks-loading', 'false', { timeout: 30000 });
+
     // Click PLAY
     const playBtn = page.getByRole('button', { name: /PLAY/i });
     await expect(playBtn).toBeVisible();

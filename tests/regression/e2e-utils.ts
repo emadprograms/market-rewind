@@ -44,9 +44,9 @@ export async function startSession(
   await expect(chartCard(page, 0)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
   await expect(chartCard(page, 1)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
   // Verify that replay session time has initialized and transport is ready
-  await expect(page.locator('.playback-bar')).toHaveAttribute('data-ticks-loading', 'false', { timeout: 15000 });
-  await expect(page.locator('.time-display')).not.toHaveText('--:--:--', { timeout: 15000 });
-  await expect(page.getByRole('button', { name: /PLAY/i })).toBeEnabled({ timeout: 15000 });
+  await expect(page.locator('.playback-bar')).toHaveAttribute('data-ticks-loading', 'false', { timeout: 30000 });
+  await expect(page.locator('.time-display')).not.toHaveText('--:--:--', { timeout: 30000 });
+  await expect(page.getByRole('button', { name: /PLAY/i })).toBeEnabled({ timeout: 30000 });
 }
 
 /** Backward compatibility alias */

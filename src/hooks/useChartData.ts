@@ -268,8 +268,13 @@ export function useChartData({
 
     if (isReplayMode && globalTime) {
       if (timeframe === '1D') {
-        const endOfReplayDay = new Date(new Date(globalTime).toISOString().slice(0, 10) + 'T23:59:59.999Z').getTime();
-        filtered = filtered.filter((_, i) => filteredTimestamps[i] <= endOfReplayDay);
+        const startOfTodayMs = Math.floor(globalTime / (86400 * 1000)) * (86400 * 1000);
+        if (latestTick) {
+          filtered = filtered.filter((_, i) => filteredTimestamps[i] < startOfTodayMs);
+        } else {
+          const endOfReplayDay = new Date(new Date(globalTime).toISOString().slice(0, 10) + 'T23:59:59.999Z').getTime();
+          filtered = filtered.filter((_, i) => filteredTimestamps[i] <= endOfReplayDay);
+        }
       } else {
         const durationSec = TF_SECONDS[timeframe] || 60;
         const currentBucketStartMs = Math.floor(globalTime / (durationSec * 1000)) * (durationSec * 1000);
@@ -321,7 +326,21 @@ export function useChartData({
           latestTick.session || 'REG'
         );
         if (formingCandle) {
-          resampled = [...resampled, formingCandle];
+          if (resampled.length > 0 && resampled[resampled.length - 1].time === bucketTime) {
+            const last = resampled[resampled.length - 1];
+            resampled = [
+              ...resampled.slice(0, -1),
+              {
+                ...last,
+                high: Math.max(last.high, formingCandle.high),
+                low: Math.min(last.low, formingCandle.low),
+                close: formingCandle.close,
+                volume: (last.volume || 0) + formingCandle.volume,
+              }
+            ];
+          } else {
+            resampled = [...resampled, formingCandle];
+          }
         }
       }
     } else if (isReplayMode && latestTick) {

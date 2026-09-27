@@ -288,8 +288,17 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
 
     if (bufferedTicks.length > 0) {
       if (currentTickIndex < bufferedTicks.length - 1) {
-        const nextIndex = currentTickIndex + 1;
+        const nextIndex = currentTickIndex < 0 ? 0 : currentTickIndex + 1;
         const nextTick = bufferedTicks[nextIndex];
+        const nextTickMs = isoToMs(nextTick.time);
+
+        // If masterData provides a closer next step than nextTickMs, advance via bar logic
+        const nextBarMs = advanceTimeLogic(currentTime, stepMinutes, masterData);
+        if (nextBarMs && nextBarMs < nextTickMs) {
+          set({ currentTime: nextBarMs, isPaused: true });
+          return;
+        }
+
         const updatedLatest = { ...latestTickBySymbol };
         if (nextTick && nextTick.symbol) {
           updatedLatest[nextTick.symbol.toUpperCase()] = nextTick;
@@ -298,7 +307,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
           currentTickIndex: nextIndex,
           currentTick: nextTick,
           latestTickBySymbol: updatedLatest,
-          currentTime: isoToMs(nextTick.time),
+          currentTime: nextTickMs,
           isPaused: true,
         });
       }
@@ -361,6 +370,17 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     const targetMs = typeof time === 'number' ? time : isoToMs(time);
     if (bufferedTicks.length === 0) {
       set({ currentTime: targetMs });
+      return;
+    }
+
+    const firstTickMs = isoToMs(bufferedTicks[0].time);
+    if (targetMs < firstTickMs) {
+      set({
+        currentTickIndex: -1,
+        currentTick: null,
+        latestTickBySymbol: {},
+        currentTime: targetMs,
+      });
       return;
     }
 

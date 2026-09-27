@@ -224,43 +224,100 @@ class StreamingClient {
     const apiTf = TIMEFRAME_TO_API[tf] || (tf.toLowerCase().includes('d') ? '1d' : tf.toLowerCase().includes('h') ? '1h' : '1m');
     const limit = options.limit || 15000;
 
+    const isSubSecond = ['1s', '5s', '15s', '30s'].includes(tf);
     let rawList: any[] = [];
 
-    // Query streaming candles directly
-    try {
-      const streamParams = new URLSearchParams({
-        symbol: sym,
-        tf: apiTf,
-        timeframe: apiTf,
-        limit: String(limit),
-        source: 'streaming',
-      });
-      if (options.startTime) streamParams.append('start', options.startTime);
-      if (options.endTime) streamParams.append('end', options.endTime);
+    if (isSubSecond) {
+      try {
+        const streamParams = new URLSearchParams({
+          symbol: sym,
+          tf: apiTf,
+          timeframe: apiTf,
+          limit: String(limit),
+        });
+        if (options.startTime) streamParams.append('start', options.startTime);
+        if (options.endTime) streamParams.append('end', options.endTime);
 
-      let res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
-      if (!res.ok) {
-        // Fallback to /api/candles with source=streaming
-        res = await fetch(`${API_BASE_URL}/api/candles?${streamParams.toString()}`);
+        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          rawList = Array.isArray(data) ? data : (data.candles || []);
+        }
+      } catch (e) {
+        console.warn(`Failed to fetch sub-second streaming candles for ${symbol}:`, e);
       }
-      if (res.ok) {
-        const data = await res.json();
-        rawList = Array.isArray(data) ? data : (data.candles || []);
+    } else {
+      // Standard timeframes: query historical DuckDB for deep context & regular trading hours
+      let histCandles: any[] = [];
+      try {
+        const params = new URLSearchParams({
+          symbol: sym,
+          tf: apiTf,
+          timeframe: apiTf,
+          limit: String(limit),
+        });
+        if (options.startTime) params.append('start', options.startTime);
+        if (options.endTime) params.append('end', options.endTime);
+
+        const res = await fetch(`${API_BASE_URL}/api/candles?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          histCandles = Array.isArray(data) ? data : (data.candles || []);
+        }
+      } catch {
+        // ignore
       }
-    } catch (e) {
-      console.warn(`Failed to fetch streaming candles for ${symbol}:`, e);
+
+      // Also fetch live streaming buffer candles if available
+      let streamCandles: any[] = [];
+      try {
+        const streamParams = new URLSearchParams({
+          symbol: sym,
+          tf: apiTf,
+          timeframe: apiTf,
+          limit: String(limit),
+        });
+        if (options.startTime) streamParams.append('start', options.startTime);
+        if (options.endTime) streamParams.append('end', options.endTime);
+
+        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          streamCandles = Array.isArray(data) ? data : (data.candles || []);
+        }
+      } catch {
+        // ignore
+      }
+
+      // Merge historical + streaming candles deduplicated by timestamp
+      const candleMap = new Map<string, any>();
+      for (const c of histCandles) {
+        const key = String(c.time ?? c.time_str ?? c.timestamp);
+        candleMap.set(key, c);
+      }
+      for (const c of streamCandles) {
+        const key = String(c.time ?? c.time_str ?? c.timestamp);
+        candleMap.set(key, c);
+      }
+      rawList = Array.from(candleMap.values());
     }
 
     return (rawList || []).map((row: any) => {
       let timeStr = '';
-      if (row.time_str) {
-        timeStr = row.time_str;
+      if (typeof row.time === 'number') {
+        const ms = row.time < 1e11 ? row.time * 1000 : row.time;
+        timeStr = new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
       } else if (typeof row.time === 'string') {
         timeStr = row.time.replace('T', ' ').slice(0, 19);
-      } else if (typeof row.time === 'number') {
-        timeStr = new Date(row.time * 1000).toISOString().replace('T', ' ').slice(0, 19);
       } else if (row.timestamp) {
-        timeStr = String(row.timestamp).replace('T', ' ').slice(0, 19);
+        const d = new Date(row.timestamp);
+        if (!isNaN(d.getTime())) {
+          timeStr = d.toISOString().replace('T', ' ').slice(0, 19);
+        } else {
+          timeStr = String(row.timestamp).replace('T', ' ').slice(0, 19);
+        }
+      } else if (row.time_str) {
+        timeStr = row.time_str;
       }
 
       return {

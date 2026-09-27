@@ -102,8 +102,8 @@ export function PlaybackBar({
         {formatDisplayTime(currentTime)}
       </div>
 
-      {/* Market Closed Warning badge when 0 ticks buffered */}
-      {bufferedTicks.length === 0 && (
+      {/* Market Closed Warning badge when 0 ticks buffered and no master data */}
+      {bufferedTicks.length === 0 && masterData.length === 0 && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -117,7 +117,7 @@ export function PlaybackBar({
           border: '1px solid rgba(239, 83, 80, 0.3)',
           whiteSpace: 'nowrap'
         }}>
-          Market Closed / No Ticks
+          Market Closed / No Data
         </div>
       )}
 
@@ -155,8 +155,8 @@ export function PlaybackBar({
         <button 
           className="btn-primary" 
           onClick={togglePlay} 
-          disabled={!canPlay || bufferedTicks.length === 0 || isLoadingTicks}
-          title={bufferedTicks.length === 0 ? "Market Closed: No tick data recorded for this date" : undefined}
+          disabled={!canPlay || isLoadingTicks}
+          title={!canPlay ? "Market Closed: No data recorded for this date" : undefined}
           style={{ padding: '4px 12px', fontSize: '11px', fontWeight: 700 }}
         >
           {isLoadingTicks ? 'LOADING...' : (!isPaused ? <Pause size={16} /> : <Play size={16} />)}

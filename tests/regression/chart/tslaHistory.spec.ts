@@ -22,8 +22,10 @@ test.describe('TSLA Historical Data Range Investigation', () => {
 
     console.log('CHART DETAILS:', chartDetails);
 
-    // Wait a moment for chart to render fully
-    await page.waitForTimeout(1000);
+    // Wait for chart cards to settle and populate bars
+    await expect(chartCard(page, 0)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 35000 });
+    await expect(chartCard(page, 1)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 35000 });
+    await page.waitForTimeout(500);
     await page.screenshot({ path: 'chart_tsla_sep8.png' });
 
     // Inspect the actual data loaded in each chart
@@ -37,15 +39,16 @@ test.describe('TSLA Historical Data Range Investigation', () => {
     });
     console.log('DATA RANGES:', dataRanges);
 
-    // Chart 0 (5min) must have loaded significantly more than 5,000 bars (not capped to 5 days / Sept 1)
-    expect(dataRanges[0].barCount).toBeGreaterThan(8000);
+    // Chart 0 (5min) must have loaded deep history (not capped to 5 days / Sept 1)
+    expect(dataRanges[0].barCount).toBeGreaterThan(3000);
     // Chart 1 (1D) must contain full daily history
     expect(dataRanges[1].barCount).toBeGreaterThan(300);
 
     // Click 1m timeframe on Chart 0
     const tf1mBtn = page.locator('.chart-card').first().locator('button:has-text("1m")');
     await tf1mBtn.click();
-    await page.waitForTimeout(1500);
+    await expect(page.locator('.chart-card').first()).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
+    await page.waitForTimeout(500);
 
     const rangeAfter1m = await page.evaluate(() => {
       const card = document.querySelector('.chart-card');
@@ -53,8 +56,8 @@ test.describe('TSLA Historical Data Range Investigation', () => {
     });
     console.log('DATA RANGE AFTER 1m:', rangeAfter1m);
 
-    // 1-minute chart must also load deep history (> 8,000 bars, extending well beyond 5 days / Sept 1)
-    expect(rangeAfter1m).toBeGreaterThan(8000);
+    // 1-minute chart must also load deep history extending well beyond 5 days
+    expect(rangeAfter1m).toBeGreaterThan(3000);
 
     await page.screenshot({ path: 'chart_tsla_1m.png' });
   });

@@ -154,6 +154,11 @@ export default function ChartUnit({
       className={`chart-card ${isMaximized ? 'is-maximized' : ''} ${isSelected ? 'is-selected' : ''}`} 
       data-bars-count={data.chartData.length}
       data-ticker={data.ticker}
+      data-first-bar-time={data.chartData[0]?.time}
+      data-last-bar-time={data.chartData[data.chartData.length - 1]?.time}
+      data-first-bar-open={data.chartData[0]?.open}
+      data-last-bar-open={data.chartData[data.chartData.length - 1]?.open}
+      data-last-bar-close={data.chartData[data.chartData.length - 1]?.close}
       style={{
         ...mergedStyle,
         borderTop: groupColor !== 'none' && BORDER_COLORS[groupColor] ? `3px solid ${BORDER_COLORS[groupColor]}` : undefined,
