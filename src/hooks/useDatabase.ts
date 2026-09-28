@@ -4,13 +4,16 @@ import { streamingClient } from '../lib/streamingClient';
 export function useDatabase() {
   const [tickers, setTickers] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [dbStatus, setDbStatus] = useState('Connecting to Streaming DuckDB...');
+  const [serviceUrl, setServiceUrl] = useState<string>(() => streamingClient.getBaseUrl());
+  const [dbStatus, setDbStatus] = useState<string>(() => `Connecting to Streaming DuckDB at ${streamingClient.getBaseUrl()}...`);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
   const [isStreamingConnected, setIsStreamingConnected] = useState(false);
 
   const checkDataSources = useCallback(async () => {
     setIsLoading(true);
-    setDbStatus('Connecting to Streaming DuckDB...');
+    const currentUrl = streamingClient.getBaseUrl();
+    setServiceUrl(currentUrl);
+    setDbStatus(`Connecting to Streaming DuckDB at ${currentUrl}...`);
 
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
@@ -40,14 +43,31 @@ export function useDatabase() {
       await new Promise(r => setTimeout(r, 400));
     }
 
-    setDbStatus('Streaming DuckDB offline. Start service on port 8420.');
+    setDbStatus(`Streaming DuckDB offline at ${currentUrl}`);
     setIsDbLoaded(false);
     setIsStreamingConnected(false);
     setIsLoading(false);
   }, []);
 
+  const changeServiceUrl = useCallback((newUrl: string) => {
+    streamingClient.setServiceUrl(newUrl);
+    setServiceUrl(streamingClient.getBaseUrl());
+    checkDataSources();
+  }, [checkDataSources]);
+
+  const resetServiceUrl = useCallback(() => {
+    streamingClient.resetToDefaultUrl();
+    setServiceUrl(streamingClient.getBaseUrl());
+    checkDataSources();
+  }, [checkDataSources]);
+
   useEffect(() => {
     checkDataSources();
+    const unsubscribe = streamingClient.subscribeUrlChange((newUrl) => {
+      setServiceUrl(newUrl);
+      checkDataSources();
+    });
+    return unsubscribe;
   }, [checkDataSources]);
 
   return {
@@ -56,6 +76,9 @@ export function useDatabase() {
     dbStatus,
     isDbLoaded,
     isStreamingConnected,
+    serviceUrl,
+    changeServiceUrl,
+    resetServiceUrl,
     refreshMetadata: checkDataSources
   };
 }

@@ -19,6 +19,7 @@ import { ChartWorkspace } from './components/ChartWorkspace';
 import { PlaybackBar } from './components/PlaybackBar';
 import { PlaybackManager } from './components/PlaybackManager';
 import { TimeAndSales } from './components/TimeAndSales';
+import { ConnectionSetupCard } from './components/ConnectionSetupCard';
 
 export default function App() {
   const { 
@@ -26,7 +27,10 @@ export default function App() {
     isLoading, 
     dbStatus, 
     isDbLoaded, 
-    isStreamingConnected 
+    isStreamingConnected,
+    serviceUrl,
+    changeServiceUrl,
+    resetServiceUrl
   } = useDatabase();
 
   const {
@@ -166,6 +170,9 @@ export default function App() {
         onEndSession={endSession}
         layoutMode={layoutMode}
         setLayoutMode={setLayoutMode}
+        serviceUrl={serviceUrl}
+        onUpdateServiceUrl={changeServiceUrl}
+        onResetServiceUrl={resetServiceUrl}
       />
 
       <div className="main-content" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
@@ -176,8 +183,12 @@ export default function App() {
                  <Activity className="animate-pulse" size={48} />
               </main>
             ) : !isDbLoaded ? (
-              <main className="workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-                 Please ensure DuckDB streaming service is running at localhost:8420.
+              <main className="workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                 <ConnectionSetupCard
+                   currentUrl={serviceUrl}
+                   dbStatus={dbStatus}
+                   onConnect={changeServiceUrl}
+                 />
               </main>
             ) : (
               <>

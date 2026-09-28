@@ -4,18 +4,9 @@
  */
 import type { MarketTick, RawBar, Timeframe } from '../types';
 
-const defaultStreamingUrl = (typeof process !== 'undefined' && process.env?.VITE_STREAMING_URL) || 'http://localhost:8420';
-const defaultWsUrl = (typeof process !== 'undefined' && process.env?.VITE_WS_URL) || 'ws://localhost:8420';
+declare const process: any;
 
-const isTestEnv = typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || Boolean(process.env?.VITEST));
-const API_BASE_URL = isTestEnv 
-  ? defaultStreamingUrl 
-  : (typeof window !== 'undefined' ? window.location.origin : defaultStreamingUrl);
-const WS_BASE_URL = isTestEnv
-  ? defaultWsUrl
-  : (typeof window !== 'undefined' 
-    ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host
-    : defaultWsUrl);
+export const STORAGE_KEY_STREAMING_URL = 'market_rewind_duckdb_url';
 
 export interface SymbolMetadata {
   symbol: string;
@@ -34,15 +25,209 @@ export interface BackendStatus {
   };
 }
 
-class StreamingClient {
-  private isOnline: boolean | null = null;
+/**
+ * Pure helper to resolve the default streaming URL given environment, hostname, or storage.
+ */
+export function resolveServiceUrl(options?: {
+  hostname?: string;
+  protocol?: string;
+  savedUrl?: string | null;
+  envUrl?: string;
+  isTest?: boolean;
+}): string {
+  // 1. User's saved preference in localStorage takes precedence
+  if (options?.savedUrl && options.savedUrl.trim()) {
+    return options.savedUrl.trim();
+  }
 
-  async checkStatus(): Promise<BackendStatus | null> {
+  // 2. In unit test environment without explicit host override, default to envUrl or localhost:8420
+  if (options?.isTest) {
+    if (options?.envUrl) return options.envUrl;
+    return 'http://localhost:8420';
+  }
+
+  // 3. In browser context: Smart default using the exact hostname the user entered to access the app
+  if (options?.hostname) {
+    const proto = options.protocol === 'https:' ? 'https:' : 'http:';
+    return `${proto}//${options.hostname}:8420`;
+  }
+
+  // 4. Environment variable fallback
+  if (options?.envUrl) {
+    return options.envUrl;
+  }
+
+  return 'http://localhost:8420';
+}
+
+/**
+ * Gets the current default streaming URL based on localStorage, window.location, or environment.
+ */
+export function getDefaultStreamingUrl(): string {
+  let savedUrl: string | null = null;
+  if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/status`, { signal: AbortSignal.timeout(3000) });
+      savedUrl = window.localStorage.getItem(STORAGE_KEY_STREAMING_URL);
+    } catch {
+      // LocalStorage access may be restricted
+    }
+  }
+
+  const isTest = typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || Boolean(process.env?.VITEST));
+  const hostname = typeof window !== 'undefined' && window.location ? window.location.hostname : undefined;
+  const protocol = typeof window !== 'undefined' && window.location ? window.location.protocol : undefined;
+  const envUrl = typeof process !== 'undefined' ? process.env?.VITE_STREAMING_URL : undefined;
+
+  return resolveServiceUrl({
+    hostname,
+    protocol,
+    savedUrl,
+    envUrl,
+    isTest: isTest && !savedUrl,
+  });
+}
+
+/**
+ * Gets the smart default host URL (e.g. http://<hostname>:8420) ignoring localStorage.
+ * Useful for the "Current Host" reset preset.
+ */
+export function getHostDefaultStreamingUrl(): string {
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const proto = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    return `${proto}//${window.location.hostname}:8420`;
+  }
+  return 'http://localhost:8420';
+}
+
+/**
+ * Normalizes user-input URL string into clean HTTP and WebSocket URLs.
+ * Handles missing protocol (defaults to http://), trailing slashes, and protocol translation.
+ */
+export function normalizeServiceUrl(rawUrl: string): { httpUrl: string; wsUrl: string } {
+  let cleaned = (rawUrl || '').trim();
+  if (!cleaned) {
+    cleaned = getDefaultStreamingUrl();
+  }
+
+  // Handle bare hostname/IP like "100.85.12.34:8420" or "localhost:8420"
+  if (!/^https?:\/\//i.test(cleaned)) {
+    if (/^wss:\/\//i.test(cleaned)) {
+      cleaned = cleaned.replace(/^wss:\/\//i, 'https://');
+    } else if (/^ws:\/\//i.test(cleaned)) {
+      cleaned = cleaned.replace(/^ws:\/\//i, 'http://');
+    } else {
+      cleaned = `http://${cleaned}`;
+    }
+  }
+
+  // Strip trailing slashes
+  cleaned = cleaned.replace(/\/+$/, '');
+
+  // Derive WebSocket URL
+  let wsUrl: string;
+  if (cleaned.startsWith('https://')) {
+    wsUrl = cleaned.replace(/^https:\/\//i, 'wss://');
+  } else {
+    wsUrl = cleaned.replace(/^http:\/\//i, 'ws://');
+  }
+
+  return { httpUrl: cleaned, wsUrl };
+}
+
+export class StreamingClient {
+  private isOnline: boolean | null = null;
+  private _baseUrl: string;
+  private _wsUrl: string;
+  private listeners: Set<(url: string) => void> = new Set();
+
+  constructor() {
+    const initial = normalizeServiceUrl(getDefaultStreamingUrl());
+    this._baseUrl = initial.httpUrl;
+    this._wsUrl = initial.wsUrl;
+  }
+
+  getBaseUrl(): string {
+    return this._baseUrl;
+  }
+
+  getWsUrl(): string {
+    return this._wsUrl;
+  }
+
+  /**
+   * Sets a new service URL at runtime, persists it to localStorage,
+   * resets connection status, and notifies all registered subscribers.
+   */
+  setServiceUrl(rawUrl: string): { httpUrl: string; wsUrl: string } {
+    const normalized = normalizeServiceUrl(rawUrl);
+    this._baseUrl = normalized.httpUrl;
+    this._wsUrl = normalized.wsUrl;
+    this.isOnline = null;
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY_STREAMING_URL, normalized.httpUrl);
+      } catch {
+        // LocalStorage may fail in restricted context
+      }
+    }
+
+    this.notifyListeners();
+    return normalized;
+  }
+
+  /**
+   * Clears saved preference from localStorage and resets to host default.
+   */
+  resetToDefaultUrl(): { httpUrl: string; wsUrl: string } {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY_STREAMING_URL);
+      } catch {
+        // ignore
+      }
+    }
+
+    const hostDefault = getHostDefaultStreamingUrl();
+    const normalized = normalizeServiceUrl(hostDefault);
+    this._baseUrl = normalized.httpUrl;
+    this._wsUrl = normalized.wsUrl;
+    this.isOnline = null;
+
+    this.notifyListeners();
+    return normalized;
+  }
+
+  /**
+   * Subscribes to changes to the streaming service URL.
+   * Returns an unsubscribe function.
+   */
+  subscribeUrlChange(listener: (url: string) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notifyListeners(): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(this._baseUrl);
+      } catch (err) {
+        console.error('Error in streamingClient url listener:', err);
+      }
+    }
+  }
+
+  async checkStatus(urlOverride?: string): Promise<BackendStatus | null> {
+    const targetUrl = urlOverride ? normalizeServiceUrl(urlOverride).httpUrl : this.getBaseUrl();
+    try {
+      const res = await fetch(`${targetUrl}/api/status`, { signal: AbortSignal.timeout(3000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      this.isOnline = true;
+      if (!urlOverride) {
+        this.isOnline = true;
+      }
 
       const streamingInfo = data.streaming || data.streaming_db || {};
 
@@ -58,7 +243,9 @@ class StreamingClient {
 
       return normalized;
     } catch {
-      this.isOnline = false;
+      if (!urlOverride) {
+        this.isOnline = false;
+      }
       return null;
     }
   }
@@ -69,7 +256,7 @@ class StreamingClient {
 
   async getSymbols(): Promise<SymbolMetadata[]> {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/symbols`);
+      const res = await fetch(`${this.getBaseUrl()}/api/symbols`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const list = Array.isArray(data) ? data : (data.symbols || []);
@@ -95,7 +282,7 @@ class StreamingClient {
 
   async getSymbolSummary(symbol: string): Promise<any | null> {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/symbols/${encodeURIComponent(symbol)}`);
+      const res = await fetch(`${this.getBaseUrl()}/api/symbols/${encodeURIComponent(symbol)}`);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -130,7 +317,7 @@ class StreamingClient {
     let rawTicks: any[] = [];
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/ticks?${params.toString()}`);
+      const res = await fetch(`${this.getBaseUrl()}/api/ticks?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         rawTicks = Array.isArray(data) ? data : (data.ticks || []);
@@ -174,7 +361,7 @@ class StreamingClient {
    */
   async getLiveTape(symbol: string, limit: number = 50): Promise<MarketTick[]> {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/stream/tape?symbol=${encodeURIComponent(symbol.toUpperCase())}&limit=${limit}`);
+      const res = await fetch(`${this.getBaseUrl()}/api/stream/tape?symbol=${encodeURIComponent(symbol.toUpperCase())}&limit=${limit}`);
       if (!res.ok) return [];
       const data = await res.json();
       const raw = Array.isArray(data) ? data : (data.ticks || []);
@@ -225,7 +412,7 @@ class StreamingClient {
     const limit = options.limit || 15000;
 
     const isSubSecond = ['1s', '5s', '15s', '30s'].includes(tf);
-    const endpoint = isSubSecond ? `${API_BASE_URL}/api/streaming/candles` : `${API_BASE_URL}/api/candles`;
+    const endpoint = isSubSecond ? `${this.getBaseUrl()}/api/streaming/candles` : `${this.getBaseUrl()}/api/candles`;
 
     const params = new URLSearchParams({
       symbol: sym,
@@ -247,8 +434,8 @@ class StreamingClient {
       }
     } catch (e) {
       console.warn(`Failed to fetch candles from ${endpoint} for ${symbol}:`, e);
+      const fallbackEndpoint = isSubSecond ? `${this.getBaseUrl()}/api/candles` : `${this.getBaseUrl()}/api/streaming/candles`;
       try {
-        const fallbackEndpoint = isSubSecond ? `${API_BASE_URL}/api/candles` : `${API_BASE_URL}/api/streaming/candles`;
         const streamRes = await fetch(`${fallbackEndpoint}?${params.toString()}`, {
           signal: AbortSignal.timeout(20000),
         });
@@ -301,7 +488,7 @@ class StreamingClient {
     let isConnected = false;
 
     const connect = () => {
-      ws = new WebSocket(`${WS_BASE_URL}/ws/replay`);
+      ws = new WebSocket(`${this.getWsUrl()}/ws/replay`);
 
       ws.onopen = () => {
         isConnected = true;

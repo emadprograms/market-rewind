@@ -400,7 +400,7 @@ export function useChartData({
       }
     } else if (latestTick) {
       resampled = applyTickToCandles(resampled, latestTick, timeframe);
-    } else if (timeframe !== '1min' && timeframe !== '1D') {
+    } else if ((timeframe as string) !== '1min' && (timeframe as string) !== '1D') {
       // Synthesize forming multi-minute/hour candle from 1m masterData up to effectiveCutoff
       const durationSec = TF_SECONDS[timeframe] || 60;
       const currentBucketStartMs = Math.floor(effectiveCutoff / (durationSec * 1000)) * (durationSec * 1000);
