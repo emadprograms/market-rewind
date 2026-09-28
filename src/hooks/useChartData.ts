@@ -67,15 +67,42 @@ export function useChartData({
   };
   const [showEth, setShowEth] = useState<boolean>(initialEth || false);
 
-  const globalTime = usePlaybackStore((state) => state.currentTime);
+  // PERF-01: Decouple high-frequency playback store state from React re-renders.
+  // During active playback (isPaused === false), ticks update the canvas directly in useChartLifecycle.
+  // React state (globalTime, latestTick, symbolTicks) only updates when PAUSED (seeking, stepping, initial load)
+  // or on playback pause transitions to commit the final state.
+  const [globalTime, setGlobalTime] = useState<number | null>(() => usePlaybackStore.getState().currentTime);
+  const [latestTick, setLatestTick] = useState<MarketTick | null>(() => {
+    const s = usePlaybackStore.getState();
+    const sym = ticker.toUpperCase();
+    return s.latestTickBySymbol?.[sym] || (s.currentTick?.symbol?.toUpperCase() === sym ? s.currentTick : null);
+  });
+  const [symbolTicks, setSymbolTicks] = useState<MarketTick[]>(() => {
+    return usePlaybackStore.getState().ticksBySymbol?.[ticker.toUpperCase()] || EMPTY_TICKS;
+  });
   const masterData = usePlaybackStore((state) => state.masterData);
-  const latestTick = usePlaybackStore((state) => 
-    state.latestTickBySymbol?.[ticker.toUpperCase()] || 
-    (state.currentTick?.symbol?.toUpperCase() === ticker.toUpperCase() ? state.currentTick : null)
-  );
-  const symbolTicks = usePlaybackStore((state) => 
-    state.ticksBySymbol?.[ticker.toUpperCase()] || EMPTY_TICKS
-  );
+
+  useEffect(() => {
+    const sym = ticker.toUpperCase();
+    const updateStaticState = (s: any) => {
+      setGlobalTime(s.currentTime);
+      setLatestTick(
+        s.latestTickBySymbol?.[sym] || 
+        (s.currentTick?.symbol?.toUpperCase() === sym ? s.currentTick : null)
+      );
+      setSymbolTicks(s.ticksBySymbol?.[sym] || EMPTY_TICKS);
+    };
+
+    updateStaticState(usePlaybackStore.getState());
+
+    const unsub = usePlaybackStore.subscribe((state) => {
+      if (state.isPaused) {
+        updateStaticState(state);
+      }
+    });
+
+    return unsub;
+  }, [ticker]);
 
   const defaultCutoff = useMemo(() => {
     if (!selectedDate) return 0;

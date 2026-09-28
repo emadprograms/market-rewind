@@ -1,12 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { IChartApi, ISeriesApi, Time, TickMarkType, IPriceLine } from 'lightweight-charts';
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
-import { getTzForTicker } from '../lib/timezones';
+import { TF_SECONDS } from '../types';
+import { getTzForTicker, isRthTick } from '../lib/timezones';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 import { useChartInit } from './chart/useChartInit';
 import { useChartPlugins } from './chart/useChartPlugins';
 import { useChartDrawings } from './chart/useChartDrawings';
 import { useChartViewport } from './chart/useChartViewport';
+
+const getBucketTime = (timestampMs: number, tf: Timeframe): number => {
+  const date = new Date(timestampMs);
+  if (tf === '1D') {
+    return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0) / 1000);
+  }
+  const durationSec = TF_SECONDS[tf] || 60;
+  const bucketStartMs = Math.floor(timestampMs / (durationSec * 1000)) * (durationSec * 1000);
+  return Math.floor(bucketStartMs / 1000);
+};
 
 interface UseChartLifecycleParams {
   chartContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -63,10 +74,23 @@ export function useChartLifecycle({
   priceSeriesRef,
   onFocus,
 }: UseChartLifecycleParams) {
-  const globalTime = usePlaybackStore((state) => state.currentTime);
-
   const [isViewModified, setIsViewModified] = useState(false);
   const isAtEnd = !isViewModified;
+
+  const themeRef = useRef(theme);
+  const isHydratedRef = useRef(false);
+  const lastCandleRef = useRef<{
+    time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  } | null>(null);
+
+  useEffect(() => {
+    themeRef.current = theme;
+  }, [theme]);
   
   const { 
     chartRef: initChartRef, 
@@ -126,6 +150,31 @@ export function useChartLifecycle({
   });
 
   const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    isHydratedRef.current = isHydrated;
+  }, [isHydrated]);
+
+  // Seed lastCandleRef from chartData so ticks extend the latest completed candle
+  useEffect(() => {
+    if (chartData.length > 0) {
+      const last = chartData[chartData.length - 1];
+      const timeSec = typeof last.time === 'number'
+        ? (last.time > 1e11 ? Math.floor(last.time / 1000) : last.time)
+        : Math.floor(new Date(String(last.time).replace(' ', 'T') + (String(last.time).includes('Z') ? '' : 'Z')).getTime() / 1000);
+
+      lastCandleRef.current = {
+        time: timeSec,
+        open: last.open,
+        high: last.high,
+        low: last.low,
+        close: last.close,
+        volume: last.volume || 0,
+      };
+    } else {
+      lastCandleRef.current = null;
+    }
+  }, [chartData]);
 
   useEffect(() => {
     chartRef.current = initChartRef.current;
@@ -375,16 +424,127 @@ export function useChartLifecycle({
     };
   }, [initChartRef.current, onFocus]);
 
-  // 6. Live Price Line for 1D chart (Extended Hours)
+  // 6. Direct High-Performance Playback Tick Subscription (PERF-01, PERF-02, PERF-04)
+  // Bypasses React render tree completely during active playback (~60fps O(1) direct canvas updates)
+  useEffect(() => {
+    if (!initPriceSeriesRef.current || !initVolumeSeriesRef.current) return;
+
+    const sym = ticker.toUpperCase();
+
+    const unsubscribe = usePlaybackStore.subscribe((state) => {
+      // Guard: Only update if playing, series are ready, and chart is hydrated
+      if (state.isPaused || !initPriceSeriesRef.current || !initVolumeSeriesRef.current || !isHydratedRef.current) return;
+
+      const tick = state.latestTickBySymbol?.[sym] ||
+        (state.currentTick?.symbol?.toUpperCase() === sym ? state.currentTick : null);
+      if (!tick || !tick.price || tick.price <= 0) return;
+
+      const tickTimeMs = typeof tick.time === 'number'
+        ? (tick.time < 1e11 ? tick.time * 1000 : tick.time)
+        : new Date(String(tick.time).replace(' ', 'T') + (String(tick.time).includes('Z') ? '' : 'Z')).getTime();
+
+      // 1D Extended Hours Live Price Line
+      if (timeframe === '1D') {
+        if (!priceLineRef.current) {
+          priceLineRef.current = initPriceSeriesRef.current.createPriceLine({
+            price: tick.price,
+            color: 'rgba(255, 210, 0, 0.6)',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: 'Live',
+          });
+        } else {
+          priceLineRef.current.applyOptions({ price: tick.price });
+        }
+
+        // Daily completed bars strictly use RTH ticks
+        if (!isRthTick(tick, ticker)) return;
+      }
+
+      const bucketTime = getBucketTime(tickTimeMs, timeframe);
+      const lastCandle = lastCandleRef.current;
+
+      if (lastCandle) {
+        if (bucketTime < lastCandle.time) return;
+
+        const tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
+
+        if (lastCandle.time === bucketTime) {
+          lastCandle.high = Math.max(lastCandle.high, tick.price);
+          lastCandle.low = Math.min(lastCandle.low, tick.price);
+          lastCandle.close = tick.price;
+          lastCandle.volume = Number((lastCandle.volume + tickVol).toFixed(4));
+
+          initPriceSeriesRef.current.update({
+            time: bucketTime as any,
+            open: lastCandle.open,
+            high: lastCandle.high,
+            low: lastCandle.low,
+            close: lastCandle.close,
+          });
+
+          initVolumeSeriesRef.current.update({
+            time: bucketTime as any,
+            value: lastCandle.volume,
+            color: lastCandle.close >= lastCandle.open
+              ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+              : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+          });
+        } else {
+          // New candle bucket!
+          const newCandle = {
+            time: bucketTime,
+            open: tick.price,
+            high: tick.price,
+            low: tick.price,
+            close: tick.price,
+            volume: tickVol,
+          };
+          lastCandleRef.current = newCandle;
+
+          initPriceSeriesRef.current.update({
+            time: bucketTime as any,
+            open: newCandle.open,
+            high: newCandle.high,
+            low: newCandle.low,
+            close: newCandle.close,
+          });
+
+          initVolumeSeriesRef.current.update({
+            time: bucketTime as any,
+            value: newCandle.volume,
+            color: themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a',
+          });
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [ticker, timeframe, initPriceSeriesRef.current, initVolumeSeriesRef.current]);
+
+  // 7. Static/Paused Price Line for 1D chart (Extended Hours)
   useEffect(() => {
     if (!initPriceSeriesRef.current) return;
 
-    if (timeframe === '1D' && globalTime && localMasterData.length > 0) {
-      let lastPrice = null;
+    const unsub = usePlaybackStore.subscribe((state) => {
+      if (!state.isPaused) return; // handled by direct tick subscriber during playback
+      if (timeframe !== '1D' || !state.currentTime || localMasterData.length === 0) {
+        if (priceLineRef.current && initPriceSeriesRef.current) {
+          try {
+            initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
+            priceLineRef.current = null;
+          } catch (_) {}
+        }
+        return;
+      }
 
+      let lastPrice = null;
       for (let i = localMasterData.length - 1; i >= 0; i--) {
         const barMs = new Date(localMasterData[i].time.replace(' ', 'T') + 'Z').getTime();
-        if (barMs <= globalTime) {
+        if (barMs <= state.currentTime) {
           lastPrice = localMasterData[i].close;
           break;
         }
@@ -404,20 +564,18 @@ export function useChartLifecycle({
           priceLineRef.current.applyOptions({ price: lastPrice });
         }
       }
-    } else if (priceLineRef.current && initPriceSeriesRef.current) {
-      initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
-      priceLineRef.current = null;
-    }
-    
+    });
+
     return () => {
+      unsub();
       if (priceLineRef.current && initPriceSeriesRef.current) {
         try {
           initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
           priceLineRef.current = null;
-        } catch(_) {}
+        } catch (_) {}
       }
     };
-  }, [globalTime, timeframe, ticker, localMasterData]);
+  }, [timeframe, localMasterData, initPriceSeriesRef.current]);
 
   return {
     volumeSeriesRef: initVolumeSeriesRef,
