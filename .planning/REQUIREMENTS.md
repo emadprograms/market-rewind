@@ -52,7 +52,7 @@ This milestone resolves two critical UX and performance bottlenecks in Market Re
 | PERF-02 | Phase 19 | Complete |
 | PERF-03 | Phase 19 | Complete |
 | PERF-04 | Phase 19 | Complete |
-| VIEW-01 | Phase 20 | Pending |
-| VIEW-02 | Phase 20 | Pending |
-| VIEW-03 | Phase 20 | Pending |
-| VIEW-04 | Phase 20 | Pending |
+| VIEW-01 | Phase 20 | Complete |
+| VIEW-02 | Phase 20 | Complete |
+| VIEW-03 | Phase 20 | Complete |
+| VIEW-04 | Phase 20 | Complete |
