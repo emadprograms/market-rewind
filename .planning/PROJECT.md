@@ -6,9 +6,9 @@ Market Rewind is a high-performance local-first market replay and charting analy
 ## Core Value
 High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
 
-## Current Milestone: Complete (v3.1 Shipped & Archived)
+## Current Milestone: Milestone v3.2 — High-Performance Chart Playback & Data Reliability Engine
 
-**Goal:** Re-architect Market Rewind to run exclusively on `streaming.duckdb`, synchronizing real-time market playback across all active charts and groups simultaneously, with strict date boundaries, removal of legacy SQLite/Vercel artifacts, and a comprehensive test-first Playwright/unit test suite.
+**Goal:** Eliminate CPU hogging and UI freezing during market playback by decoupling high-frequency playback state from the React render tree, executing O(1) direct canvas series updates via lightweight-charts, preventing viewport drag-fighting during playback, and resolving the intermittent single-candle loading bug with robust data validation and initialization safeguards.
 
 ## Validated Requirements
 - ✓ Basic market replay engine (v1.0)
