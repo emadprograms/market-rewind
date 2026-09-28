@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:regression": "playwright test",
+    "test:journey": "playwright test -c playwright.journey.config.ts",
     "build": "vite build",
     "preview": "vite preview"
   },
