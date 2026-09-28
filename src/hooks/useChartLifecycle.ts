@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { IChartApi, ISeriesApi, MouseEventParams, Time, TickMarkType, IPriceLine } from 'lightweight-charts';
+import { IChartApi, ISeriesApi, Time, TickMarkType, IPriceLine } from 'lightweight-charts';
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
 import { getTzForTicker } from '../lib/timezones';
 import { usePlaybackStore } from '../store/usePlaybackStore';
@@ -8,16 +8,17 @@ import { useChartPlugins } from './chart/useChartPlugins';
 import { useChartDrawings } from './chart/useChartDrawings';
 import { useChartViewport } from './chart/useChartViewport';
 
-
 interface UseChartLifecycleParams {
   chartContainerRef: React.RefObject<HTMLDivElement | null>;
   ticker: string;
   timeframe: Timeframe;
   showEth: boolean;
   showVP: boolean;
+  theme?: 'light' | 'dark' | 'oled';
   chartData: ChartBar[];
+  boundaryTime?: string | null;
   localMasterData: RawBar[];
-  isReplayMode: boolean;
+  isReplayMode?: boolean;
   isLoadingHistory: boolean;
   pendingHistoryPrependRef: React.MutableRefObject<HistoryPrependState | null>;
   isDrawingMode: boolean;
@@ -28,8 +29,8 @@ interface UseChartLifecycleParams {
   setGhostPoint: React.Dispatch<React.SetStateAction<RectPoint | null>>;
   drawings: TickerDrawings;
   onUpdateDrawings: (ticker: string, type: 'rays' | 'rects', items: RayDrawing[] | RectDrawing[]) => void;
-  activeTrade: ActiveTrade | null;
-  tradeBadgeRef: React.RefObject<HTMLDivElement | null>;
+  activeTrade?: ActiveTrade | null;
+  tradeBadgeRef?: React.RefObject<HTMLDivElement | null>;
   chartRef: React.MutableRefObject<IChartApi | null>;
   priceSeriesRef: React.MutableRefObject<ISeriesApi<'Candlestick'> | null>;
   onFocus?: () => void;
@@ -41,9 +42,11 @@ export function useChartLifecycle({
   timeframe,
   showEth,
   showVP,
+  theme = 'oled',
   chartData,
+  boundaryTime = null,
   localMasterData,
-  isReplayMode,
+  isReplayMode = false,
   isLoadingHistory,
   pendingHistoryPrependRef,
   isDrawingMode,
@@ -54,13 +57,16 @@ export function useChartLifecycle({
   setGhostPoint,
   drawings,
   onUpdateDrawings,
-  activeTrade,
+  activeTrade = null,
   tradeBadgeRef,
   chartRef,
   priceSeriesRef,
   onFocus,
 }: UseChartLifecycleParams) {
   const globalTime = usePlaybackStore((state) => state.currentTime);
+
+  const [isViewModified, setIsViewModified] = useState(false);
+  const isAtEnd = !isViewModified;
   
   const { 
     chartRef: initChartRef, 
@@ -71,7 +77,7 @@ export function useChartLifecycle({
     chartContainerRef,
     ticker,
     timeframe,
-    onAtEndChange: useCallback((atEnd: boolean) => setIsAtEnd(atEnd), []),
+    onViewStateChange: useCallback((atEnd: boolean, autoScale: boolean) => setIsViewModified(!atEnd || !autoScale), []),
   });
 
   const {
@@ -81,20 +87,22 @@ export function useChartLifecycle({
     rectPluginRef,
     tradePluginRef,
     updateShadingConfig,
+    pluginVersion,
   } = useChartPlugins({
     priceSeriesRef: initPriceSeriesRef,
     ticker,
     timeframe,
     showEth,
     showVP,
+    boundaryTime,
     drawings,
     tradeBadgeRef,
   });
 
   const {
     syncViewport,
-    checkAutoReveal,
     scrollToRealTime,
+    resetView,
   } = useChartViewport({
     chartRef,
     priceSeriesRef,
@@ -117,17 +125,61 @@ export function useChartLifecycle({
     onUpdateDrawings,
   });
 
-  const [isAtEnd, setIsAtEnd] = useState(true);
-  const [chartUpdateTick, setChartUpdateTick] = useState(0);
   const [isHydrated, setIsHydrated] = useState(false);
-  
-  // The AUTO_REVEAL_THRESHOLD is now inside useChartViewport
-
 
   useEffect(() => {
     chartRef.current = initChartRef.current;
     priceSeriesRef.current = initPriceSeriesRef.current;
   }, [initChartRef.current, initPriceSeriesRef.current, chartRef, priceSeriesRef]);
+
+  // Theme support
+  useEffect(() => {
+    if (!initChartRef.current || !initPriceSeriesRef.current || !initVolumeSeriesRef.current) return;
+
+    if (theme === 'light') {
+        initChartRef.current.applyOptions({
+            layout: { background: { color: '#cccccc' }, textColor: '#000000' },
+            grid: { vertLines: { color: 'rgba(0, 0, 0, 0.05)' }, horzLines: { color: 'rgba(0, 0, 0, 0.05)' } },
+            timeScale: { borderColor: '#a3a3a3' }
+        });
+        initChartRef.current.priceScale('right').applyOptions({
+            borderColor: '#a3a3a3'
+        });
+        if (typeof initPriceSeriesRef.current.applyOptions === 'function') {
+            initPriceSeriesRef.current.applyOptions({
+                upColor: '#ffffff',
+                downColor: '#000000',
+                borderVisible: true,
+                borderColor: '#000000',
+                borderUpColor: '#000000',
+                borderDownColor: '#000000',
+                wickUpColor: '#000000',
+                wickDownColor: '#000000',
+            });
+        }
+    } else {
+        initChartRef.current.applyOptions({
+            layout: { background: { color: 'transparent' }, textColor: '#94a3b8' },
+            grid: { vertLines: { color: 'rgba(255, 255, 255, 0.05)' }, horzLines: { color: 'rgba(255, 255, 255, 0.05)' } },
+            timeScale: { borderColor: 'rgba(255, 255, 255, 0.1)' }
+        });
+        initChartRef.current.priceScale('right').applyOptions({
+            borderColor: 'rgba(255, 255, 255, 0.1)'
+        });
+        if (typeof initPriceSeriesRef.current.applyOptions === 'function') {
+            initPriceSeriesRef.current.applyOptions({
+                upColor: '#26a69a',
+                downColor: '#ef5350',
+                borderVisible: false,
+                borderColor: 'transparent',
+                borderUpColor: 'transparent',
+                borderDownColor: 'transparent',
+                wickUpColor: '#26a69a',
+                wickDownColor: '#ef5350',
+            });
+        }
+    }
+  }, [theme, initChartRef.current, initPriceSeriesRef.current, initVolumeSeriesRef.current]);
 
   const lastDataCountRef = useRef(0);
   const priceLineRef = useRef<IPriceLine | null>(null);
@@ -137,7 +189,6 @@ export function useChartLifecycle({
   
   const isDrawingModeRef = useRef(isDrawingMode);
   const currentTickerRef = useRef(ticker);
-
 
   useEffect(() => {
     isDrawingModeRef.current = isDrawingMode;
@@ -153,9 +204,7 @@ export function useChartLifecycle({
   }, [timeframe]);
 
   useEffect(() => {
-    console.log(`[StabilityTrace] ScrollEffect: isHydrated=${isHydrated}, dataLength=${chartData.length}`);
     if (isHydrated && chartData.length > 0) {
-      console.log(`[StabilityTrace] Triggering scrollToRealTime`);
       scrollToRealTime();
     }
   }, [isHydrated, scrollToRealTime]);
@@ -194,6 +243,13 @@ export function useChartLifecycle({
     }
   }, [rectAnchor, ghostPoint, drawings.rects]);
 
+  // Update active trade in trade plugin if provided
+  useEffect(() => {
+    if (tradePluginRef.current && activeTrade !== undefined) {
+      tradePluginRef.current.setTrade(activeTrade);
+    }
+  }, [activeTrade, tradePluginRef, pluginVersion]);
+
   // 3. Update Chart Data
   useEffect(() => {
     if (initPriceSeriesRef.current && initVolumeSeriesRef.current && initChartRef.current && chartData.length > 0) {
@@ -201,13 +257,12 @@ export function useChartLifecycle({
                             lastTfRef.current === timeframe && 
                             lastEthRef.current === showEth;
       
-      const hasPendingPrepend = pendingHistoryPrependRef.current !== null;
-      const canIncrement = isSameContext && chartData.length >= lastDataCountRef.current && lastDataCountRef.current > 0 && !hasPendingPrepend;
-
       const formatBar = (d: RawBar) => {
-        const isoString = d.time.replace(' ', 'T') + (d.time.includes('Z') ? '' : 'Z');
+        const timeSec = typeof d.time === 'number'
+          ? (d.time > 1e11 ? Math.floor(d.time / 1000) : d.time)
+          : Math.floor(new Date(String(d.time).replace(' ', 'T') + (String(d.time).includes('Z') ? '' : 'Z')).getTime() / 1000);
         return {
-          time: Math.floor(new Date(isoString).getTime() / 1000) as Time,
+          time: timeSec as Time,
           open: d.open,
           high: d.high,
           low: d.low,
@@ -216,95 +271,80 @@ export function useChartLifecycle({
         };
       };
 
-      const formatAllBars = (bars: RawBar[]) => {
-        const raw = bars.map(formatBar);
-        raw.sort((a, b) => (a.time as number) - (b.time as number));
-        const res: any[] = [];
-        for (const bar of raw) {
-          if (res.length === 0) {
-            res.push(bar);
-          } else {
-            const last = res[res.length - 1];
-            if ((bar.time as number) > (last.time as number)) {
-              res.push(bar);
-            } else if ((bar.time as number) === (last.time as number)) {
-              res[res.length - 1] = bar;
-            }
-          }
-        }
-        return res;
-      };
+      const formatted: any[] = chartData.map(formatBar);
 
-      // Capture viewport range BEFORE any data mutation for accurate sync
-      const capturedRange = initChartRef.current.timeScale().getVisibleLogicalRange();
+      if (vpPluginRef.current) {
+        vpPluginRef.current.setData(formatted);
+      }
+
+      const hasPendingPrepend = pendingHistoryPrependRef.current !== null;
+      const canIncrement = isSameContext && chartData.length >= lastDataCountRef.current && lastDataCountRef.current > 0 && !hasPendingPrepend;
 
       if (canIncrement) {
         try {
           const prevCount = lastDataCountRef.current;
-          // Update the last existing bar (it may have been the partial edge bar last time)
           if (prevCount > 0) {
-            const lastBar = formatBar(chartData[prevCount - 1]);
+            const lastBar = formatted[prevCount - 1];
             initPriceSeriesRef.current.update({ time: lastBar.time, open: lastBar.open, high: lastBar.high, low: lastBar.low, close: lastBar.close });
-            initVolumeSeriesRef.current.update({ time: lastBar.time, value: lastBar.volume, color: lastBar.close >= lastBar.open ? '#26a69a' : '#ef5350' });
+            initVolumeSeriesRef.current.update({
+              time: lastBar.time,
+              value: lastBar.volume,
+              color: lastBar.close >= lastBar.open ? (theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a') : (theme === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350')
+            });
           }
-          // Append any new bars beyond what was previously shown
-          for (let i = prevCount; i < chartData.length; i++) {
-            const bar = formatBar(chartData[i]);
+          for (let i = prevCount; i < formatted.length; i++) {
+            const bar = formatted[i];
             initPriceSeriesRef.current.update({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
-            initVolumeSeriesRef.current.update({ time: bar.time, value: bar.volume, color: bar.close >= bar.open ? '#26a69a' : '#ef5350' });
+            initVolumeSeriesRef.current.update({
+              time: bar.time,
+              value: bar.volume,
+              color: bar.close >= bar.open ? (theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a') : (theme === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350')
+            });
           }
         } catch {
-          // If incremental update fails (e.g. timestamp format mismatch or non-increasing time), safely fallback to setData
-          const formatted = formatAllBars(chartData);
           initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
             time, open, high, low, close
           })));
           initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
-            time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
+            time, value: volume, color: close >= open ? (theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a') : (theme === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350')
           })));
         }
       } else {
-        // Full setData for context changes (ticker, timeframe, ETH toggle, or history prepend)
-        const formatted = formatAllBars(chartData);
-        if (vpPluginRef.current) {
-          vpPluginRef.current.setData(formatted);
+        try {
+          initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
+            time, open, high, low, close
+          })));
+        } catch (err) {
+          console.warn('lightweight-charts price series error:', err);
         }
-        initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
-          time, open, high, low, close
-        })));
-        initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
-          time, value: volume, color: close >= open ? '#26a69a' : '#ef5350'
-        })));
+
+        try {
+          initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
+            time, value: volume, color: close >= open ? (theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a') : (theme === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350')
+          })));
+        } catch (err) {
+          console.warn('lightweight-charts volume series error:', err);
+        }
       }
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
-      
-      // Only sync viewport for non-incremental updates (history prepend, context changes).
-      // For incremental replay steps, let candles fill the rightOffset space naturally.
-      // The checkAutoReveal logic (Section 4) handles auto-scrolling when bars reach the edge.
-      if (!canIncrement && isSameContext) {
-        requestAnimationFrame(() => {
-          syncViewport(isSameContext, capturedRange);
-        });
-      }
+      syncViewport(isSameContext);
 
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
       lastDataCountRef.current = chartData.length;
 
-      if (!isHydrated) {
-        requestAnimationFrame(() => {
-          setIsHydrated(true);
-        });
-      }
+      requestAnimationFrame(() => {
+        setIsHydrated(true);
+      });
 
-      } else if (initPriceSeriesRef.current && initVolumeSeriesRef.current) {
-        initPriceSeriesRef.current.setData([]);
-        initVolumeSeriesRef.current.setData([]);
+    } else if (initPriceSeriesRef.current && initVolumeSeriesRef.current && chartData.length === 0) {
+      initPriceSeriesRef.current.setData([]);
+      initVolumeSeriesRef.current.setData([]);
     }
 
-  }, [chartData, isReplayMode, isLoadingHistory, syncViewport]);
+  }, [chartData, syncViewport, theme]);
 
   // 3b. Refresh shading plugin when ticker/timeframe/ETH changes
   useEffect(() => {
@@ -312,13 +352,6 @@ export function useChartLifecycle({
     const isET = tz === 'America/New_York';
     updateShadingConfig(isET);
   }, [ticker, timeframe, showEth, updateShadingConfig]);
-
-  // 4. Auto-Reveal Logic during Replay
-  useEffect(() => {
-    if (!isReplayMode || !initChartRef.current || !initPriceSeriesRef.current) return;
-
-    checkAutoReveal();
-  }, [globalTime, isReplayMode, checkAutoReveal]);
 
   // 5. Handle Focus Click
   useEffect(() => {
@@ -384,8 +417,11 @@ export function useChartLifecycle({
   return {
     volumeSeriesRef: initVolumeSeriesRef,
     tradePluginRef,
+    pluginVersion,
     isAtEnd,
+    isViewModified,
     scrollToRealTime,
+    resetView,
     isHydrated,
   };
 }

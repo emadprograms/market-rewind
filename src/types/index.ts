@@ -20,6 +20,8 @@ export interface MarketTick {
   session?: 'REG' | 'PRE' | 'POST' | string;
 }
 
+export type OrderDirection = 'BUY' | 'SELL';
+
 /** Raw 1-minute or sub-second bar */
 export interface RawBar {
   time: string;          // "2024-01-15 14:30:00" (UTC)

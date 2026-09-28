@@ -40,6 +40,7 @@ export default function ChartUnit({
   const priceSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
 
   const [showVP, setShowVP] = React.useState(false);
+  const theme = useWorkspaceStore((state) => state.theme);
 
   // 1. Data management
   const data = useChartData({ 
@@ -97,6 +98,7 @@ export default function ChartUnit({
     timeframe: data.timeframe,
     showEth: data.showEth,
     showVP,
+    theme,
     chartData: data.chartData,
     localMasterData: data.localMasterData,
     isReplayMode,
@@ -125,9 +127,13 @@ export default function ChartUnit({
     tradePluginRef: chart.tradePluginRef 
   });
 
-  // Sync PnL to App
+  // Sync PnL to App with equality guard
+  const lastPnLRef = useRef({ r: 0, u: 0 });
   React.useEffect(() => {
-    onPnLUpdate(id, trade.realizedPnL, trade.unrealizedPnL);
+    if (lastPnLRef.current.r !== trade.realizedPnL || lastPnLRef.current.u !== trade.unrealizedPnL) {
+      lastPnLRef.current = { r: trade.realizedPnL, u: trade.unrealizedPnL };
+      onPnLUpdate(id, trade.realizedPnL, trade.unrealizedPnL);
+    }
   }, [trade.realizedPnL, trade.unrealizedPnL, id, onPnLUpdate]);
 
   const currentPrice = data.chartData[data.chartData.length - 1]?.close ?? 0;
@@ -193,14 +199,19 @@ export default function ChartUnit({
       >
         <ChartCanvas
           chartContainerRef={chartContainerRef}
+          chartRef={chartRef}
+          priceSeriesRef={priceSeriesRef}
           isDrawingMode={keyboard.isDrawingMode}
           isAtEnd={chart.isAtEnd}
+          isViewModified={chart.isViewModified}
           scrollToRealTime={chart.scrollToRealTime}
+          resetView={chart.resetView}
           activeTrade={trade.activeTrade}
           currentPrice={currentPrice}
           tradeBadgeRef={tradeBadgeRef}
           onCloseTrade={() => trade.setActiveTrade(null)}
           isHydrated={chart.isHydrated}
+          theme={theme}
         />
         
         <DrawingStatus 

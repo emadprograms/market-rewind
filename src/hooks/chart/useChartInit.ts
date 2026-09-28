@@ -1,19 +1,20 @@
 import { useEffect, useRef } from 'react';
 import { createChart, IChartApi, ISeriesApi, Time, TickMarkType } from 'lightweight-charts';
-import { getTzForTicker } from '../../lib/timezones';
 import type { Timeframe } from '../../types';
 
 interface UseChartInitParams {
   chartContainerRef: React.RefObject<HTMLDivElement | null>;
   ticker: string;
   timeframe: Timeframe;
-  onAtEndChange: (atEnd: boolean) => void;
+  onViewStateChange?: (atEnd: boolean, autoScale: boolean) => void;
+  onAtEndChange?: (atEnd: boolean) => void;
 }
 
 export function useChartInit({
   chartContainerRef,
   ticker,
   timeframe,
+  onViewStateChange,
   onAtEndChange,
 }: UseChartInitParams) {
   const chartRef = useRef<IChartApi | null>(null);
@@ -21,9 +22,23 @@ export function useChartInit({
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const lastBarSpacingRef = useRef<number | null>(null);
 
+  const onViewStateChangeRef = useRef(onViewStateChange);
+  const onAtEndChangeRef = useRef(onAtEndChange);
+  useEffect(() => {
+    onViewStateChangeRef.current = onViewStateChange;
+    onAtEndChangeRef.current = onAtEndChange;
+  }, [onViewStateChange, onAtEndChange]);
+
+  const notifyViewState = (atEnd: boolean, autoScale: boolean) => {
+    if (onViewStateChangeRef.current) {
+      onViewStateChangeRef.current(atEnd, autoScale);
+    } else if (onAtEndChangeRef.current) {
+      onAtEndChangeRef.current(atEnd);
+    }
+  };
+
   useEffect(() => {
     if (!chartContainerRef.current) return;
-    const tz = getTzForTicker(ticker);
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
@@ -39,22 +54,19 @@ export function useChartInit({
       localization: {
         timeFormatter: (time: Time) => {
           const date = new Date((time as number) * 1000);
-          if (timeframe === '1D') {
-            return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' });
-          }
-          return date.toLocaleString('en-US', { timeZone: tz, hour12: false, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          return date.toLocaleString('en-US', { hour12: false, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
       },
       timeScale: {
         borderColor: 'rgba(255, 255, 255, 0.1)',
-        timeVisible: timeframe !== '1D',
+        timeVisible: true,
         secondsVisible: false,
         shiftVisibleRangeOnNewBar: false,
         rightOffset: 15,
         tickMarkFormatter: (time: Time, tickMarkType: TickMarkType) => {
           const date = new Date((time as number) * 1000);
-          if (tickMarkType <= 2) return date.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric' });
-          return date.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+          if (tickMarkType <= 2) return date.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+          return date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
         }
       },
       handleScroll: true,
@@ -63,7 +75,7 @@ export function useChartInit({
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
         const ts = chart.timeScale();
-        lastBarSpacingRef.current = ts.options().barSpacing;
+        lastBarSpacingRef.current = typeof ts.options === 'function' ? ts.options().barSpacing : null;
 
         const logicalRange = ts.getVisibleLogicalRange();
         if (logicalRange && priceSeriesRef.current) {
@@ -71,20 +83,42 @@ export function useChartInit({
             if (bars.length > 0) {
                 const lastBarIndex = bars.length - 1;
                 const newAtEnd = logicalRange.to >= lastBarIndex - 0.5;
-                onAtEndChange(newAtEnd);
+                const scale = chart.priceScale('right');
+                const autoScale = typeof scale.options === 'function' ? scale.options().autoScale : true;
+                notifyViewState(newAtEnd, autoScale !== false);
             }
         }
     });
 
+    const intervalId = setInterval(() => {
+      if (!priceSeriesRef.current) return;
+      const ts = chart.timeScale();
+      const logicalRange = ts.getVisibleLogicalRange();
+      const bars = priceSeriesRef.current.data();
+      let isAtEnd = true;
+      if (logicalRange && bars.length > 0) {
+          const lastBarIndex = bars.length - 1;
+          isAtEnd = logicalRange.to >= lastBarIndex - 0.5;
+      }
+      const scale = chart.priceScale('right');
+      const autoScale = typeof scale.options === 'function' ? scale.options().autoScale : true;
+      notifyViewState(isAtEnd, autoScale !== false);
+    }, 250);
+
     chart.priceScale('right').applyOptions({
       scaleMargins: {
         top: 0.1,
-        bottom: 0.25,
+        bottom: 0.15,
       },
     });
 
     const priceSeries = chart.addCandlestickSeries({
-      upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+      upColor: '#26a69a', 
+      downColor: '#ef5350', 
+      borderVisible: false, 
+      wickUpColor: '#26a69a', 
+      wickDownColor: '#ef5350',
+      lastValueVisible: false, // Hide default price label
     });
 
     const volumeSeries = chart.addHistogramSeries({
@@ -94,7 +128,7 @@ export function useChartInit({
     
     volumeSeries.priceScale().applyOptions({
       scaleMargins: {
-        top: 0.8,
+        top: 0.85,
         bottom: 0,
       },
     });
@@ -102,7 +136,6 @@ export function useChartInit({
     const resizeObserver = new ResizeObserver(entries => {
       if (entries.length === 0 || entries[0].target !== chartContainerRef.current) return;
       const newRect = entries[0].contentRect;
-      console.log(`[useChartInit] Resize: ${newRect.width}x${newRect.height} for ${ticker}`);
       chart.applyOptions({ width: newRect.width, height: newRect.height });
     });
 
@@ -115,13 +148,14 @@ export function useChartInit({
     volumeSeriesRef.current = volumeSeries;
 
     return () => {
+      if (intervalId) clearInterval(intervalId);
       resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
       priceSeriesRef.current = null;
       volumeSeriesRef.current = null;
     };
-  }, [chartContainerRef, ticker, timeframe, onAtEndChange]);
+  }, [chartContainerRef]); // Reuses canvas across ticker and timeframe switches
 
   return { chartRef, priceSeriesRef, volumeSeriesRef, lastBarSpacingRef };
 }

@@ -90,9 +90,9 @@ describe('React Render-Cycle Proof (Test 3)', () => {
   it('should not re-render component when panning within the same state zone', async () => {
     render(<MockComponent params={params} />);
     
-    // Wait for mount effects to settle
+    // Wait for mount and hydration effects to settle
     await act(async () => {
-        await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, 500)); // wait for rAF and intervals
     });
     
     const initialRenders = (window as any).lastRenderCount;
@@ -114,9 +114,9 @@ describe('React Render-Cycle Proof (Test 3)', () => {
   it('should only re-render once when crossing the isAtEnd threshold', async () => {
     render(<MockComponent params={params} />);
     
-    // Wait for mount effects to settle
+    // Wait for mount and hydration effects to settle
     await act(async () => {
-        await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, 100));
     });
     
     const initialRenders = (window as any).lastRenderCount;

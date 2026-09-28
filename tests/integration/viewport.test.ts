@@ -5,10 +5,11 @@ import { useChartLifecycle } from '../../src/hooks/useChartLifecycle';
 // Mock lightweight-charts
 const mockTimeScale = {
   scrollToRealTime: vi.fn(),
+  scrollToPosition: vi.fn(),
   getVisibleLogicalRange: vi.fn().mockReturnValue({ from: 0, to: 100 }),
   setVisibleLogicalRange: vi.fn(),
   subscribeVisibleLogicalRangeChange: vi.fn(),
-  options: vi.fn().mockReturnValue({ barSpacing: 1 }),
+  options: vi.fn().mockReturnValue({ barSpacing: 1, rightOffset: 15 }),
   width: vi.fn().mockReturnValue(1000),
 };
 
@@ -86,20 +87,20 @@ describe('Viewport Stability Integration', () => {
     chartRef.current = mockChart;
     priceSeriesRef.current = mockSeries;
 
-    expect(mockTimeScale.scrollToRealTime).not.toHaveBeenCalled();
+    expect(mockTimeScale.scrollToPosition).not.toHaveBeenCalled();
     
     await act(async () => {
       rerender({ chartData: [{ time: '2023-01-01 00:00', open: 100, high: 110, low: 90, close: 105, volume: 1000 }] });
     });
     
-    expect(mockTimeScale.scrollToRealTime).not.toHaveBeenCalled();
+    expect(mockTimeScale.scrollToPosition).not.toHaveBeenCalled();
     
     await act(async () => {
       vi.advanceTimersByTime(16);
-      await vi.runAllTimersAsync();
+      await vi.advanceTimersByTimeAsync(250);
     });
     
-    expect(mockTimeScale.scrollToRealTime).toHaveBeenCalled();
+    expect(mockTimeScale.scrollToPosition).toHaveBeenCalled();
     vi.useRealTimers();
   });
 });

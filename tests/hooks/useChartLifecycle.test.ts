@@ -13,6 +13,19 @@ vi.mock('../../src/hooks/chart/useChartInit', () => ({
   })),
 }));
 
+// Mock useChartPlugins to prevent canvas/plugin crashes during testing
+vi.mock('../../src/hooks/chart/useChartPlugins', () => ({
+  useChartPlugins: vi.fn(() => ({
+    shadingPluginRef: { current: null },
+    vpPluginRef: { current: null },
+    rayPluginRef: { current: null },
+    rectPluginRef: { current: null },
+    tradePluginRef: { current: null },
+    updateShadingConfig: vi.fn(),
+    pluginVersion: 0,
+  })),
+}));
+
 describe('useChartLifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -83,7 +83,14 @@ export function useChartData({
     return new Date(targetStr.replace(' ', 'T') + 'Z').getTime();
   }, [selectedDate]);
 
-  const effectiveCutoff = (isReplayMode && globalTime) ? globalTime : (globalTime || defaultCutoff);
+  const effectiveCutoff = (() => {
+    if (isReplayMode && globalTime) return globalTime;
+    if (globalTime) return globalTime;
+    // When no globalTime is set yet, use Infinity to show ALL loaded data
+    // rather than defaultCutoff which clips to 09:30 and can cause single-candle display
+    if (!isReplayMode) return Infinity;
+    return defaultCutoff;
+  })();
 
   // Dynamic Ticker Playback Synchronization (SYNC-04)
   useEffect(() => {

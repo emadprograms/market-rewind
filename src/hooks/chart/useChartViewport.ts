@@ -1,5 +1,5 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { IChartApi, ISeriesApi, LogicalRange } from 'lightweight-charts';
+import { useRef, useCallback } from 'react';
+import { IChartApi, ISeriesApi } from 'lightweight-charts';
 import type { HistoryPrependState } from '../../types';
 
 interface UseChartViewportParams {
@@ -9,6 +9,15 @@ interface UseChartViewportParams {
   pendingHistoryPrependRef: React.MutableRefObject<HistoryPrependState | null>;
 }
 
+const matchTime = (a: any, b: any): boolean => {
+  if (a === b) return true;
+  if (a === null || a === undefined || b === null || b === undefined) return false;
+  const toSec = (v: any) => typeof v === 'number' 
+    ? (v > 1e11 ? Math.floor(v / 1000) : v) 
+    : Math.floor(new Date(String(v).replace(' ', 'T') + (String(v).includes('Z') ? '' : 'Z')).getTime() / 1000);
+  return toSec(a) === toSec(b);
+};
+
 export function useChartViewport({
   chartRef,
   priceSeriesRef,
@@ -16,135 +25,104 @@ export function useChartViewport({
   pendingHistoryPrependRef,
 }: UseChartViewportParams) {
   const lastDataCountRef = useRef(0);
-  const autoRevealLockedRef = useRef(false);
-  const AUTO_REVEAL_THRESHOLD = 10;
 
   const scrollToRealTime = useCallback(() => {
     if (chartRef.current) {
-      chartRef.current.timeScale().scrollToRealTime();
+      const ts = chartRef.current.timeScale();
+      const rightOffset = typeof ts.options === 'function' ? ts.options().rightOffset || 15 : 15;
+      if (typeof ts.scrollToPosition === 'function') {
+        ts.scrollToPosition(rightOffset, false);
+      }
+      if (typeof ts.scrollToRealTime === 'function') {
+        ts.scrollToRealTime();
+      }
     }
   }, [chartRef]);
 
-  const syncViewport = useCallback((isSameContext: boolean, capturedRange?: LogicalRange | null) => {
+  const resetView = useCallback(() => {
+    if (chartRef.current) {
+      const ts = chartRef.current.timeScale();
+      const rightOffset = typeof ts.options === 'function' ? ts.options().rightOffset || 15 : 15;
+      if (typeof ts.scrollToPosition === 'function') {
+        ts.scrollToPosition(rightOffset, false);
+      } else if (typeof ts.scrollToRealTime === 'function') {
+        ts.scrollToRealTime();
+      }
+      chartRef.current.priceScale('right').applyOptions({ autoScale: true });
+    }
+  }, [chartRef]);
+
+  const syncViewport = useCallback((isSameContext: boolean) => {
     if (!chartRef.current || !priceSeriesRef.current || chartData.length === 0) return;
 
     const ts = chartRef.current.timeScale();
-    const oldLogicalRange = capturedRange || ts.getVisibleLogicalRange();
+    const oldLogicalRange = ts.getVisibleLogicalRange();
 
     if (isSameContext && oldLogicalRange) {
       const wasAtEnd = oldLogicalRange.to >= lastDataCountRef.current - 0.5;
 
       if (pendingHistoryPrependRef.current) {
+        // Priority 1: Prepend History
         const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
+        
         if (oldFirstTime === null) {
-          ts.setVisibleLogicalRange(oldLogicalRange);
-          autoRevealLockedRef.current = true;
           pendingHistoryPrependRef.current = null;
+          ts.setVisibleLogicalRange(oldLogicalRange);
           return;
         }
-        const matchTime = (dTime: any, targetTime: any): boolean => {
-          if (dTime === targetTime) return true;
-          if (!dTime || !targetTime) return false;
-          const targetMs = typeof targetTime === 'number'
-            ? (targetTime > 1e11 ? targetTime : targetTime * 1000)
-            : new Date(String(targetTime).replace(' ', 'T') + (String(targetTime).includes('Z') ? '' : 'Z')).getTime();
-          const dMs = typeof dTime === 'number'
-            ? (dTime > 1e11 ? dTime : dTime * 1000)
-            : new Date(String(dTime).replace(' ', 'T') + (String(dTime).includes('Z') ? '' : 'Z')).getTime();
-          if (isNaN(targetMs) || isNaN(dMs)) return false;
-          return Math.floor(dMs / 1000) === Math.floor(targetMs / 1000);
-        };
 
         const newFirstIndex = chartData.findIndex(d => matchTime(d.time, oldFirstTime));
+        
         if (newFirstIndex > 0 && prependRange) {
-            const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
-            ts.setVisibleLogicalRange(newRange);
-            autoRevealLockedRef.current = true;
+            ts.setVisibleLogicalRange({
+                from: prependRange.from + newFirstIndex,
+                to: prependRange.to + newFirstIndex
+            });
         } else {
             ts.setVisibleLogicalRange(oldLogicalRange);
-            autoRevealLockedRef.current = true;
         }
         pendingHistoryPrependRef.current = null;
       } else if (wasAtEnd) {
+        // Priority 2: Manual Shift (End-of-chart)
         const shift = chartData.length - lastDataCountRef.current;
         if (shift > 0) {
-          const newRange = { from: oldLogicalRange.from + shift, to: oldLogicalRange.to + shift };
-          ts.setVisibleLogicalRange(newRange);
-          autoRevealLockedRef.current = true;
+          ts.setVisibleLogicalRange({
+            from: oldLogicalRange.from + shift,
+            to: oldLogicalRange.to + shift
+          });
         } else {
-          ts.scrollToRealTime();
-          autoRevealLockedRef.current = true;
+          ts.setVisibleLogicalRange(oldLogicalRange);
         }
-      } else if (oldLogicalRange.from >= chartData.length) {
-        ts.scrollToRealTime();
-        autoRevealLockedRef.current = true;
       } else {
         ts.setVisibleLogicalRange(oldLogicalRange);
-        autoRevealLockedRef.current = true;
       }
     } else if (pendingHistoryPrependRef.current) {
+        // Handle prepend even if context changed
         const { oldFirstTime, oldLogicalRange: prependRange } = pendingHistoryPrependRef.current;
-        const matchTime = (dTime: any, targetTime: any): boolean => {
-          if (dTime === targetTime) return true;
-          if (!dTime || !targetTime) return false;
-          const targetMs = typeof targetTime === 'number'
-            ? (targetTime > 1e11 ? targetTime : targetTime * 1000)
-            : new Date(String(targetTime).replace(' ', 'T') + (String(targetTime).includes('Z') ? '' : 'Z')).getTime();
-          const dMs = typeof dTime === 'number'
-            ? (dTime > 1e11 ? dTime : dTime * 1000)
-            : new Date(String(dTime).replace(' ', 'T') + (String(dTime).includes('Z') ? '' : 'Z')).getTime();
-          if (isNaN(targetMs) || isNaN(dMs)) return false;
-          return Math.floor(dMs / 1000) === Math.floor(targetMs / 1000);
-        };
         const newFirstIndex = chartData.findIndex(d => matchTime(d.time, oldFirstTime));
+        
         if (newFirstIndex > 0 && prependRange) {
-            const newRange = { from: prependRange.from + newFirstIndex, to: prependRange.to + newFirstIndex };
-            ts.setVisibleLogicalRange(newRange);
-            autoRevealLockedRef.current = true;
+            ts.setVisibleLogicalRange({
+                from: prependRange.from + newFirstIndex,
+                to: prependRange.to + newFirstIndex
+            });
         }
         pendingHistoryPrependRef.current = null;
+    } else {
+        const rightOffset = typeof ts.options === 'function' ? ts.options().rightOffset || 15 : 15;
+        if (typeof ts.scrollToPosition === 'function') {
+          ts.scrollToPosition(rightOffset, false);
+        } else if (typeof ts.scrollToRealTime === 'function') {
+          ts.scrollToRealTime();
+        }
     }
 
     lastDataCountRef.current = chartData.length;
   }, [chartRef, priceSeriesRef, chartData, pendingHistoryPrependRef]);
 
-  const checkAutoReveal = useCallback(() => {
-    if (!chartRef.current || !priceSeriesRef.current) return;
-
-    if (autoRevealLockedRef.current) {
-      autoRevealLockedRef.current = false;
-      return;
-    }
-
-    const ts = chartRef.current.timeScale();
-    const range = ts.getVisibleLogicalRange();
-    if (!range) return;
-
-    const data = priceSeriesRef.current.data();
-    const dataEnd = data.length - 1;
-    
-    const rightMargin = range.to - dataEnd;
-    
-    // If the user has scrolled back into history, don't auto-scroll
-    if (rightMargin < -AUTO_REVEAL_THRESHOLD) {
-      return;
-    }
-
-    // Maintain a minimum margin on the right. If candles get too close to the edge, push chart left.
-    // This allows candles to fill empty space naturally before forcing a scroll.
-    const MIN_MARGIN = 2;
-    if (rightMargin <= MIN_MARGIN) {
-      const shift = MIN_MARGIN - rightMargin;
-      ts.setVisibleLogicalRange({
-        from: range.from + shift,
-        to: range.to + shift
-      });
-    }
-  }, [chartRef, priceSeriesRef, scrollToRealTime]);
-
   return {
     syncViewport,
-    checkAutoReveal,
     scrollToRealTime,
+    resetView,
   };
 }
