@@ -92,11 +92,11 @@ export function getSessionType(timestamp: number, ticker?: string): 'PRE' | 'RTH
 export function isRthBar(bar: { time: string; session?: string }, ticker?: string): boolean {
   if (bar.session) {
     const s = bar.session.toUpperCase();
+    if (s.includes('PRE') || s.includes('POST') || s.includes('ETH') || s === 'OTHER') {
+      return false;
+    }
     if (s === 'REG' || s === 'RTH' || s.includes('REG')) {
       return true;
-    }
-    if (s === 'PRE' || s === 'POST' || s === 'OTHER') {
-      return false;
     }
   }
 
@@ -117,11 +117,11 @@ export function isRthBar(bar: { time: string; session?: string }, ticker?: strin
 export function isRthTick(tick: { time: string | number; session?: string; symbol?: string }, ticker?: string): boolean {
   if (tick.session) {
     const s = tick.session.toUpperCase();
+    if (s.includes('PRE') || s.includes('POST') || s.includes('ETH') || s === 'OTHER') {
+      return false;
+    }
     if (s === 'REG' || s === 'RTH' || s.includes('REG')) {
       return true;
-    }
-    if (s === 'PRE' || s === 'POST' || s === 'OTHER') {
-      return false;
     }
   }
 

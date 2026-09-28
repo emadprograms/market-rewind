@@ -354,8 +354,10 @@ export function useChartData({
       const offsetHours = 14 - parseInt(nyHour, 10);
       const startOfTodayMs = new Date(`${selectedDate}T00:00:00Z`).getTime() + (offsetHours * 3600000);
       
-      // Daily completed bars strictly before today (prevents leaking DuckDB's completed EOD candle)
-      filtered = filtered.filter((_, i) => filteredTimestamps[i] < startOfTodayMs);
+      // In replay mode, drop today's completed bar so it is formed live from RTH bars/ticks
+      if (isReplayMode || globalTime) {
+        filtered = filtered.filter((_, i) => filteredTimestamps[i] < startOfTodayMs);
+      }
     } else {
       const durationSec = TF_SECONDS[timeframe] || 60;
       const currentBucketStartMs = Math.floor(effectiveCutoff / (durationSec * 1000)) * (durationSec * 1000);
@@ -384,56 +386,77 @@ export function useChartData({
     }
 
     return filtered;
-  }, [localMasterData, barTimestampsMs, timeframe, showEth, effectiveCutoff, latestTick, selectedDate]);
+  }, [localMasterData, barTimestampsMs, timeframe, showEth, effectiveCutoff, latestTick, selectedDate, isReplayMode, globalTime]);
 
   // Resample the filtered data to the target timeframe and synthesize live tick
   const chartData = useMemo(() => {
     let resampled = resampleData(filteredData, timeframe);
 
     if (timeframe === '1D') {
-      const probeDate = new Date(`${selectedDate}T14:00:00Z`);
-      const nyHour = new Intl.DateTimeFormat('en-US', { 
-        timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' 
-      }).format(probeDate);
-      const offsetHours = 14 - parseInt(nyHour, 10);
-      const startOfTodayMs = new Date(`${selectedDate}T00:00:00Z`).getTime() + (offsetHours * 3600000);
+      if (isReplayMode || globalTime) {
+        const probeDate = new Date(`${selectedDate}T14:00:00Z`);
+        const nyHour = new Intl.DateTimeFormat('en-US', { 
+          timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' 
+        }).format(probeDate);
+        const offsetHours = 14 - parseInt(nyHour, 10);
+        const startOfTodayMs = new Date(`${selectedDate}T00:00:00Z`).getTime() + (offsetHours * 3600000);
 
-      // Regular Trading Hours (09:30 AM to 16:00 PM Eastern Time)
-      const rthOpenMs = startOfTodayMs + (9.5 * 3600000);
-      const rthCloseMs = startOfTodayMs + (16 * 3600000);
+        // Regular Trading Hours (09:30 AM to 16:00 PM Eastern Time)
+        const rthOpenMs = startOfTodayMs + (9.5 * 3600000);
+        const rthCloseMs = startOfTodayMs + (16 * 3600000);
 
-      const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0)
-        ? masterData
-        : localMasterData;
+        const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0)
+          ? masterData
+          : localMasterData;
 
-      const todayBars = candidateBars.filter(b => {
-        const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
-        return bMs >= rthOpenMs && bMs <= Math.min(effectiveCutoff, rthCloseMs) && isRthBar(b, ticker);
-      });
+        const todayBars = candidateBars.filter(b => {
+          const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
+          return bMs >= rthOpenMs && bMs <= Math.min(effectiveCutoff, rthCloseMs) && isRthBar(b, ticker);
+        });
 
-      if (todayBars.length > 0) {
-        const formingDaily: RawBar = {
-          time: `${selectedDate} 12:00:00`,
-          open: todayBars[0].open,
-          high: Math.max(...todayBars.map(b => b.high)),
-          low: Math.min(...todayBars.map(b => b.low)),
-          close: todayBars[todayBars.length - 1].close,
-          volume: todayBars.reduce((s, b) => s + (b.volume || 0), 0),
-          session: 'REG',
-          tickCount: todayBars.reduce((s, b) => s + (b.tickCount || 1), 0),
-        };
+        if (todayBars.length > 0) {
+          const formingDaily: RawBar = {
+            time: `${selectedDate} 12:00:00`,
+            open: todayBars[0].open,
+            high: Math.max(...todayBars.map(b => b.high)),
+            low: Math.min(...todayBars.map(b => b.low)),
+            close: todayBars[todayBars.length - 1].close,
+            volume: todayBars.reduce((s, b) => s + (b.volume || 0), 0),
+            session: 'REG',
+            tickCount: todayBars.reduce((s, b) => s + (b.tickCount || 1), 0),
+          };
 
-        // Only incorporate latestTick if currently within RTH hours
-        if (latestTick && latestTick.price && effectiveCutoff >= rthOpenMs && effectiveCutoff <= rthCloseMs) {
-          if (isRthTick(latestTick, ticker)) {
-            formingDaily.high = Math.max(formingDaily.high, latestTick.price);
-            formingDaily.low = Math.min(formingDaily.low, latestTick.price);
-            formingDaily.close = latestTick.price;
-            if (latestTick.volume) formingDaily.volume += latestTick.volume;
+          // Only incorporate latestTick if currently within RTH hours
+          if (latestTick && latestTick.price && effectiveCutoff >= rthOpenMs && effectiveCutoff <= rthCloseMs) {
+            if (isRthTick(latestTick, ticker)) {
+              formingDaily.high = Math.max(formingDaily.high, latestTick.price);
+              formingDaily.low = Math.min(formingDaily.low, latestTick.price);
+              formingDaily.close = latestTick.price;
+              if (latestTick.volume) formingDaily.volume += latestTick.volume;
+            }
+          }
+
+          resampled = [...resampled, formingDaily];
+        } else if (symbolTicks && symbolTicks.length > 0 && effectiveCutoff >= rthOpenMs) {
+          // Fallback: build forming daily candle from raw symbol ticks
+          const rthTicks = symbolTicks.filter(t => {
+            const tMs = isoToMs(t.time);
+            return tMs >= rthOpenMs && tMs <= Math.min(effectiveCutoff, rthCloseMs) && isRthTick(t, ticker);
+          });
+          if (rthTicks.length > 0) {
+            const formingDaily: RawBar = {
+              time: `${selectedDate} 12:00:00`,
+              open: rthTicks[0].price,
+              high: Math.max(...rthTicks.map(t => t.price)),
+              low: Math.min(...rthTicks.map(t => t.price)),
+              close: rthTicks[rthTicks.length - 1].price,
+              volume: rthTicks.reduce((s, t) => s + (t.volume || 0), 0),
+              session: 'REG',
+              tickCount: rthTicks.length,
+            };
+            resampled = [...resampled, formingDaily];
           }
         }
-
-        resampled = [...resampled, formingDaily];
       }
     } else if (effectiveCutoff && latestTick && symbolTicks && symbolTicks.length > 0 && tickTimestampsMs.length > 0) {
       const durationSec = TF_SECONDS[timeframe] || 60;

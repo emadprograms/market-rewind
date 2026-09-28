@@ -399,6 +399,7 @@ export class StreamingClient {
       startTime?: string;
       endTime?: string;
       limit?: number;
+      session?: string;
     } = {}
   ): Promise<RawBar[]> {
     const sym = symbol.toUpperCase();
@@ -427,6 +428,11 @@ export class StreamingClient {
       timeframe: apiTf,
       limit: String(limit),
     });
+    if (options.session) {
+      params.append('session', options.session);
+    } else if (tf === '1D' || apiTf === '1d') {
+      params.append('session', 'REG');
+    }
     if (options.startTime) params.append('start', options.startTime);
     if (options.endTime) params.append('end', options.endTime);
 

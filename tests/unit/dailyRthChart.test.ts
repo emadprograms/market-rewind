@@ -10,7 +10,7 @@ describe('1D Daily Chart RTH Filtering', () => {
     it('accurately identifies RTH bars from session attribute', () => {
       expect(isRthBar({ time: '2026-09-25 13:30:00', session: 'REG' })).toBe(true);
       expect(isRthBar({ time: '2026-09-25 13:30:00', session: 'RTH' })).toBe(true);
-      expect(isRthBar({ time: '2026-09-25 13:30:00', session: 'REG, POST' })).toBe(true);
+      expect(isRthBar({ time: '2026-09-25 13:30:00', session: 'REG, POST' })).toBe(false);
       expect(isRthBar({ time: '2026-09-25 12:00:00', session: 'PRE' })).toBe(false);
       expect(isRthBar({ time: '2026-09-25 20:30:00', session: 'POST' })).toBe(false);
     });

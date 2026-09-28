@@ -46,9 +46,9 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
     it('should query streaming.duckdb endpoint and return daily candles on standard timeframes', async () => {
       // Mock streaming candles across 4 days directly from streaming.duckdb
       const mockStreamCandles = [
-        { time: 1790035200, time_str: '2026-09-22 00:00:00', open: 774.0, high: 775.1, low: 771.4, close: 773.7, volume: 1000, source: 'DATABENTO', session: 'POST, PRE, REG' },
-        { time: 1790121600, time_str: '2026-09-23 00:00:00', open: 774.3, high: 774.7, low: 766.5, close: 767.3, volume: 1200, source: 'DATABENTO', session: 'POST, PRE, REG' },
-        { time: 1790208000, time_str: '2026-09-24 00:00:00', open: 764.5, high: 768.9, low: 761.8, close: 765.9, volume: 1100, source: 'DATABENTO', session: 'POST, PRE, REG' },
+        { time: 1790035200, time_str: '2026-09-22 00:00:00', open: 774.0, high: 775.1, low: 771.4, close: 773.7, volume: 1000, source: 'DATABENTO', session: 'REG' },
+        { time: 1790121600, time_str: '2026-09-23 00:00:00', open: 774.3, high: 774.7, low: 766.5, close: 767.3, volume: 1200, source: 'DATABENTO', session: 'REG' },
+        { time: 1790208000, time_str: '2026-09-24 00:00:00', open: 764.5, high: 768.9, low: 761.8, close: 765.9, volume: 1100, source: 'DATABENTO', session: 'REG' },
         { time: 1790294400, time_str: '2026-09-25 00:00:00', open: 771.0, high: 772.2, low: 770.1, close: 771.4, volume: 500, source: 'CAPITAL_STREAM', session: 'REG', tick_count: 500 },
       ];
 
