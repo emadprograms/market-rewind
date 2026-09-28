@@ -45,11 +45,11 @@ test.describe('JOURNEY 01 — Open the website & backend connection', () => {
     await openWebsite(page);
     await expect(page.getByText('Configure Session')).toBeVisible({ timeout: 30_000 });
 
-    // The status badge turns "online" and reports the connected inventory.
+    // The status badge turns "online" and reports the connected inventory in its title tooltip.
     const badge = page.locator('.sidebar .status-badge');
     await expect(badge).toHaveClass(/status-online/, { timeout: 10_000 });
-    await expect(badge).toContainText(/Streaming DuckDB Connected/i);
-    await expect(badge).toContainText(/Symbols/i);
+    await expect(badge).toHaveAttribute('title', /Streaming DuckDB Connected/i);
+    await expect(badge).toHaveAttribute('title', /Symbols/i);
   });
 
   test('offline backend: shows the "start the service" guidance instead of the session configurator', async ({ page }) => {

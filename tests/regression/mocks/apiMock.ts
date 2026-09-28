@@ -144,12 +144,14 @@ export async function installApiMocks(page: Page, options: MockMarketOptions = {
     const q = url.searchParams;
     handle.lastTicksQuery = new URLSearchParams(q);
     const symbol = (q.get('symbol') || 'SPY').toUpperCase();
-    const ticks = queryTicks(symbol, {
-      startMs: toMs(q.get('start_time')),
-      endMs: toMs(q.get('end_time')),
-      limit: q.get('limit') ? Number(q.get('limit')) : undefined,
-      offset: q.get('offset') ? Number(q.get('offset')) : undefined,
-    });
+    const ticks = options.emptyMarket
+      ? []
+      : queryTicks(symbol, {
+          startMs: toMs(q.get('start_time')),
+          endMs: toMs(q.get('end_time')),
+          limit: q.get('limit') ? Number(q.get('limit')) : undefined,
+          offset: q.get('offset') ? Number(q.get('offset')) : undefined,
+        });
     return json(route, ticks, latency);
   });
 
@@ -179,11 +181,13 @@ export async function installApiMocks(page: Page, options: MockMarketOptions = {
     handle.lastCandlesQuery = new URLSearchParams(q);
     const symbol = (q.get('symbol') || 'SPY').toUpperCase();
     const tf = tfTokenToSeconds(q.get('tf') || q.get('timeframe') || '1m');
-    const rows = queryCandles(symbol, tf, {
-      startMs: toMs(q.get('start')),
-      endMs: toMs(q.get('end')),
-      limit: q.get('limit') ? Number(q.get('limit')) : undefined,
-    });
+    const rows = options.emptyMarket
+      ? []
+      : queryCandles(symbol, tf, {
+          startMs: toMs(q.get('start')),
+          endMs: toMs(q.get('end')),
+          limit: q.get('limit') ? Number(q.get('limit')) : undefined,
+        });
     return json(route, rows, latency);
   });
 
@@ -194,7 +198,7 @@ export async function installApiMocks(page: Page, options: MockMarketOptions = {
     const q = url.searchParams;
     const symbol = (q.get('symbol') || 'SPY').toUpperCase();
     const limit = q.get('limit') ? Number(q.get('limit')) : 50;
-    const rows = queryTape(symbol, Date.now() + 86_400_000, limit);
+    const rows = options.emptyMarket ? [] : queryTape(symbol, Date.now() + 86_400_000, limit);
     return json(route, rows, latency);
   });
 

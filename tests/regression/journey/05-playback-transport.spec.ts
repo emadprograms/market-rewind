@@ -20,6 +20,7 @@ import {
   playButton,
   setSpeed,
   readScrubber,
+  seekScrubber,
   utcToEtClock,
   collectPageErrors,
 } from '../mocks/replayJourney';
@@ -166,7 +167,10 @@ test.describe('JOURNEY 05 — Playback transport (play / pause / step / scrub / 
     // (09:20 -> past 09:25 needs >300s of market time; 100x * ~3.5s ≈ 350s).
     await setSpeed(page, '100');
     await pressPlay(page);
-    await page.waitForTimeout(3500);
+    await expect(async () => {
+      const current = await readBarData(card);
+      expect(current.barsCount).toBeGreaterThan(before.barsCount);
+    }).toPass({ timeout: 15_000 });
     await pressPause(page);
 
     const after = await readBarData(card);

@@ -37,7 +37,7 @@ test.describe('JOURNEY 03 — Historical context (previous days before the targe
     const firstEtDate = utcToEtDate(bar.firstBarTime!);
     expect(firstEtDate < TARGET).toBe(true);
     // And it opens at/after the regular session (09:30 ET), not pre-dawn.
-    expect(utcToEtClock(bar.firstBarTime!)).toMatch(/^(09:3\d|1[0-6]):/);
+    expect(utcToEtClock(bar.firstBarTime!)).toMatch(/^(09:[3-5]\d|1[0-6]:\d{2})/);
 
     expect(pageErrors).toEqual([]);
   });

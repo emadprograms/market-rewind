@@ -17,6 +17,8 @@ import {
   pressPlay,
   pressPause,
   setSpeed,
+  readScrubber,
+  seekScrubber,
   openTape,
   tapeRows,
   tapePanel,
