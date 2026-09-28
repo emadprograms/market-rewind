@@ -212,6 +212,7 @@ class StreamingApp:
         end_time = request.query.get("end_time") or request.query.get("end")
         limit = int(request.query.get("limit", 15000))
         direction = request.query.get("direction")
+        session = request.query.get("session")
 
         candles = self.db.query_candles(
             symbol=symbol,
@@ -220,6 +221,7 @@ class StreamingApp:
             end_time=end_time,
             limit=limit,
             direction=direction,
+            session=session,
         )
         return web.Response(text=json_dumps(candles), content_type="application/json")
 

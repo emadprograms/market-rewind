@@ -71,3 +71,25 @@ def test_service_dynamic_candles_minute(service):
     assert len(candles) > 0
     c = candles[0]
     assert c["high"] >= c["low"]
+
+
+def test_service_dynamic_candles_daily_rth_only(service):
+    # Test 1d candle query strictly filters to RTH (REG session)
+    daily_candles = service.query_candles("NVDA", timeframe="1d", limit=5)
+    assert isinstance(daily_candles, list)
+    assert len(daily_candles) > 0
+
+    c = daily_candles[0]
+    assert "open" in c
+    assert "high" in c
+    assert "low" in c
+    assert "close" in c
+    assert "volume" in c
+    assert c["high"] >= c["low"]
+
+    # Verify that default 1d query matches explicit session="REG"
+    reg_candles = service.query_candles("NVDA", timeframe="1d", limit=5, session="REG")
+    assert len(daily_candles) == len(reg_candles)
+    assert daily_candles[0]["open"] == reg_candles[0]["open"]
+    assert daily_candles[0]["close"] == reg_candles[0]["close"]
+    assert daily_candles[0]["volume"] == reg_candles[0]["volume"]

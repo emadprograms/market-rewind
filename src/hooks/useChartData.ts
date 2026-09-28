@@ -8,7 +8,7 @@ import { applyTickToCandles, getBucketTimestamp } from '../lib/candleSynthesizer
 import { buildCandleFromTickSlice } from '../lib/tickSynthesizer';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
-import { getUtcTimeFromEt } from '../lib/timezones';
+import { getUtcTimeFromEt, isRthBar, isRthTick } from '../lib/timezones';
 import type { MarketTick } from '../types';
 
 const EMPTY_TICKS: MarketTick[] = [];
@@ -59,7 +59,12 @@ export function useChartData({
   };
 
   const [localMasterData, setLocalMasterData] = useState<RawBar[]>([]);
-  const [timeframe, setTimeframe] = useState<Timeframe>(initialTf || '1D');
+  const [timeframe, setTimeframeLocal] = useState<Timeframe>(initialTf || '1D');
+  const setStoreTimeframe = useWorkspaceStore((state) => state.setTimeframe);
+  const setTimeframe = (tf: Timeframe) => {
+    setTimeframeLocal(tf);
+    setStoreTimeframe(chartId, tf);
+  };
   const [showEth, setShowEth] = useState<boolean>(initialEth || false);
 
   const globalTime = usePlaybackStore((state) => state.currentTime);
@@ -146,7 +151,6 @@ export function useChartData({
     let cancelled = false;
     async function load() {
       console.log(`[useChartData ${id}] load() START: ${ticker} (${timeframe}) date=${selectedDate}`);
-      setLocalMasterData([]);
       setIsLoadingHistory(true);
       lastFetchedEndTimeRef.current = null;
       hasMoreHistoryRef.current = true;
@@ -169,7 +173,13 @@ export function useChartData({
         earliestLoadedDateRef.current = data[0].time;
       }
       dataTimeframeRef.current = timeframe;
-      setLocalMasterData(data as RawBar[]);
+      setLocalMasterData((prev: RawBar[]) => {
+        if (prev === data) return prev;
+        if (prev.length === data?.length && prev[prev.length - 1]?.time === data[data.length - 1]?.time && prev[0]?.time === data[0]?.time) {
+          return prev;
+        }
+        return (data || []) as RawBar[];
+      });
       setIsLoadingHistory(false);
     }
     load();
@@ -266,9 +276,15 @@ export function useChartData({
   const filteredData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
     
-    let filtered = (timeframe === '1D' || showEth) 
-      ? localMasterData 
-      : localMasterData.filter((d, i) => !d.session || d.session === 'REG' || d.session.includes('REG'));
+    let filtered: RawBar[];
+    if (timeframe === '1D') {
+      // 1D chart strictly uses RTH hours, never ETH / full 24h day
+      filtered = localMasterData.filter((d) => isRthBar(d, ticker));
+    } else if (showEth) {
+      filtered = localMasterData;
+    } else {
+      filtered = localMasterData.filter((d) => !d.session || d.session === 'REG' || d.session.includes('REG'));
+    }
     
     // Build index map: if we filtered by session, we need to map filtered indices to original barTimestampsMs indices
     let filteredTimestamps: number[];
@@ -320,13 +336,17 @@ export function useChartData({
       const offsetHours = 14 - parseInt(nyHour, 10);
       const startOfTodayMs = new Date(`${selectedDate}T00:00:00Z`).getTime() + (offsetHours * 3600000);
 
+      // Regular Trading Hours (09:30 AM to 16:00 PM Eastern Time)
+      const rthOpenMs = startOfTodayMs + (9.5 * 3600000);
+      const rthCloseMs = startOfTodayMs + (16 * 3600000);
+
       const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0)
         ? masterData
         : localMasterData;
 
       const todayBars = candidateBars.filter(b => {
         const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
-        return bMs >= startOfTodayMs && bMs <= effectiveCutoff;
+        return bMs >= rthOpenMs && bMs <= Math.min(effectiveCutoff, rthCloseMs) && isRthBar(b, ticker);
       });
 
       if (todayBars.length > 0) {
@@ -341,11 +361,14 @@ export function useChartData({
           tickCount: todayBars.reduce((s, b) => s + (b.tickCount || 1), 0),
         };
 
-        if (latestTick && latestTick.price) {
-          formingDaily.high = Math.max(formingDaily.high, latestTick.price);
-          formingDaily.low = Math.min(formingDaily.low, latestTick.price);
-          formingDaily.close = latestTick.price;
-          if (latestTick.volume) formingDaily.volume += latestTick.volume;
+        // Only incorporate latestTick if currently within RTH hours
+        if (latestTick && latestTick.price && effectiveCutoff >= rthOpenMs && effectiveCutoff <= rthCloseMs) {
+          if (isRthTick(latestTick, ticker)) {
+            formingDaily.high = Math.max(formingDaily.high, latestTick.price);
+            formingDaily.low = Math.min(formingDaily.low, latestTick.price);
+            formingDaily.close = latestTick.price;
+            if (latestTick.volume) formingDaily.volume += latestTick.volume;
+          }
         }
 
         resampled = [...resampled, formingDaily];

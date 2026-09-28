@@ -66,8 +66,9 @@ describe('Chart Integrity Unit Tests: X-Axis, Shading, and Opening Price', () =>
   });
 
   describe('4. Daily Resampling (resampling.ts)', () => {
-    it('resamples intraday candles into daily bars without day-shift in local time', () => {
+    it('resamples intraday candles into daily bars using strictly RTH hours (excluding PRE and POST)', () => {
       const bars: RawBar[] = [
+        { time: '2026-09-25 12:00:00', open: 765.0, high: 766.0, low: 764.0, close: 765.5, volume: 500, session: 'PRE' },
         { time: '2026-09-25 13:30:00', open: 768.5, high: 770.0, low: 768.0, close: 769.0, volume: 1000, session: 'REG' },
         { time: '2026-09-25 19:59:00', open: 771.5, high: 772.0, low: 771.0, close: 772.0, volume: 2000, session: 'POST' },
       ];
@@ -75,10 +76,13 @@ describe('Chart Integrity Unit Tests: X-Axis, Shading, and Opening Price', () =>
       const daily = resampleData(bars, '1D');
       expect(daily).toHaveLength(1);
       expect(daily[0].time).toBe('2026-09-25 12:00:00');
+      // Strictly reflects RTH hours (REG session):
       expect(daily[0].open).toBe(768.5);
-      expect(daily[0].high).toBe(772.0);
+      expect(daily[0].high).toBe(770.0);
       expect(daily[0].low).toBe(768.0);
-      expect(daily[0].close).toBe(772.0);
+      expect(daily[0].close).toBe(769.0);
+      expect(daily[0].volume).toBe(1000);
+      expect(daily[0].session).toBe('REG');
     });
   });
 });

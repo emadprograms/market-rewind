@@ -5,6 +5,7 @@
  */
 import type { MarketTick, RawBar, Timeframe } from '../types';
 import { TF_SECONDS } from '../types';
+import { isRthTick } from './timezones';
 
 export function getBucketTimestamp(time: string | number, timeframe: Timeframe): string {
   const date = typeof time === 'number' 
@@ -44,10 +45,11 @@ export function applyTickToCandles(
   timeframe: Timeframe
 ): RawBar[] {
   if (!tick || isNaN(tick.price)) return candles;
+  if (timeframe === '1D' && !isRthTick(tick)) return candles;
 
   const bucketTime = getBucketTimestamp(tick.time, timeframe);
   const tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
-  const session = tick.session || 'REG';
+  const session = timeframe === '1D' ? 'REG' : (tick.session || 'REG');
 
   if (!candles || candles.length === 0) {
     return [
@@ -97,6 +99,7 @@ export function buildCandlesFromTicks(
 ): RawBar[] {
   let candles: RawBar[] = [];
   for (const tick of ticks) {
+    if (timeframe === '1D' && !isRthTick(tick)) continue;
     candles = applyTickToCandles(candles, tick, timeframe);
   }
   return candles;

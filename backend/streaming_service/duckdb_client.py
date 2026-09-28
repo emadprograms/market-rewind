@@ -250,13 +250,15 @@ class DuckDBService:
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         limit: int = 15000,
-        direction: Optional[str] = None
+        direction: Optional[str] = None,
+        session: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Dynamically aggregates ticks into OHLCV candles using DuckDB time_bucket().
         If no ticks match and timeframe is 1m+, attempts fallback to historical.duckdb.
         When querying historical window up to end_time (start_time is None), queries the latest
         candles before end_time (DESC) and reverses them to return in chronological ASC order.
+        For 1d timeframe, strictly uses Regular Trading Hours (RTH / session = 'REG').
         """
         interval = INTERVAL_MAP.get(timeframe.lower(), "1 minute")
         candles: List[Dict[str, Any]] = []
@@ -266,6 +268,12 @@ class DuckDBService:
             try:
                 where_clauses = ["symbol = ?"]
                 params: List[Any] = [symbol.upper()]
+
+                if session and session.upper() != "ALL":
+                    where_clauses.append("upper(session) = ?")
+                    params.append(session.upper())
+                elif not session and timeframe.lower() in ("1d", "1 day"):
+                    where_clauses.append("(upper(session) = 'REG' OR session = 'RTH')")
 
                 if start_time:
                     where_clauses.append("timestamp >= ?::TIMESTAMP")
@@ -323,7 +331,8 @@ class DuckDBService:
                 start_time=start_time,
                 end_time=hist_end_time,
                 limit=remaining_limit,
-                direction=direction
+                direction=direction,
+                session=session
             )
             if candles and hist_candles and hist_candles[-1]["time"] == candles[0]["time"]:
                 hist_candles = hist_candles[:-1]
@@ -338,7 +347,8 @@ class DuckDBService:
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         limit: int = 15000,
-        direction: Optional[str] = None
+        direction: Optional[str] = None,
+        session: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Queries 1-minute historical candles from historical.duckdb with optional resampling."""
         interval = INTERVAL_MAP.get(timeframe.lower(), "1 minute")
@@ -346,6 +356,12 @@ class DuckDBService:
         try:
             where_clauses = ["symbol = ?"]
             params: List[Any] = [symbol.upper()]
+
+            if session and session.upper() != "ALL":
+                where_clauses.append("upper(session) = ?")
+                params.append(session.upper())
+            elif not session and timeframe.lower() in ("1d", "1 day"):
+                where_clauses.append("(upper(session) = 'REG' OR session = 'RTH')")
 
             if start_time:
                 where_clauses.append("timestamp >= ?::TIMESTAMP")

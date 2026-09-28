@@ -36,3 +36,103 @@ export function getUtcTimeFromEt(dateStr: string, etTimeStr: string): string {
   const targetUtcDate = new Date(localMs + (offsetHours * 3600000));
   return targetUtcDate.toISOString().replace('T', ' ').substring(0, 19);
 }
+
+const formatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  hour: 'numeric',
+  minute: 'numeric',
+  hour12: false
+});
+
+let lastDay = -1;
+let dayOffset = 0; // in minutes
+
+export function getSessionType(timestamp: number, ticker?: string): 'PRE' | 'RTH' | 'POST' | 'OTHER' {
+  if (ticker) {
+    const tz = getTzForTicker(ticker);
+    if (tz === 'UTC') return 'RTH';
+  }
+
+  const date = new Date(timestamp * 1000);
+  const day = Math.floor(timestamp / 86400);
+  
+  if (day !== lastDay) {
+      // Recalculate offset for the day
+      const nyStr = formatter.format(date); // "H:MM" or "HH:MM"
+      const [h, m] = nyStr.split(':').map(Number);
+      const utcHours = date.getUTCHours();
+      const utcMinutes = date.getUTCMinutes();
+      
+      const nyTotal = h * 60 + m;
+      const utcTotal = utcHours * 60 + utcMinutes;
+      
+      dayOffset = nyTotal - utcTotal;
+      // Handle wrap around (day boundary)
+      if (dayOffset > 720) dayOffset -= 1440;
+      if (dayOffset < -720) dayOffset += 1440;
+      
+      lastDay = day;
+  }
+  
+  const totalMinutesUTC = date.getUTCHours() * 60 + date.getUTCMinutes();
+  let totalMinutes = totalMinutesUTC + dayOffset;
+  if (totalMinutes < 0) totalMinutes += 1440;
+  if (totalMinutes >= 1440) totalMinutes -= 1440;
+
+  if (totalMinutes >= 240 && totalMinutes < 570) return 'PRE';
+  if (totalMinutes >= 570 && totalMinutes < 960) return 'RTH';
+  if (totalMinutes >= 960 && totalMinutes < 1200) return 'POST';
+  return 'OTHER';
+}
+
+/**
+ * Determines if a bar belongs to Regular Trading Hours (RTH).
+ * Checks the session field first ('REG' or 'RTH'), then falls back to timestamp-based session calculation.
+ */
+export function isRthBar(bar: { time: string; session?: string }, ticker?: string): boolean {
+  if (bar.session) {
+    const s = bar.session.toUpperCase();
+    if (s === 'REG' || s === 'RTH' || s.includes('REG')) {
+      return true;
+    }
+    if (s === 'PRE' || s === 'POST' || s === 'OTHER') {
+      return false;
+    }
+  }
+
+  // Daily bars bucketed at 12:00:00 or 00:00:00 without explicit session are preserved
+  if (bar.time.endsWith(' 12:00:00') || bar.time.endsWith(' 00:00:00')) {
+    return true;
+  }
+
+  const rawTime = bar.time.includes('T') ? bar.time : bar.time.replace(' ', 'T') + (bar.time.includes('Z') ? '' : 'Z');
+  const ms = new Date(rawTime).getTime();
+  if (isNaN(ms)) return true;
+  return getSessionType(Math.floor(ms / 1000), ticker) === 'RTH';
+}
+
+/**
+ * Determines if a tick belongs to Regular Trading Hours (RTH).
+ */
+export function isRthTick(tick: { time: string | number; session?: string; symbol?: string }, ticker?: string): boolean {
+  if (tick.session) {
+    const s = tick.session.toUpperCase();
+    if (s === 'REG' || s === 'RTH' || s.includes('REG')) {
+      return true;
+    }
+    if (s === 'PRE' || s === 'POST' || s === 'OTHER') {
+      return false;
+    }
+  }
+
+  let ms: number;
+  if (typeof tick.time === 'number') {
+    ms = tick.time < 1e11 ? tick.time * 1000 : tick.time;
+  } else {
+    const rawTime = tick.time.includes('T') ? tick.time : tick.time.replace(' ', 'T') + (tick.time.includes('Z') ? '' : 'Z');
+    ms = new Date(rawTime).getTime();
+  }
+
+  if (isNaN(ms)) return true;
+  return getSessionType(Math.floor(ms / 1000), tick.symbol || ticker) === 'RTH';
+}

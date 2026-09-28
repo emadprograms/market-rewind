@@ -1,5 +1,6 @@
 import type { RawBar, Timeframe } from '../types';
 import { TF_SECONDS } from '../types';
+import { isRthBar } from './timezones';
 
 export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
   const start = performance.now();
@@ -16,6 +17,10 @@ export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
   let currentBucket: RawBar | null = null;
 
   data.forEach((bar) => {
+    if (timeframe === '1D' && !isRthBar(bar)) {
+      return;
+    }
+
     const rawTime = bar.time.includes('T') ? bar.time : bar.time.replace(' ', 'T') + (bar.time.includes('Z') ? '' : 'Z');
     const date = new Date(rawTime);
     const timestamp = date.getTime();
@@ -49,7 +54,7 @@ export function resampleData(data: RawBar[], timeframe: Timeframe): RawBar[] {
         low: bar.low,
         close: bar.close,
         volume: bar.volume,
-        session: bar.session,
+        session: timeframe === '1D' ? 'REG' : bar.session,
         tickCount: bar.tickCount || 1,
       };
     } else {
