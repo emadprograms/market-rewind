@@ -12,9 +12,10 @@ test.describe('TEST-06: Real-Time Playback Clock & Tick Timing', () => {
     await expect(timeDisplay).toBeVisible();
     const initialTimeStr = await timeDisplay.innerText();
 
-    // Verify PLAY button is visible and active
+    // Verify PLAY button is visible and active, and ticks have buffered
     const playBtn = page.getByRole('button', { name: /PLAY/i });
     await expect(playBtn).toBeVisible();
+    await expect(page.locator('.playback-bar')).not.toHaveAttribute('data-total-ticks', '0', { timeout: 20000 });
 
     // Start playback
     const startWallTime = Date.now();

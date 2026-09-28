@@ -74,6 +74,7 @@ export function PlaybackBar({
     <div 
       className="playback-bar" 
       data-ticks-loading={isLoadingTicks ? "true" : "false"}
+      data-total-ticks={totalTicks}
       style={{ paddingLeft: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}
     >
       

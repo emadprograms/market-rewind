@@ -225,81 +225,40 @@ class StreamingClient {
     const limit = options.limit || 15000;
 
     const isSubSecond = ['1s', '5s', '15s', '30s'].includes(tf);
+    const endpoint = isSubSecond ? `${API_BASE_URL}/api/streaming/candles` : `${API_BASE_URL}/api/candles`;
+
+    const params = new URLSearchParams({
+      symbol: sym,
+      tf: apiTf,
+      timeframe: apiTf,
+      limit: String(limit),
+    });
+    if (options.startTime) params.append('start', options.startTime);
+    if (options.endTime) params.append('end', options.endTime);
+
     let rawList: any[] = [];
-
-    if (isSubSecond) {
+    try {
+      const res = await fetch(`${endpoint}?${params.toString()}`, {
+        signal: AbortSignal.timeout(20000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        rawList = Array.isArray(data) ? data : (data.candles || []);
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch candles from ${endpoint} for ${symbol}:`, e);
       try {
-        const streamParams = new URLSearchParams({
-          symbol: sym,
-          tf: apiTf,
-          timeframe: apiTf,
-          limit: String(limit),
+        const fallbackEndpoint = isSubSecond ? `${API_BASE_URL}/api/candles` : `${API_BASE_URL}/api/streaming/candles`;
+        const streamRes = await fetch(`${fallbackEndpoint}?${params.toString()}`, {
+          signal: AbortSignal.timeout(20000),
         });
-        if (options.startTime) streamParams.append('start', options.startTime);
-        if (options.endTime) streamParams.append('end', options.endTime);
-
-        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
+        if (streamRes.ok) {
+          const data = await streamRes.json();
           rawList = Array.isArray(data) ? data : (data.candles || []);
         }
-      } catch (e) {
-        console.warn(`Failed to fetch sub-second streaming candles for ${symbol}:`, e);
+      } catch (err2) {
+        console.warn(`Failed to fetch candles from fallback ${fallbackEndpoint} for ${symbol}:`, err2);
       }
-    } else {
-      // Standard timeframes: query historical DuckDB for deep context & regular trading hours
-      let histCandles: any[] = [];
-      try {
-        const params = new URLSearchParams({
-          symbol: sym,
-          tf: apiTf,
-          timeframe: apiTf,
-          limit: String(limit),
-        });
-        if (options.startTime) params.append('start', options.startTime);
-        if (options.endTime) params.append('end', options.endTime);
-
-        const res = await fetch(`${API_BASE_URL}/api/candles?${params.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          histCandles = Array.isArray(data) ? data : (data.candles || []);
-        }
-      } catch {
-        // ignore
-      }
-
-      // Also fetch live streaming buffer candles if available
-      let streamCandles: any[] = [];
-      try {
-        const streamParams = new URLSearchParams({
-          symbol: sym,
-          tf: apiTf,
-          timeframe: apiTf,
-          limit: String(limit),
-        });
-        if (options.startTime) streamParams.append('start', options.startTime);
-        if (options.endTime) streamParams.append('end', options.endTime);
-
-        const res = await fetch(`${API_BASE_URL}/api/streaming/candles?${streamParams.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          streamCandles = Array.isArray(data) ? data : (data.candles || []);
-        }
-      } catch {
-        // ignore
-      }
-
-      // Merge historical + streaming candles deduplicated by timestamp
-      const candleMap = new Map<string, any>();
-      for (const c of histCandles) {
-        const key = String(c.time ?? c.time_str ?? c.timestamp);
-        candleMap.set(key, c);
-      }
-      for (const c of streamCandles) {
-        const key = String(c.time ?? c.time_str ?? c.timestamp);
-        candleMap.set(key, c);
-      }
-      rawList = Array.from(candleMap.values());
     }
 
     return (rawList || []).map((row: any) => {

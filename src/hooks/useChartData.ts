@@ -63,6 +63,7 @@ export function useChartData({
   const [showEth, setShowEth] = useState<boolean>(initialEth || false);
 
   const globalTime = usePlaybackStore((state) => state.currentTime);
+  const masterData = usePlaybackStore((state) => state.masterData);
   const latestTick = usePlaybackStore((state) => 
     state.latestTickBySymbol?.[ticker.toUpperCase()] || 
     (state.currentTick?.symbol?.toUpperCase() === ticker.toUpperCase() ? state.currentTick : null)
@@ -70,6 +71,14 @@ export function useChartData({
   const symbolTicks = usePlaybackStore((state) => 
     state.ticksBySymbol?.[ticker.toUpperCase()] || EMPTY_TICKS
   );
+
+  const defaultCutoff = useMemo(() => {
+    if (!selectedDate) return 0;
+    const targetStr = getUtcTimeFromEt(selectedDate, '09:30');
+    return new Date(targetStr.replace(' ', 'T') + 'Z').getTime();
+  }, [selectedDate]);
+
+  const effectiveCutoff = (isReplayMode && globalTime) ? globalTime : (globalTime || defaultCutoff);
 
   // Dynamic Ticker Playback Synchronization (SYNC-04)
   useEffect(() => {
@@ -133,10 +142,10 @@ export function useChartData({
     if (onTimeframeChange) onTimeframeChange(id, timeframe);
   }, [timeframe, id, onTimeframeChange]);
 
-  // Initial data fetch
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      console.log(`[useChartData ${id}] load() START: ${ticker} (${timeframe}) date=${selectedDate}`);
       setLocalMasterData([]);
       setIsLoadingHistory(true);
       lastFetchedEndTimeRef.current = null;
@@ -146,13 +155,16 @@ export function useChartData({
       const endBoundary = selectedDate ? `${selectedDate} 23:59:59` : undefined;
       try {
         data = await streamingClient.getCandles(ticker, { timeframe, endTime: endBoundary, limit: 10000 });
-      } catch {
-        // Fallback to local DB
+      } catch (err) {
+        console.warn(`[useChartData ${id}] getCandles ERROR:`, err);
       }
 
-      if (cancelled) return;
+      if (cancelled) {
+        console.log(`[useChartData ${id}] load() CANCELLED before setLocalMasterData: ${ticker} (${timeframe})`);
+        return;
+      }
 
-      console.log(`[useChartData] ${ticker} (${timeframe}) loaded ${data?.length || 0} bars: ${data?.[0]?.time} -> ${data?.[data?.length - 1]?.time}`);
+      console.log(`[useChartData ${id}] ${ticker} (${timeframe}) loaded ${data?.length || 0} bars: ${data?.[0]?.time} -> ${data?.[data?.length - 1]?.time}`);
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }
@@ -161,8 +173,11 @@ export function useChartData({
       setIsLoadingHistory(false);
     }
     load();
-    return () => { cancelled = true; };
-  }, [ticker, selectedDate, timeframe]);
+    return () => { 
+      cancelled = true; 
+      console.log(`[useChartData ${id}] load() CLEANUP: ${ticker} (${timeframe}) date=${selectedDate}`);
+    };
+  }, [ticker, selectedDate, timeframe, id]);
 
   // Infinite Scroll Listener
   useEffect(() => {
@@ -266,38 +281,78 @@ export function useChartData({
       );
     }
 
-    if (isReplayMode && globalTime) {
-      if (timeframe === '1D') {
-        const startOfTodayMs = Math.floor(globalTime / (86400 * 1000)) * (86400 * 1000);
-        if (latestTick) {
-          filtered = filtered.filter((_, i) => filteredTimestamps[i] < startOfTodayMs);
-        } else {
-          const endOfReplayDay = new Date(new Date(globalTime).toISOString().slice(0, 10) + 'T23:59:59.999Z').getTime();
-          filtered = filtered.filter((_, i) => filteredTimestamps[i] <= endOfReplayDay);
-        }
+    if (timeframe === '1D') {
+      const probeDate = new Date(`${selectedDate}T14:00:00Z`);
+      const nyHour = new Intl.DateTimeFormat('en-US', { 
+        timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' 
+      }).format(probeDate);
+      const offsetHours = 14 - parseInt(nyHour, 10);
+      const startOfTodayMs = new Date(`${selectedDate}T00:00:00Z`).getTime() + (offsetHours * 3600000);
+      
+      // Daily completed bars strictly before today (prevents leaking DuckDB's completed EOD candle)
+      filtered = filtered.filter((_, i) => filteredTimestamps[i] < startOfTodayMs);
+    } else {
+      const durationSec = TF_SECONDS[timeframe] || 60;
+      const currentBucketStartMs = Math.floor(effectiveCutoff / (durationSec * 1000)) * (durationSec * 1000);
+      
+      if (latestTick) {
+        filtered = filtered.filter((_, i) => filteredTimestamps[i] < currentBucketStartMs);
+      } else if (timeframe === '1min') {
+        filtered = filtered.filter((_, i) => filteredTimestamps[i] <= effectiveCutoff);
       } else {
-        const durationSec = TF_SECONDS[timeframe] || 60;
-        const currentBucketStartMs = Math.floor(globalTime / (durationSec * 1000)) * (durationSec * 1000);
-        
-        // When live ticks are active for this ticker, exclude any historical bar in or after the current bucket
-        if (latestTick) {
-          filtered = filtered.filter((_, i) => filteredTimestamps[i] < currentBucketStartMs);
-        } else {
-          filtered = filtered.filter((_, i) => filteredTimestamps[i] <= globalTime);
-        }
+        // Higher timeframe bars before the current forming bucket
+        filtered = filtered.filter((_, i) => filteredTimestamps[i] < currentBucketStartMs);
       }
     }
     
     return filtered;
-  }, [localMasterData, barTimestampsMs, timeframe, showEth, isReplayMode, globalTime, latestTick]);
+  }, [localMasterData, barTimestampsMs, timeframe, showEth, effectiveCutoff, latestTick, selectedDate]);
 
   // Resample the filtered data to the target timeframe and synthesize live tick
   const chartData = useMemo(() => {
     let resampled = resampleData(filteredData, timeframe);
 
-    if (isReplayMode && globalTime && latestTick && symbolTicks && symbolTicks.length > 0 && tickTimestampsMs.length > 0) {
+    if (timeframe === '1D') {
+      const probeDate = new Date(`${selectedDate}T14:00:00Z`);
+      const nyHour = new Intl.DateTimeFormat('en-US', { 
+        timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' 
+      }).format(probeDate);
+      const offsetHours = 14 - parseInt(nyHour, 10);
+      const startOfTodayMs = new Date(`${selectedDate}T00:00:00Z`).getTime() + (offsetHours * 3600000);
+
+      const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0)
+        ? masterData
+        : localMasterData;
+
+      const todayBars = candidateBars.filter(b => {
+        const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
+        return bMs >= startOfTodayMs && bMs <= effectiveCutoff;
+      });
+
+      if (todayBars.length > 0) {
+        const formingDaily: RawBar = {
+          time: `${selectedDate} 12:00:00`,
+          open: todayBars[0].open,
+          high: Math.max(...todayBars.map(b => b.high)),
+          low: Math.min(...todayBars.map(b => b.low)),
+          close: todayBars[todayBars.length - 1].close,
+          volume: todayBars.reduce((s, b) => s + (b.volume || 0), 0),
+          session: 'REG',
+          tickCount: todayBars.reduce((s, b) => s + (b.tickCount || 1), 0),
+        };
+
+        if (latestTick && latestTick.price) {
+          formingDaily.high = Math.max(formingDaily.high, latestTick.price);
+          formingDaily.low = Math.min(formingDaily.low, latestTick.price);
+          formingDaily.close = latestTick.price;
+          if (latestTick.volume) formingDaily.volume += latestTick.volume;
+        }
+
+        resampled = [...resampled, formingDaily];
+      }
+    } else if (effectiveCutoff && latestTick && symbolTicks && symbolTicks.length > 0 && tickTimestampsMs.length > 0) {
       const durationSec = TF_SECONDS[timeframe] || 60;
-      const currentBucketStartMs = Math.floor(globalTime / (durationSec * 1000)) * (durationSec * 1000);
+      const currentBucketStartMs = Math.floor(effectiveCutoff / (durationSec * 1000)) * (durationSec * 1000);
       const bucketTime = getBucketTimestamp(currentBucketStartMs, timeframe);
 
       // Binary search for the first tick >= currentBucketStartMs using pre-cached timestamps
@@ -308,10 +363,10 @@ export function useChartData({
         else hi = mid;
       }
 
-      // Collect bucket ticks from binary search start to globalTime
+      // Collect bucket ticks from binary search start to effectiveCutoff
       const bucketTicks: MarketTick[] = [];
       for (let i = lo; i < symbolTicks.length; i++) {
-        if (tickTimestampsMs[i] > globalTime) break;
+        if (tickTimestampsMs[i] > effectiveCutoff) break;
         if (tickTimestampsMs[i] >= currentBucketStartMs) {
           bucketTicks.push(symbolTicks[i]);
         }
@@ -343,13 +398,40 @@ export function useChartData({
           }
         }
       }
-    } else if (isReplayMode && latestTick) {
+    } else if (latestTick) {
       resampled = applyTickToCandles(resampled, latestTick, timeframe);
+    } else if (timeframe !== '1min' && timeframe !== '1D') {
+      // Synthesize forming multi-minute/hour candle from 1m masterData up to effectiveCutoff
+      const durationSec = TF_SECONDS[timeframe] || 60;
+      const currentBucketStartMs = Math.floor(effectiveCutoff / (durationSec * 1000)) * (durationSec * 1000);
+      const bucketTime = getBucketTimestamp(currentBucketStartMs, timeframe);
+
+      const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0) 
+        ? masterData 
+        : localMasterData;
+
+      const bucketBars = candidateBars.filter(b => {
+        const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
+        return bMs >= currentBucketStartMs && bMs <= effectiveCutoff;
+      });
+
+      if (bucketBars.length > 0) {
+        const formingCandle: RawBar = {
+          time: bucketTime,
+          open: bucketBars[0].open,
+          high: Math.max(...bucketBars.map(b => b.high)),
+          low: Math.min(...bucketBars.map(b => b.low)),
+          close: bucketBars[bucketBars.length - 1].close,
+          volume: bucketBars.reduce((s, b) => s + (b.volume || 0), 0),
+          session: bucketBars[bucketBars.length - 1].session || 'REG',
+          tickCount: bucketBars.reduce((s, b) => s + (b.tickCount || 1), 0),
+        };
+        resampled = [...resampled, formingCandle];
+      }
     }
 
-    console.log(`[useChartData chartData] ${ticker} (${timeframe}) count=${resampled.length}: ${resampled[0]?.time} -> ${resampled[resampled.length - 1]?.time}`);
     return resampled;
-  }, [filteredData, timeframe, isReplayMode, globalTime, latestTick, symbolTicks, tickTimestampsMs]);
+  }, [filteredData, timeframe, isReplayMode, effectiveCutoff, latestTick, symbolTicks, tickTimestampsMs, selectedDate, ticker, masterData, localMasterData]);
 
   return {
     ticker,

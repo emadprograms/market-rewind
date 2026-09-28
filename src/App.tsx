@@ -103,6 +103,9 @@ export default function App() {
       const endTime = `${selectedDate} 23:59:59`;
       const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime || '09:20');
       const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
+      usePlaybackStore.getState().setCurrentTime(targetMs);
+      usePlaybackStore.getState().seekTickTime(targetMs);
+      usePlaybackStore.getState().setPaused(true);
 
       // Collect all active tickers across workspace (charts, groups, session)
       const ws = useWorkspaceStore.getState();

@@ -72,9 +72,12 @@ export function useChartViewport({
           ts.setVisibleLogicalRange(newRange);
           autoRevealLockedRef.current = true;
         } else {
-          ts.setVisibleLogicalRange(oldLogicalRange);
+          ts.scrollToRealTime();
           autoRevealLockedRef.current = true;
         }
+      } else if (oldLogicalRange.from >= chartData.length) {
+        ts.scrollToRealTime();
+        autoRevealLockedRef.current = true;
       } else {
         ts.setVisibleLogicalRange(oldLogicalRange);
         autoRevealLockedRef.current = true;

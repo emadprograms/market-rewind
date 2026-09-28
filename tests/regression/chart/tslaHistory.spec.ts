@@ -3,11 +3,8 @@ import { startSession, chartCard, headerTicker } from '../e2e-utils';
 
 test.describe('TSLA Historical Data Range Investigation', () => {
   test('inspect loaded candles for TSLA on 2026-09-08', async ({ page }) => {
-    page.on('console', msg => {
-      if (msg.text().includes('useChartData') || msg.text().includes('Loaded')) {
-        console.log('BROWSER:', msg.text());
-      }
-    });
+    page.on('console', msg => console.log('BROWSER:', msg.type(), msg.text()));
+    page.on('pageerror', err => console.log('BROWSER PAGEERROR:', err.message));
 
     await startSession(page, 'TSLA', '2026-09-08');
 
@@ -47,17 +44,20 @@ test.describe('TSLA Historical Data Range Investigation', () => {
     // Click 1m timeframe on Chart 0
     const tf1mBtn = page.locator('.chart-card').first().locator('button:has-text("1m")');
     await tf1mBtn.click();
-    await expect(page.locator('.chart-card').first()).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
-    await page.waitForTimeout(500);
+    
+    // 1-minute chart must load deep history extending well beyond 5 days (>3000 bars)
+    await expect(async () => {
+      const card = page.locator('.chart-card').first();
+      const countStr = await card.getAttribute('data-bars-count');
+      const count = Number(countStr || 0);
+      expect(count).toBeGreaterThan(3000);
+    }).toPass({ timeout: 15000 });
 
     const rangeAfter1m = await page.evaluate(() => {
       const card = document.querySelector('.chart-card');
       return Number(card?.getAttribute('data-bars-count') || 0);
     });
     console.log('DATA RANGE AFTER 1m:', rangeAfter1m);
-
-    // 1-minute chart must also load deep history extending well beyond 5 days
-    expect(rangeAfter1m).toBeGreaterThan(3000);
 
     await page.screenshot({ path: 'chart_tsla_1m.png' });
   });

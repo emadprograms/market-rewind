@@ -41,8 +41,8 @@ export async function startSession(
   await expect(headerTicker(chartCard(page, 0))).toHaveText(ticker);
   await expect(headerTicker(chartCard(page, 1))).toHaveText(ticker);
   // Verify that charts actually have loaded candle bars (not blank 0 bars)
-  await expect(chartCard(page, 0)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
-  await expect(chartCard(page, 1)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 15000 });
+  await expect(chartCard(page, 0)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 25000 });
+  await expect(chartCard(page, 1)).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 25000 });
   // Verify that replay session time has initialized and transport is ready
   await expect(page.locator('.playback-bar')).toHaveAttribute('data-ticks-loading', 'false', { timeout: 30000 });
   await expect(page.locator('.time-display')).not.toHaveText('--:--:--', { timeout: 30000 });

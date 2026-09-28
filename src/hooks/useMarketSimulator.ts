@@ -17,6 +17,13 @@ export function useMarketSimulator(
   const masterData = usePlaybackStore((state) => state.masterData);
 
   const loadMarketData = useCallback(async () => {
+    // Synchronously anchor replay cursor to target time before awaiting candles
+    const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
+    const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
+    setCurrentTime(targetMs);
+    seekTickTime(targetMs);
+    setPaused(true);
+
     let data: RawBar[] = [];
     const endBoundary = `${selectedDate} 23:59:59`;
     try {
@@ -30,10 +37,6 @@ export function useMarketSimulator(
     }
 
     setMasterData(data || []);
-    
-    // Always anchor replay cursor to exactly 9:20 AM ET of selectedDate
-    const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
-    const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
     setCurrentTime(targetMs);
     seekTickTime(targetMs);
     setPaused(true);

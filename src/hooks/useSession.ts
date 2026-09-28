@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getUtcTimeFromEt } from '../lib/timezones';
+import { usePlaybackStore } from '../store/usePlaybackStore';
 
 const DEFAULT_DATE = '2026-09-25';
 
@@ -44,16 +45,48 @@ export function useSession(tickers: string[]) {
     return targetUtcDate.toISOString().replace('T', ' ').substring(0, 19);
   }, []);
 
-  const startSession = useCallback(() => setIsSessionStarted(true), []);
-  const endSession = useCallback(() => setIsSessionStarted(false), []);
+  const syncStoreTime = useCallback((dateStr: string, timeStr: string) => {
+    const targetTimeStr = getUtcTimeFromEt(dateStr, timeStr);
+    const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
+    usePlaybackStore.getState().setCurrentTime(targetMs);
+    usePlaybackStore.getState().seekTickTime(targetMs);
+    usePlaybackStore.getState().setPaused(true);
+  }, [getUtcTimeFromEt]);
+
+  // Synchronously seed initial currentTime on mount if not already populated
+  useEffect(() => {
+    if (usePlaybackStore.getState().currentTime === null) {
+      syncStoreTime(selectedDate, entryTime);
+    }
+  }, [selectedDate, entryTime, syncStoreTime]);
+
+  const handleSetSelectedDate = useCallback((newDate: string) => {
+    setSelectedDate(newDate);
+    syncStoreTime(newDate, entryTime);
+  }, [entryTime, syncStoreTime]);
+
+  const handleSetEntryTime = useCallback((newTime: string) => {
+    setEntryTime(newTime);
+    syncStoreTime(selectedDate, newTime);
+  }, [selectedDate, syncStoreTime]);
+
+  const startSession = useCallback(() => {
+    syncStoreTime(selectedDate, entryTime);
+    setIsSessionStarted(true);
+  }, [selectedDate, entryTime, syncStoreTime]);
+
+  const endSession = useCallback(() => {
+    setIsSessionStarted(false);
+    usePlaybackStore.getState().setPaused(true);
+  }, []);
 
   return {
     selectedDate,
-    setSelectedDate,
+    setSelectedDate: handleSetSelectedDate,
     sessionTicker,
     setSessionTicker,
     entryTime,
-    setEntryTime,
+    setEntryTime: handleSetEntryTime,
     isSessionStarted,
     startSession,
     endSession,
