@@ -9,6 +9,14 @@ class ResizeObserver {
 }
 window.ResizeObserver = ResizeObserver
 
+// Mock pointer capture for JSDOM
+if (!Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = vi.fn();
+}
+if (!Element.prototype.releasePointerCapture) {
+  Element.prototype.releasePointerCapture = vi.fn();
+}
+
 // Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -71,3 +79,8 @@ Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
   writable: true,
 })
+
+beforeEach(() => {
+  localStorage.clear();
+})
+

@@ -241,15 +241,30 @@ export async function readScrubber(page: Page): Promise<{ current: number; total
  * `fill()` is unreliable on controlled range inputs, so we set the value via the
  * native prototype setter (bypassing React's value tracker) and fire input+change.
  */
-export async function seekScrubber(page: Page, index: number): Promise<void> {
+export async function seekScrubber(page: Page, indexOrTime: number): Promise<void> {
   const slider = page.locator('.playback-bar input[type="range"]');
   await slider.evaluate((el, val) => {
     const input = el as HTMLInputElement;
+    const min = Number(input.min);
+    const max = Number(input.max);
+    let targetVal = val;
+    // If val is a tick index (small integer) and slider is time-based (min is Unix ms > 1e11)
+    if (min > 1e11 && val < 1e11) {
+      const store = (window as any).usePlaybackStore;
+      const ticks = store?.getState()?.bufferedTicks || [];
+      if (ticks[val]) {
+        const timeStr = ticks[val].time;
+        const norm = timeStr.includes('T') ? timeStr : timeStr.replace(' ', 'T');
+        targetVal = new Date(norm.includes('Z') ? norm : norm + 'Z').getTime();
+      } else {
+        targetVal = min + (val / Math.max(1, (store?.getState()?.totalTicks || 1))) * (max - min);
+      }
+    }
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
-    setter.call(input, String(val));
+    setter.call(input, String(targetVal));
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
-  }, index);
+  }, indexOrTime);
 }
 
 // ---------------------------------------------------------------------------

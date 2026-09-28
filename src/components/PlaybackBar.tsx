@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, ListFilter } from 'lucide-react';
-import { usePlaybackStore } from '../store/usePlaybackStore';
+import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { getTzForTicker, getTzLabel } from '../lib/timezones';
 
 interface PlaybackBarProps {
@@ -41,6 +41,50 @@ export function PlaybackBar({
   const stepForward = usePlaybackStore((state) => state.stepForward);
   const stepBackward = usePlaybackStore((state) => state.stepBackward);
   const seekTickIndex = usePlaybackStore((state) => state.seekTickIndex);
+  const seekTickTime = usePlaybackStore((state) => state.seekTickTime);
+
+  const { minTime, maxTime } = useMemo(() => {
+    let min: number | null = null;
+    let max: number | null = null;
+
+    if (bufferedTicks.length > 0) {
+      min = isoToMs(bufferedTicks[0].time);
+      max = isoToMs(bufferedTicks[bufferedTicks.length - 1].time);
+    } else if (masterData.length > 0) {
+      min = isoToMs(masterData[0].time);
+      max = isoToMs(masterData[masterData.length - 1].time);
+    }
+
+    if (currentTime !== null) {
+      if (min !== null) min = Math.min(min, currentTime);
+      else min = currentTime;
+
+      if (max !== null) max = Math.max(max, currentTime);
+      else max = currentTime;
+    }
+
+    if (min !== null && max !== null && min >= max) {
+      max = min + 60000;
+    }
+
+    return { minTime: min, maxTime: max };
+  }, [bufferedTicks, masterData, currentTime]);
+
+  const sliderValue = (minTime !== null && maxTime !== null && currentTime !== null)
+    ? Math.max(minTime, Math.min(currentTime, maxTime))
+    : (minTime ?? 0);
+
+  const formatTimeOnly = (ms: number | null) => {
+    if (!ms) return '--:--:--';
+    const tz = getTzForTicker(sessionTicker);
+    return new Date(ms).toLocaleString('en-US', { 
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+  };
 
   const formatDisplayTime = (ms: number | null) => {
     if (!ms) return '--:--:--';
@@ -60,7 +104,10 @@ export function PlaybackBar({
   };
 
   const togglePlay = () => {
-    if (isPaused && currentTickIndex >= totalTicks - 1 && totalTicks > 0) {
+    if (isPaused && minTime !== null && maxTime !== null && currentTime !== null && currentTime >= maxTime) {
+      seekTickTime(minTime);
+      setPaused(false);
+    } else if (isPaused && currentTickIndex >= totalTicks - 1 && totalTicks > 0) {
       seekTickIndex(0);
       setPaused(false);
     } else {
@@ -173,19 +220,35 @@ export function PlaybackBar({
         <button className="btn-icon" onClick={onResetToOpen} title="Reset to Start"><RotateCcw size={18} /></button>
       </div>
 
-      {/* Scrubber slider for Tick Replay */}
-      {totalTicks > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '120px', maxWidth: '300px' }}>
+      {/* Time-based scrubber slider */}
+      {canPlay && minTime !== null && maxTime !== null && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', maxWidth: '340px' }}>
           <input
             type="range"
-            min={0}
-            max={totalTicks - 1}
-            value={currentTickIndex}
-            onChange={(e) => seekTickIndex(parseInt(e.target.value, 10))}
+            data-testid="playback-time-slider"
+            aria-label="Time-based playback slider"
+            min={minTime}
+            max={maxTime}
+            step={1000}
+            value={sliderValue}
+            onChange={(e) => seekTickTime(parseInt(e.target.value, 10))}
+            title={`Replay Time: ${formatTimeOnly(sliderValue)} (${currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/${totalTicks} ticks)`}
             style={{ width: '100%', accentColor: '#2962ff', cursor: 'pointer' }}
           />
-          <span style={{ fontSize: '10px', color: '#787b86', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}>
-            {currentTickIndex + 1}/{totalTicks}
+          <span 
+            data-testid="playback-time-label"
+            title={`Current: ${formatTimeOnly(sliderValue)} | End: ${formatTimeOnly(maxTime)}`}
+            style={{ fontSize: '11px', color: '#787b86', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}
+          >
+            {formatTimeOnly(sliderValue)} / {formatTimeOnly(maxTime)}
+          </span>
+          {/* Subtle tick counter display */}
+          <span 
+            data-testid="tick-counter" 
+            title="Current tick / total buffered ticks"
+            style={{ fontSize: '9px', color: '#555865', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}
+          >
+            {currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/{totalTicks}
           </span>
         </div>
       )}

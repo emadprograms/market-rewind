@@ -67,12 +67,14 @@ describe('Tick Playback Store Unit Tests', () => {
     expect(usePlaybackStore.getState().currentTickIndex).toBe(0);
   });
 
-  it('should seek by timestamp to the closest tick', () => {
+  it('should seek by timestamp to the last executed tick at or before target time without look-ahead bias', () => {
     usePlaybackStore.getState().setBufferedTicks(sampleTicks);
 
     usePlaybackStore.getState().seekTickTime('2026-09-25 14:30:00.800');
-    // Closest tick is at 14:30:01.000 (index 2)
-    expect(usePlaybackStore.getState().currentTickIndex).toBe(2);
+    // At 14:30:00.800, the tick at 14:30:01.000 is in the future. Last executed tick is index 1 (14:30:00.350)
+    expect(usePlaybackStore.getState().currentTickIndex).toBe(1);
+    expect(usePlaybackStore.getState().currentTick?.price).toBe(180.25);
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:30:00.800'));
   });
 
   it('should support configurable playback speeds', () => {

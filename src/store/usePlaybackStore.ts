@@ -366,7 +366,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   seekTickTime: (time) => {
-    const { bufferedTicks } = get();
+    const { bufferedTicks, ticksBySymbol } = get();
     const targetMs = typeof time === 'number' ? time : isoToMs(time);
     if (bufferedTicks.length === 0) {
       set({ currentTime: targetMs });
@@ -384,30 +384,44 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       return;
     }
 
-    let closestIndex = 0;
-    let minDiff = Infinity;
+    // Binary search for the last tick occurring at or before targetMs (tMs <= targetMs)
+    let low = 0;
+    let high = bufferedTicks.length - 1;
+    let targetIndex = 0;
 
-    for (let i = 0; i < bufferedTicks.length; i++) {
-      const tMs = isoToMs(bufferedTicks[i].time);
-      const diff = Math.abs(tMs - targetMs);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIndex = i;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const midMs = isoToMs(bufferedTicks[mid].time);
+      if (midMs <= targetMs) {
+        targetIndex = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
       }
-      if (tMs >= targetMs) break;
     }
 
-    const targetTick = bufferedTicks[closestIndex];
+    const targetTick = bufferedTicks[targetIndex] || null;
+
+    // Scan backwards from targetIndex to efficiently populate the latest tick for each symbol
     const updatedLatest: Record<string, MarketTick> = {};
-    for (let i = 0; i <= closestIndex; i++) {
+    const knownSymbols = Object.keys(ticksBySymbol);
+    const neededSymbolsCount = knownSymbols.length > 0 ? knownSymbols.length : Infinity;
+    let foundCount = 0;
+
+    for (let i = targetIndex; i >= 0; i--) {
       const t = bufferedTicks[i];
       if (t && t.symbol) {
-        updatedLatest[t.symbol.toUpperCase()] = t;
+        const sym = t.symbol.toUpperCase();
+        if (!updatedLatest[sym]) {
+          updatedLatest[sym] = t;
+          foundCount++;
+          if (foundCount >= neededSymbolsCount) break;
+        }
       }
     }
 
     set({
-      currentTickIndex: closestIndex,
+      currentTickIndex: targetIndex,
       currentTick: targetTick,
       latestTickBySymbol: updatedLatest,
       currentTime: targetMs,
