@@ -206,24 +206,42 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               className="btn-outline"
               style={{ fontSize: '0.75rem', padding: '4px 8px' }}
               onClick={() => {
-                setUrlInput(hostDefault);
+                setUrlInput('http://100.72.128.22:8420');
                 setTestResult(null);
               }}
+              title="Use direct Tailscale stream IP"
             >
-              Current Host ({hostDefault.replace(/^https?:\/\//, '')})
+              Tailscale IP (100.72.128.22:8420)
             </button>
             <button
               type="button"
               className="btn-outline"
               style={{ fontSize: '0.75rem', padding: '4px 8px' }}
               onClick={() => {
-                setUrlInput('http://localhost:8420');
+                setUrlInput('http://arshad-pc-1:8420');
                 setTestResult(null);
               }}
+              title="Use permanent Tailscale MagicDNS name"
             >
-              Localhost (8420)
+              MagicDNS (arshad-pc-1:8420)
             </button>
+            {hostDefault !== 'http://100.72.128.22:8420' && hostDefault !== 'http://arshad-pc-1:8420' && (
+              <button
+                type="button"
+                className="btn-outline"
+                style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                onClick={() => {
+                  setUrlInput(hostDefault);
+                  setTestResult(null);
+                }}
+              >
+                Current Host ({hostDefault.replace(/^https?:\/\//, '')})
+              </button>
+            )}
           </div>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginTop: '6px', opacity: 0.8 }}>
+            💡 Tailscale Tip: <strong>arshad-pc-1:8420</strong> is your permanent MagicDNS host, which persists even if Tailscale reassigns IP addresses.
+          </span>
         </div>
 
         {testResult && (

@@ -178,21 +178,35 @@ export const ConnectionSetupCard: React.FC<ConnectionSetupCardProps> = ({
                 type="button"
                 className="btn-outline"
                 style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                onClick={() => handlePreset(hostDefault)}
-                title={`Use current host address (${hostDefault})`}
+                onClick={() => handlePreset('http://100.72.128.22:8420')}
+                title="Use direct Tailscale stream IP (http://100.72.128.22:8420)"
               >
-                Current Host ({hostDefault.replace(/^https?:\/\//, '')})
+                Tailscale IP (100.72.128.22:8420)
               </button>
               <button
                 type="button"
                 className="btn-outline"
                 style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                onClick={() => handlePreset('http://localhost:8420')}
-                title="Use localhost (http://localhost:8420)"
+                onClick={() => handlePreset('http://arshad-pc-1:8420')}
+                title="Use permanent Tailscale MagicDNS name (http://arshad-pc-1:8420)"
               >
-                Localhost (8420)
+                MagicDNS (arshad-pc-1:8420)
               </button>
+              {hostDefault !== 'http://100.72.128.22:8420' && hostDefault !== 'http://arshad-pc-1:8420' && (
+                <button
+                  type="button"
+                  className="btn-outline"
+                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                  onClick={() => handlePreset(hostDefault)}
+                  title={`Use current host address (${hostDefault})`}
+                >
+                  Current Host ({hostDefault.replace(/^https?:\/\//, '')})
+                </button>
+              )}
             </div>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginTop: '6px', opacity: 0.8 }}>
+              💡 Tailscale Tip: <strong>arshad-pc-1:8420</strong> is your permanent MagicDNS host, which persists even if Tailscale reassigns IP addresses.
+            </span>
           </div>
 
           {errorMessage && (

@@ -25,6 +25,10 @@ export interface BackendStatus {
   };
 }
 
+export const TAILSCALE_STREAMING_IP = '100.72.128.22';
+export const TAILSCALE_STREAMING_MAGICDNS = 'arshad-pc-1';
+export const DEFAULT_STREAMING_URL = `http://${TAILSCALE_STREAMING_IP}:8420`;
+
 /**
  * Pure helper to resolve the default streaming URL given environment, hostname, or storage.
  */
@@ -40,24 +44,24 @@ export function resolveServiceUrl(options?: {
     return options.savedUrl.trim();
   }
 
-  // 2. In unit test environment without explicit host override, default to envUrl or localhost:8420
+  // 2. Explicit environment variable override
+  if (options?.envUrl && options.envUrl.trim()) {
+    return options.envUrl.trim();
+  }
+
+  // 3. In unit test environment without explicit host override, default to localhost:8420 for mock servers
   if (options?.isTest) {
-    if (options?.envUrl) return options.envUrl;
     return 'http://localhost:8420';
   }
 
-  // 3. In browser context: Smart default using the exact hostname the user entered to access the app
-  if (options?.hostname) {
+  // 4. In browser context: If accessing from a non-localhost host (like 100.72.128.22 or arshad-pc-1), match its port 8420
+  if (options?.hostname && options.hostname !== 'localhost' && options.hostname !== '127.0.0.1') {
     const proto = options.protocol === 'https:' ? 'https:' : 'http:';
     return `${proto}//${options.hostname}:8420`;
   }
 
-  // 4. Environment variable fallback
-  if (options?.envUrl) {
-    return options.envUrl;
-  }
-
-  return 'http://localhost:8420';
+  // 5. Default Tailscale streaming host when running on client/localhost
+  return DEFAULT_STREAMING_URL;
 }
 
 /**
@@ -76,7 +80,8 @@ export function getDefaultStreamingUrl(): string {
   const isTest = typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || Boolean(process.env?.VITEST));
   const hostname = typeof window !== 'undefined' && window.location ? window.location.hostname : undefined;
   const protocol = typeof window !== 'undefined' && window.location ? window.location.protocol : undefined;
-  const envUrl = typeof process !== 'undefined' ? process.env?.VITE_STREAMING_URL : undefined;
+  const envUrl = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_STREAMING_URL)
+    || (typeof process !== 'undefined' ? process.env?.VITE_STREAMING_URL : undefined);
 
   return resolveServiceUrl({
     hostname,
@@ -93,10 +98,12 @@ export function getDefaultStreamingUrl(): string {
  */
 export function getHostDefaultStreamingUrl(): string {
   if (typeof window !== 'undefined' && window.location?.hostname) {
-    const proto = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    return `${proto}//${window.location.hostname}:8420`;
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      const proto = window.location.protocol === 'https:' ? 'https:' : 'http:';
+      return `${proto}//${window.location.hostname}:8420`;
+    }
   }
-  return 'http://localhost:8420';
+  return DEFAULT_STREAMING_URL;
 }
 
 /**
