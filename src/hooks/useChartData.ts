@@ -176,6 +176,21 @@ export function useChartData({
       }
 
       console.log(`[useChartData ${id}] ${ticker} (${timeframe}) loaded ${data?.length || 0} bars: ${data?.[0]?.time} -> ${data?.[data?.length - 1]?.time}`);
+      
+      // DATA-02: Automatic query retry on suspicious single-bar responses
+      if (data && data.length === 1 && timeframe !== '1D') {
+        console.warn(`[useChartData ${id}] Suspicious single bar received for ${ticker} (${timeframe}). Retrying with open end boundary...`);
+        try {
+          const retryData = await streamingClient.getCandles(ticker, { timeframe, limit: 10000 });
+          if (!cancelled && retryData && retryData.length > 1) {
+            console.log(`[useChartData ${id}] Retry succeeded: received ${retryData.length} bars`);
+            data = retryData;
+          }
+        } catch (retryErr) {
+          console.warn(`[useChartData ${id}] Retry failed:`, retryErr);
+        }
+      }
+
       if (data && data.length > 0) {
         earliestLoadedDateRef.current = data[0].time;
       }
@@ -328,6 +343,19 @@ export function useChartData({
       }
     }
     
+    // DATA-04: Diagnostic warning when data filtering reduces bar count drastically
+    if (filtered.length <= 1 && localMasterData.length > 1) {
+      console.warn(`[useChartData ${id}] Diagnostic: Filtered data severely reduced`, {
+        rawCount: localMasterData.length,
+        filteredCount: filtered.length,
+        timeframe,
+        effectiveCutoff,
+        selectedDate,
+        isReplayMode,
+        hasGlobalTime: Boolean(globalTime)
+      });
+    }
+
     return filtered;
   }, [localMasterData, barTimestampsMs, timeframe, showEth, effectiveCutoff, latestTick, selectedDate]);
 

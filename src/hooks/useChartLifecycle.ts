@@ -253,6 +253,11 @@ export function useChartLifecycle({
   // 3. Update Chart Data
   useEffect(() => {
     if (initPriceSeriesRef.current && initVolumeSeriesRef.current && initChartRef.current && chartData.length > 0) {
+      // DATA-03: Suppress rendering transient single-bar when background history is actively loading
+      if (isLoadingHistory && chartData.length === 1) {
+        return;
+      }
+
       const isSameContext = lastTickerRef.current === ticker && 
                             lastTfRef.current === timeframe && 
                             lastEthRef.current === showEth;
@@ -344,7 +349,7 @@ export function useChartLifecycle({
       initVolumeSeriesRef.current.setData([]);
     }
 
-  }, [chartData, syncViewport, theme]);
+  }, [chartData, syncViewport, theme, isLoadingHistory]);
 
   // 3b. Refresh shading plugin when ticker/timeframe/ETH changes
   useEffect(() => {

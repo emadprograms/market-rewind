@@ -91,4 +91,41 @@ describe('useChartLifecycle', () => {
     rerender({ ticker: 'MSFT' });
     expect(result.current.isHydrated).toBe(false);
   });
+
+  it('DATA-03: should suppress rendering single bar while isLoadingHistory is true', async () => {
+    const singleBarData: any = [
+      { time: '2026-09-01 09:30:00', open: 150, high: 151, low: 149, close: 150.5, volume: 1000 }
+    ];
+
+    const { useChartInit } = await import('../../src/hooks/chart/useChartInit');
+    const initMock = vi.mocked(useChartInit);
+    const mockPriceSeries = { setData: vi.fn(), applyOptions: vi.fn(), attachPrimitive: vi.fn() };
+    const mockVolumeSeries = { setData: vi.fn(), applyOptions: vi.fn(), attachPrimitive: vi.fn(), priceScale: () => ({ applyOptions: vi.fn() }) };
+    initMock.mockReturnValue({
+      chartRef: { current: mockChart as any },
+      priceSeriesRef: { current: mockPriceSeries as any },
+      volumeSeriesRef: { current: mockVolumeSeries as any },
+      lastBarSpacingRef: { current: null },
+    });
+
+    const { rerender } = renderHook(
+      ({ isLoading }) =>
+        useChartLifecycle({
+          ...mockParams,
+          chartData: singleBarData,
+          localMasterData: singleBarData,
+          isLoadingHistory: isLoading,
+        }),
+      { initialProps: { isLoading: true } }
+    );
+
+    // setData should NOT be called while isLoadingHistory is true
+    expect(mockPriceSeries.setData).not.toHaveBeenCalled();
+
+    // Rerender when loading completes
+    rerender({ isLoading: false });
+
+    // Now setData should be called with formatted data
+    expect(mockPriceSeries.setData).toHaveBeenCalledTimes(1);
+  });
 });
