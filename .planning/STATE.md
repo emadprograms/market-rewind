@@ -48,3 +48,5 @@ Last activity: 2026-09-27 — Milestone archives consolidated, MILESTONES.md and
 | 260926-tape | time-and-sales-tick-density | 2026-09-26 | e863bf8 | [src/components/TimeAndSales.tsx](./src/components/TimeAndSales.tsx) |
 | 260928-url | tailscale-duckdb-url | 2026-09-28 | abc4b0a | [.planning/quick/260928-tailscale-duckdb-url](./quick/260928-tailscale-duckdb-url/) |
 | 260928-rth | 1d-chart-rth-hours | 2026-09-28 | 3262309 | [.planning/quick/260928-1d-chart-rth-hours](./quick/260928-1d-chart-rth-hours/) |
+| 260928-time-slider | time-based-playback-slider | 2026-09-28 | d81cfbc | [.planning/quick/260928-time-based-playback-slider](./quick/260928-time-based-playback-slider/) |
+
