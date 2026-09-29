@@ -6,9 +6,9 @@ Market Rewind is a high-performance local-first market replay and charting analy
 ## Core Value
 High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
 
-## Current Milestone: Milestone v4.0 — Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination
+## Current Milestone: Milestone v4.1 — Replay Convergence, State Machine Synchronization & Transition Integrity
 
-**Goal:** Permanently remove `historical.duckdb` and all dual-database fallback logic so that every candle (from sub-second to 1D) is dynamically aggregated solely from `streaming.duckdb` (101.4M ticks from Databento & Capital.com). Fix all 9 core defects from `market-rewind-diagnosis-and-plan.md` using strict TDD: unit and Playwright tests created and confirmed failing first, then resolved across ingestion, lifecycle, session, and timeline domains.
+**Goal:** Address all findings from `market-rewind-review-2026-09-29.md` to ensure that playing and seeking to the same time produce identical results under all rewind, date, symbol, and timeframe transitions. Fix React hook-order error in Time & Sales, synchronize consumed-tick cursors on seeks/rewinds, eliminate session tick loader races, protect the entire forming candle interval from future OHLC leaks, accumulate multi-minute fallback volume, anchor slider bounds to fixed session hours, replace per-frame full tick scans with cursor-based binary search, and expand Playwright E2E coverage.
 
 ## Validated Requirements
 - ✓ Basic market replay engine (v1.0)
@@ -20,20 +20,17 @@ High-fidelity, deterministic tick-by-tick market replay with sub-second timefram
 - ✓ Dynamic `time_bucket()` candlestick aggregation (v2.0)
 - ✓ Time & Sales / Order Flow Tape component (v2.0)
 - ✓ Dark financial terminal UI refresh (v2.0)
-- ✓ **TICK-01**: Pure Tick Replay Mode (v3.0)
-- ✓ **TICK-02**: Canonical 9:20 AM ET Date Reset (v3.0)
-- ✓ **TICK-03**: Strict Temporal Isolation (v3.0)
-- ✓ **TICK-04**: Real-Time Candle Forming (v3.0)
-- ✓ **TEST-04**: Automated Regression Test Suite (v3.0)
+- ✓ **TICK-01 – TICK-04**: Pure Tick Replay & Temporal Isolation (v3.0)
 - ✓ **CLEAN-01 – CLEAN-03**: Legacy SQLite & DuckDB Cleanup (v3.1)
-- ✓ **TEST-01 – TEST-04**: Test-First Playwright/Vitest Bug Harness (v3.1)
-- ✓ **REPLAY-01 – REPLAY-03**: Strict Date Reset & Pure Tick Replay (v3.1)
 - ✓ **SYNC-01 – SYNC-04**: Global Multi-Asset Playback Synchronization (v3.1)
-- ✓ **PERF-01**: O(1) Incremental Candle Updates (<0.05ms) (v3.1)
-- ✓ **TAPE-01**: High-Frequency Millisecond Time & Sales Streaming (v3.1)
 - ✓ **DATA-01 – DATA-04**: Single-Candle Reliability & Initial Data Load Guards (v3.2)
 - ✓ **PERF-01 – PERF-04**: Decoupled High-Performance Playback (v3.2)
 - ✓ **VIEW-01 – VIEW-04**: Viewport & Lifecycle Stabilization (v3.2)
+- ✓ **TEST-01 – TEST-03**: 11-Defect Diagnostic Replication Harness (v4.0)
+- ✓ **DATA-01 – DATA-03**: Pure `streaming.duckdb` Architecture & Historical DB Purge (v4.0)
+- ✓ **INGEST-01 – INGEST-05**: Event-Driven Ingestion & Volume Deduplication (v4.0)
+- ✓ **RENDER-01 – RENDER-04**: Lifecycle Reconciliation & Tape Symbol Filtering (v4.0)
+- ✓ **SCRUB-01 – SCRUB-03**: Timeline Scrubber Stabilization & 341-Test Verification (v4.0)
 
 ## Key Decisions
 

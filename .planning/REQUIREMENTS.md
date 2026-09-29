@@ -1,41 +1,33 @@
-# Milestone v4.0 Requirements: Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination
+# Milestone v4.1 Requirements: Replay Convergence, State Machine Synchronization & Transition Integrity
 
 ## Overview
-This milestone establishes a canonical, single-database architecture powered exclusively by `streaming.duckdb` (retiring `historical.duckdb` entirely), and eliminates the 9 core playback, lifecycle, volume, and timeline defects identified in `market-rewind-diagnosis-and-plan.md`.
+Milestone v4.1 resolves all 8 architectural and transition findings documented in `market-rewind-review-2026-09-29.md`. The core goal is achieving strict state-machine convergence: ensuring that playing, seeking, rewinding, switching symbols, and changing dates all produce mathematically identical chart state, volume totals, and temporal boundaries.
 
-All defect fixes follow a strict Test-Driven Development (TDD) discipline: unit tests and Playwright integration tests are created first, verified to fail predictably, and then resolved phase-by-phase until all 11 diagnostic suites pass alongside the existing regression suite.
+All defect fixes follow strict Test-Driven Development (TDD): unit and Playwright tests replicating all 7 review probes are created first, confirmed failing in the Red phase, and then resolved phase-by-phase until 100% green status is achieved with zero regressions.
 
 ---
 
 ## Requirements
 
-### Category 1: Test Harness & Red-Phase Verification (TEST)
-- [x] **TEST-01**: Diagnostic Vitest Test Suite replicating all 9 failure modes from `market-rewind-diagnosis-and-plan.md` (volume recounting on clock updates, intra-frame trade omission, older history render skips, empty history first-candle startup, buffer cursor desync on multi-symbol merge, fallback volume compounding, ETH-off live filtering, symbol switch price leakage, 5m future OHLC leakage, and stale session response overwrite).
-- [x] **TEST-02**: Diagnostic Playwright E2E Suite verifying end-to-end browser manifestations (TSLA 09:20 premarket load, timeline seek across historical & tick periods, symbol switch after open, and multi-symbol Time & Sales isolation).
-- [x] **TEST-03**: Red Phase Execution Verification: all diagnostic test suites execute and fail predictably against the baseline, confirming genuine defect reproduction before altering code.
+### Category 1: Test Harness & Review Reproduction (REV-TEST)
+- [ ] **REV-TEST-01**: Diagnostic Unit Test Suite `tests/unit/reviewTransitions.test.ts` replicating all 7 transition probes from `market-rewind-review-2026-09-29.md` (Time & Sales hook order crash, post-seek volume doubling, post-rewind trade suppression, multi-minute fallback volume drop, stale tick session overwrite, 1s-past-boundary look-ahead leak, and slider premarket loss after seek).
+- [ ] **REV-TEST-02**: Diagnostic Playwright E2E Suite `tests/regression/journey/11-review-e2e-hardening.spec.ts` verifying actual drawer toggling, non-empty row price inspection, symbol switching, and slider bounds with a post-open first-tick fixture.
+- [ ] **REV-TEST-03**: Red Phase Execution Verification: all review transition test probes execute and fail predictably against the baseline, confirming genuine defect reproduction before altering application code.
 
-### Category 2: Pure Single-Database (`streaming.db`) Engine (DATA)
-- [x] **DATA-01**: Pure `streaming.duckdb` Architecture: permanently purge all references, configuration options, connections, schema checks, and fallback queries to `historical.duckdb` / `historical_db` from `backend/streaming_service` (`duckdb_client.py`, `server.py`) and frontend (`streamingClient.ts`).
-- [x] **DATA-02**: Dynamic High-Performance Aggregation: all historical candles (from sub-second to 1D) are built solely from raw `ticks` in `streaming.duckdb` via DuckDB `time_bucket()` with sub-50ms execution, eliminating Frankenstein dual-database splicing.
-- [x] **DATA-03**: Strict Session Isolation in DuckDB Queries: intraday queries respect RTH vs ETH/PRE sessions natively in DuckDB, and 1D queries strictly filter RTH (09:30–16:00 ET).
+### Category 2: UI Hook Order & Cursor State Synchronization (REV-SYNC)
+- [ ] **REV-SYNC-01**: React Rules of Hooks Compliance in `TimeAndSales.tsx`: move `usePlaybackStore` and all hook subscriptions unconditionally to top-level, guaranteeing opening and closing the panel never triggers hook count mismatch errors.
+- [ ] **REV-SYNC-02**: Consumed-Tick Cursor Coherence on Seek & Snapshot: `lastConsumedTimeRef` and `lastConsumedTickRef` in `useChartLifecycle` are synchronized with seeks, rewinds, and snapshot renders so playing after seeking never re-counts already rendered trades.
+- [ ] **REV-SYNC-03**: Consumed-Tick Cursor Coherence on Rewind: backward seeking updates `lastConsumedTimeRef` to the target seek time, enabling replay after rewind to properly aggregate elapsed intermediate trades without suppression.
+- [ ] **REV-SYNC-04**: O(log N) Binary-Search Ingestion Cursor: replace linear iteration over all symbol ticks with binary search using `lastConsumedTimeRef` and early loop termination, eliminating redundant timestamp parsing per frame.
 
-### Category 3: Event-Driven Playback Ingestion & Canonical Forming (INGEST)
-- [x] **INGEST-01**: Event-Deduplicated Volume & High/Low Aggregation: chart playback subscriber must track consumed tick event IDs/timestamps, aggregating all trades crossed by the replay clock during each frame rather than recounting the latest tick on clock updates.
-- [x] **INGEST-02**: Elimination of Fallback Volume Compounding: eliminate synthetic multi-thousand volume injection on premarket fallback frames and prevent higher-timeframe reconstruction from exposing future candle high/low values before time arrives.
-- [x] **INGEST-03**: First-Candle Initialization on Empty History: direct canvas subscriber must synthesize the first forming candle when history finishes empty and new ticks arrive, unfreezing playback snapshots when ticks stream in.
-- [x] **INGEST-04**: Multi-Symbol Ingestion Cursor Stability: `addSymbolTicks` must preserve `currentTickIndex` and `currentTime` cursor stability when sorting or deduplicating the global buffer.
-- [x] **INGEST-05**: Strict ETH / Extended Hours Playback Filtering: live subscriber and candle aggregator must strictly respect `showEth` toggle during active playback, never painting premarket ticks when ETH is disabled.
+### Category 3: Temporal Isolation & Fallback Volume (REV-FORM)
+- [ ] **REV-FORM-01**: Comprehensive Forming Bucket Look-Ahead Protection: forming candle synthesis in `useChartData` bounds the entire forming bucket interval (`bMs <= effectiveCutoff && bMs + durationMs > effectiveCutoff`), ensuring completed candle high/low/volume values are never exposed at any second before bucket close.
+- [ ] **REV-FORM-02**: Constituent Volume Accumulation in Multi-Minute Fallbacks: when synthesizing higher timeframe candles from fallback ticks, accumulate earlier constituent minute volumes within the bucket rather than overwriting with only the latest minute's volume; ensure all synthetic ticks carry `isSynthesized: true`.
+- [ ] **REV-FORM-03**: Session Tick Loader Generation Guard: apply monotonic session generation tokens and cancellation to the `loadTicksForSession` workflow in `src/App.tsx`, preventing late tick responses from older dates from overwriting the active session time.
 
-### Category 4: Renderer Integrity & Session Generation Guards (RENDER)
-- [x] **RENDER-01**: Comprehensive Historical Reconciliation: `useChartLifecycle` must replace the series with `setData()` whenever earlier bars or historical prefixes change, even if the last bar timestamp matches.
-- [x] **RENDER-02**: Atomic Symbol Switching: changing tickers must cleanly reset and flush chart series, preventing old symbol price data from leaking into the new symbol view.
-- [x] **RENDER-03**: Session Generation & Request Cancellation: session and tick loading requests must carry monotonic session generation tokens and `AbortController` cancellation so stale network responses cannot overwrite newer sessions or rewind the replay clock.
-- [x] **RENDER-04**: Time & Sales Symbol Filtering: Time & Sales tape must strictly filter the tick stream by the active chart's symbol badge, eliminating cross-instrument trade pollution in multi-symbol sessions.
-
-### Category 5: Stable Timeline Scrubber & Systematic Verification (SCRUB)
-- [x] **SCRUB-01**: Fixed Session Scrubber Bounds: scrubber bounds are anchored to fixed exchange session hours (e.g. 04:00 - 20:00 ET or 09:20 - 16:00 ET) rather than moving dynamically with buffered tick ranges.
-- [x] **SCRUB-02**: Precise Integer-Second Timeline Seeking: slider steps snap to integer seconds with zero millisecond drifting, providing explicit `HH:MM:SS` jump input and drag-preview with single-seek commit.
-- [x] **SCRUB-03**: Full Green Phase Regression Verification: all diagnostic tests and all 60 existing test suites (328+ tests) pass cleanly with zero regressions.
+### Category 4: Scrubber Session Anchoring & Systematic Verification (REV-VERIFY)
+- [ ] **REV-SCRUB-01**: Fixed Session Scrubber Bounds: anchor scrubber `minTime` and `maxTime` in `PlaybackBar.tsx` to the configured session entry time and session close, remaining completely invariant when seeking forward.
+- [ ] **REV-VERIFY-01**: Full Green Phase Regression Verification: all 7 transition probes, all 11 diagnostic suites, all 62 existing test suites (341+ tests), backend pytest suites, and Playwright E2E suites pass with zero errors.
 
 ---
 
@@ -43,21 +35,15 @@ All defect fixes follow a strict Test-Driven Development (TDD) discipline: unit 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEST-01 | Phase 21 | Complete |
-| TEST-02 | Phase 21 | Complete |
-| TEST-03 | Phase 21 | Complete |
-| DATA-01 | Phase 21 | Complete |
-| DATA-02 | Phase 21 | Complete |
-| DATA-03 | Phase 21 | Complete |
-| INGEST-01 | Phase 22 | Complete |
-| INGEST-02 | Phase 22 | Complete |
-| INGEST-03 | Phase 22 | Complete |
-| INGEST-04 | Phase 22 | Complete |
-| INGEST-05 | Phase 22 | Complete |
-| RENDER-01 | Phase 23 | Complete |
-| RENDER-02 | Phase 23 | Complete |
-| RENDER-03 | Phase 23 | Complete |
-| RENDER-04 | Phase 23 | Complete |
-| SCRUB-01 | Phase 24 | Complete |
-| SCRUB-02 | Phase 24 | Complete |
-| SCRUB-03 | Phase 24 | Complete |
+| REV-TEST-01 | Phase 25 | Pending |
+| REV-TEST-02 | Phase 25 | Pending |
+| REV-TEST-03 | Phase 25 | Pending |
+| REV-SYNC-01 | Phase 26 | Pending |
+| REV-SYNC-02 | Phase 26 | Pending |
+| REV-SYNC-03 | Phase 26 | Pending |
+| REV-SYNC-04 | Phase 26 | Pending |
+| REV-FORM-01 | Phase 27 | Pending |
+| REV-FORM-02 | Phase 27 | Pending |
+| REV-FORM-03 | Phase 27 | Pending |
+| REV-SCRUB-01 | Phase 28 | Pending |
+| REV-VERIFY-01 | Phase 28 | Pending |

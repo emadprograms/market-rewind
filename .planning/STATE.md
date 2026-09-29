@@ -1,21 +1,21 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.0
-milestone_name: Canonical Single-Database (streaming.db) Replay Engine & Defect Elimination
-status: ready_for_audit
-last_updated: "2026-09-29T18:59:00.000Z"
-last_activity: 2026-09-29
+milestone: v4.1
+milestone_name: Replay Convergence, State Machine Synchronization & Transition Integrity
+status: in_progress
+last_updated: "2026-09-30T00:13:00.000Z"
+last_activity: 2026-09-30
 progress:
   total_phases: 4
-  completed_phases: 4
+  completed_phases: 0
   total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-## Milestone: v4.0 — Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination
+## Milestone: v4.1 — Replay Convergence, State Machine Synchronization & Transition Integrity
 
 ### Completed Milestones
 - **Milestone v1.0**: Stability Guardrails & Multi-Chart Core (Shipped 2026-09-25)
@@ -23,6 +23,7 @@ progress:
 - **Milestone v3.0**: Pure Tick-by-Tick Replay & Temporal Isolation Engine (Shipped 2026-09-26)
 - **Milestone v3.1**: Pure Streaming DuckDB Replay Engine, Global Multi-Asset Sync & Playwright Hardening (Shipped 2026-09-26)
 - **Milestone v3.2**: High-Performance Chart Playback & Data Reliability Engine (Shipped 2026-09-28)
+- **Milestone v4.0**: Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination (Shipped 2026-09-29)
 
 ## Project Reference
 See: [.planning/PROJECT.md](./PROJECT.md)
@@ -30,10 +31,10 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** All 4 phases in Milestone v4.0 complete. Ready for milestone audit and closure.
+**Current focus:** Starting Phase 25: Test-First Transition & Review Harness.
 
 ## Current Position
 
-Phase: Phase 24 Complete (4/4 phases complete, 100%)
-Status: Ready for Audit
-Last activity: 2026-09-29 — All 11 diagnostic defect replication tests passing (Green phase), Playwright E2E suites passing, pure streaming.duckdb backend verified, zero regressions across 62 test suites (341 tests).
+Phase: Phase 25 (0/4 phases complete, 0%)
+Status: In Progress
+Last activity: 2026-09-30 — Initialized Milestone v4.1 to address all findings from market-rewind-review-2026-09-29.md with strict TDD.

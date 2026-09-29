@@ -34,27 +34,40 @@
 
 ---
 
-## Milestone Details: v4.0 Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination ✅
+## Current Milestone: v4.1 Replay Convergence, State Machine Synchronization & Transition Integrity
 
-### Phase 21: Test-First Harness & Pure Single-DB (`streaming.db`) Backend Purge ✅
-- **Goal:** Build the complete TDD harness replicating all 9 failure modes from `market-rewind-diagnosis-and-plan.md` in unit and Playwright tests, verify Red failure state, and permanently eliminate `historical.duckdb` from backend and frontend, routing all candle aggregation through DuckDB `time_bucket()` on `streaming.duckdb`.
-- **Requirements Covered:** TEST-01, TEST-02, TEST-03, DATA-01, DATA-02, DATA-03
-- **Status:** Complete (100% verified)
+### Phase 25: Test-First Transition & Review Harness
+- **Goal:** Build the complete automated TDD harness replicating all 7 review probes from `market-rewind-review-2026-09-29.md` in unit tests (`tests/unit/reviewTransitions.test.ts`) and Playwright tests (`tests/regression/journey/11-review-e2e-hardening.spec.ts`), and verify Red failure state against current baseline.
+- **Requirements Covered:** REV-TEST-01, REV-TEST-02, REV-TEST-03
+- **Success Criteria:**
+  1. Diagnostic unit test suite and Playwright journey tests are added and execute in failing (Red) state against current codebase.
+  2. Failure modes match review findings: hook-order throw on tape toggle, post-seek volume doubling, rewind trade omission, fallback volume drop, stale tick date overwrite, 1s look-ahead leak, and scrubber premarket domain loss.
 
-### Phase 22: Event-Driven Playback Ingestion & Canonical Candle Aggregation ✅
-- **Goal:** Fix volume overcounting, trade omission, and premarket fallback defects by introducing event-aware tick tracking, intra-frame trade aggregation, empty history first-candle startup, and strict ETH filtering during active playback.
-- **Requirements Covered:** INGEST-01, INGEST-02, INGEST-03, INGEST-04, INGEST-05
-- **Status:** Complete (100% verified)
+### Phase 26: Playback State Synchronization & Cursor Coherence
+- **Goal:** Fix the React hook-order crash in `TimeAndSales.tsx` and synchronize the consumed-tick cursor across seeking, rewinding, and snapshot mounting in `useChartLifecycle.ts`. Replace per-frame linear tick scans with O(log N) binary search.
+- **Requirements Covered:** REV-SYNC-01, REV-SYNC-02, REV-SYNC-03, REV-SYNC-04
+- **Success Criteria:**
+  1. `TimeAndSales.tsx` renders without throwing when toggling between closed and open states.
+  2. `useChartLifecycle` synchronizes `lastConsumedTimeRef` with seek snapshots so playing after a seek never re-counts rendered trades.
+  3. Replay after rewind aggregates intermediate trades properly without suppression.
+  4. Intra-frame tick consumption uses binary-search cursor advancement, terminating loops early upon reaching `currentTime`.
 
-### Phase 23: Canvas Lifecycle Reconciliation, Session Guards & Tape Filtering ✅
-- **Goal:** Resolve canvas history omission, symbol-switch price leakage, out-of-order session overwrites, and multi-symbol tape trade pollution.
-- **Requirements Covered:** RENDER-01, RENDER-02, RENDER-03, RENDER-04
-- **Status:** Complete (100% verified)
+### Phase 27: Temporal Isolation & Volume Accumulation
+- **Goal:** Protect forming candles against look-ahead leaks across the entire forming interval, accumulate constituent minute volumes in multi-minute fallbacks, and eliminate the session tick loader race condition in `src/App.tsx`.
+- **Requirements Covered:** REV-FORM-01, REV-FORM-02, REV-FORM-03
+- **Success Criteria:**
+  1. Forming candle synthesis bounds the entire bucket interval so no completed high/low/volume leaks 1s past the boundary.
+  2. Multi-minute fallbacks accumulate prior constituent minute volumes instead of overwriting with only the latest minute.
+  3. `App.tsx` guards `loadTicksForSession` with session generation tokens and cancellation so older date responses cannot overwrite active session time.
 
-### Phase 24: Scrubber Timeline Stabilization & Full Autonomous E2E Verification ✅
-- **Goal:** Anchor the timeline scrubber to a stable exchange session domain with integer-second precision and exact time seeking, and verify that all 11 diagnostic suites and 60 regression suites pass cleanly with zero defects.
-- **Requirements Covered:** SCRUB-01, SCRUB-02, SCRUB-03
-- **Status:** Complete (100% verified)
+### Phase 28: Scrubber Session Anchoring & Systematic Verification
+- **Goal:** Anchor the timeline scrubber to fixed session start and end times independently of `currentTime`, harden Playwright tests to open and inspect the tape, and verify that all review probes and regression suites pass 100% cleanly.
+- **Requirements Covered:** REV-SCRUB-01, REV-VERIFY-01
+- **Success Criteria:**
+  1. Scrubber `minTime` remains firmly anchored to session start (e.g. 09:20 ET) after seeking to 09:34 or beyond.
+  2. Playwright E2E suite explicitly opens the tape, verifies rows and symbol isolation, and tests slider bounds.
+  3. All 7 review probes pass (Green phase).
+  4. All 62 test suites (341+ tests) and backend pytest suite pass with zero regressions.
 
 ---
 
