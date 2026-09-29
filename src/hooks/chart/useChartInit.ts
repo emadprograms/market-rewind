@@ -46,6 +46,9 @@ export function useChartInit({
         textColor: '#94a3b8',
         attributionLogo: false,
       },
+      rightPriceScale: {
+        minimumWidth: 80,
+      },
       grid: {
         vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
         horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
@@ -106,6 +109,7 @@ export function useChartInit({
     }, 250);
 
     chart.priceScale('right').applyOptions({
+      minimumWidth: 80,
       scaleMargins: {
         top: 0.1,
         bottom: 0.15,
@@ -143,6 +147,12 @@ export function useChartInit({
       resizeObserver.observe(chartContainerRef.current);
     }
 
+    if (chartContainerRef.current) {
+      (chartContainerRef.current as any).__chart = chart;
+      (chartContainerRef.current as any).__priceSeries = priceSeries;
+      (chartContainerRef.current as any).__volumeSeries = volumeSeries;
+    }
+
     chartRef.current = chart;
     priceSeriesRef.current = priceSeries;
     volumeSeriesRef.current = volumeSeries;
@@ -150,6 +160,11 @@ export function useChartInit({
     return () => {
       if (intervalId) clearInterval(intervalId);
       resizeObserver.disconnect();
+      if (chartContainerRef.current) {
+        delete (chartContainerRef.current as any).__chart;
+        delete (chartContainerRef.current as any).__priceSeries;
+        delete (chartContainerRef.current as any).__volumeSeries;
+      }
       chart.remove();
       chartRef.current = null;
       priceSeriesRef.current = null;
