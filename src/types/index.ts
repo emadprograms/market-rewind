@@ -32,7 +32,9 @@ export interface RawBar {
   volume: number;
   session: 'REG' | 'PRE' | 'POST' | string;
   tickCount?: number;
+  symbol?: string;
 }
+
 
 /** Resampled OHLCV bar (same shape, but time may be bucketed) */
 export type ChartBar = RawBar;

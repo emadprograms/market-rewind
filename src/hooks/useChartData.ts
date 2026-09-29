@@ -481,7 +481,14 @@ export function useChartData({
           }
         }
       }
-    } else if (effectiveCutoff && latestTick && symbolTicks && symbolTicks.length > 0 && tickTimestampsMs.length > 0) {
+    } else if (
+      effectiveCutoff &&
+      latestTick &&
+      symbolTicks &&
+      symbolTicks.length > 0 &&
+      tickTimestampsMs.length > 0 &&
+      tickTimestampsMs[0] <= effectiveCutoff
+    ) {
       const durationSec = TF_SECONDS[timeframe] || 60;
       const durationMs = durationSec * 1000;
       const currentBucketStartMs = Math.floor(effectiveCutoff / durationMs) * durationMs;
@@ -589,59 +596,64 @@ export function useChartData({
           }
         }
       }
-    } else if (latestTick) {
-      resampled = applyTickToCandles(resampled, latestTick, timeframe);
-    } else if ((timeframe as string) !== '1min' && (timeframe as string) !== '1D') {
-      // Synthesize missing and forming multi-minute/hour candles from 1m candidateBars up to effectiveCutoff
-      const durationSec = TF_SECONDS[timeframe] || 60;
-      const durationMs = durationSec * 1000;
-      const currentBucketStartMs = Math.floor(effectiveCutoff / durationMs) * durationMs;
+    } else {
+      if ((timeframe as string) !== '1min' && (timeframe as string) !== '1D') {
+        // Synthesize missing and forming multi-minute/hour candles from 1m candidateBars up to effectiveCutoff
+        const durationSec = TF_SECONDS[timeframe] || 60;
+        const durationMs = durationSec * 1000;
+        const currentBucketStartMs = Math.floor(effectiveCutoff / durationMs) * durationMs;
 
-      const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0) 
-        ? masterData 
-        : localMasterData;
+        const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0) 
+          ? masterData 
+          : localMasterData;
 
-      if (candidateBars && candidateBars.length > 0) {
-        let lastBarTimeMs = -1;
-        if (resampled.length > 0) {
-          const lastBar = resampled[resampled.length - 1];
-          lastBarTimeMs = typeof lastBar.time === 'number'
-            ? (lastBar.time > 1e11 ? lastBar.time : lastBar.time * 1000)
-            : new Date(String(lastBar.time).replace(' ', 'T') + (String(lastBar.time).includes('Z') ? '' : 'Z')).getTime();
-        }
+        if (candidateBars && candidateBars.length > 0) {
+          let lastBarTimeMs = -1;
+          if (resampled.length > 0) {
+            const lastBar = resampled[resampled.length - 1];
+            lastBarTimeMs = typeof lastBar.time === 'number'
+              ? (lastBar.time > 1e11 ? lastBar.time : lastBar.time * 1000)
+              : new Date(String(lastBar.time).replace(' ', 'T') + (String(lastBar.time).includes('Z') ? '' : 'Z')).getTime();
+          }
 
-        const startMs = lastBarTimeMs >= currentBucketStartMs ? currentBucketStartMs : (lastBarTimeMs > 0 ? lastBarTimeMs + durationMs : 0);
+          const startMs = lastBarTimeMs >= currentBucketStartMs ? currentBucketStartMs : (lastBarTimeMs > 0 ? lastBarTimeMs + durationMs : 0);
 
-        const validBars = candidateBars.filter(b => {
-          if (!showEth && !isRthBar(b, ticker)) return false;
-          const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
-          return bMs >= startMs && bMs <= effectiveCutoff;
-        });
+          const validBars = candidateBars.filter(b => {
+            if (!showEth && !isRthBar(b, ticker)) return false;
+            const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
+            return bMs >= startMs && bMs <= effectiveCutoff;
+          });
 
-        if (validBars.length > 0) {
-          const extraCandles = resampleData(validBars, timeframe);
-          for (const c of extraCandles) {
-            if (resampled.length > 0 && resampled[resampled.length - 1].time === c.time) {
-              const last = resampled[resampled.length - 1];
-              resampled = [
-                ...resampled.slice(0, -1),
-                {
-                  ...last,
-                  high: Math.max(last.high, c.high),
-                  low: Math.min(last.low, c.low),
-                  close: c.close,
-                  volume: (last.volume || 0) + c.volume,
-                }
-              ];
-            } else {
-              resampled = [...resampled, c];
+          if (validBars.length > 0) {
+            const extraCandles = resampleData(validBars, timeframe);
+            for (const c of extraCandles) {
+              if (resampled.length > 0 && resampled[resampled.length - 1].time === c.time) {
+                const last = resampled[resampled.length - 1];
+                resampled = [
+                  ...resampled.slice(0, -1),
+                  {
+                    ...last,
+                    high: Math.max(last.high, c.high),
+                    low: Math.min(last.low, c.low),
+                    close: c.close,
+                    volume: (last.volume || 0) + c.volume,
+                  }
+                ];
+              } else {
+                resampled = [...resampled, c];
+              }
             }
           }
         }
       }
+
+      if (latestTick) {
+        resampled = applyTickToCandles(resampled, latestTick, timeframe);
+      }
     }
 
     return resampled;
+
   }, [filteredData, timeframe, isReplayMode, effectiveCutoff, latestTick, symbolTicks, tickTimestampsMs, selectedDate, ticker, masterData, localMasterData]);
 
   return {

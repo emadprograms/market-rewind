@@ -47,7 +47,13 @@ export async function startSession(
   await expect(page.locator('.playback-bar')).toHaveAttribute('data-ticks-loading', 'false', { timeout: 30000 });
   await expect(page.locator('.time-display')).not.toHaveText('--:--:--', { timeout: 30000 });
   await expect(page.getByRole('button', { name: /PLAY/i })).toBeEnabled({ timeout: 30000 });
+  // Ensure masterData is populated from DuckDB before tests begin interactions
+  await page.waitForFunction(() => {
+    const store = (window as any).usePlaybackStore;
+    return store && store.getState().masterData && store.getState().masterData.length > 0;
+  }, { timeout: 30000 }).catch(() => {});
 }
+
 
 /** Backward compatibility alias */
 export const uploadSeedAndStartSession = startSession;

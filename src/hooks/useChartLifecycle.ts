@@ -337,6 +337,7 @@ export function useChartLifecycle({
 
         if (matchIdx !== -1) {
           try {
+
             // Update the candle at matchIdx (forming candle or recently closed candle)
             const curBar = formatted[matchIdx];
             initPriceSeriesRef.current.update({
@@ -389,6 +390,7 @@ export function useChartLifecycle({
           }
         }
       }
+
 
       if (!updatedIncrementally) {
         // Full dataset load (initial load, context switch, timeline seek/jump, or history prepend)

@@ -93,7 +93,60 @@ const rewindTimeLogic = (currentMs: number | null, stepMinutes: number, masterDa
   return best ? isoToMs(best) : isoToMs(masterData[0].time);
 };
 
+export const findBarAtOrBefore = (bars: RawBar[], targetMs: number): RawBar | null => {
+  if (!bars || bars.length === 0) return null;
+  let low = 0;
+  let high = bars.length - 1;
+  let bestIdx = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const midMs = isoToMs(bars[mid].time);
+    if (midMs <= targetMs) {
+      bestIdx = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return bestIdx >= 0 ? bars[bestIdx] : bars[0];
+};
+
+export const getBarSynthesizedPrice = (bar: RawBar, targetTimeMs: number): number => {
+  if (!bar) return 0;
+  const barStartMs = isoToMs(bar.time);
+  const barDurationMs = 60000;
+  if (targetTimeMs >= barStartMs + barDurationMs) {
+    return bar.close;
+  }
+  if (targetTimeMs <= barStartMs) {
+    return bar.open;
+  }
+
+  const elapsed = targetTimeMs - barStartMs;
+  const p = Math.max(0, Math.min(1, elapsed / barDurationMs));
+
+  const isGreen = bar.close >= bar.open;
+  const p1 = bar.open;
+  const p2 = isGreen ? bar.low : bar.high;
+  const p3 = isGreen ? bar.high : bar.low;
+  const p4 = bar.close;
+
+  if (p < 0.25) {
+    const t = p / 0.25;
+    return p1 + (p2 - p1) * t;
+  } else if (p < 0.75) {
+    const t = (p - 0.25) / 0.5;
+    return p2 + (p3 - p2) * t;
+  } else {
+    const t = (p - 0.75) / 0.25;
+    return p3 + (p4 - p3) * t;
+  }
+};
+
 export const usePlaybackStore = create<PlaybackState>((set, get) => ({
+
   replayMode: 'tick',
   currentTime: null,
   isPaused: true,
@@ -248,26 +301,75 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   advanceSimulationTime: (targetTimeMs: number) => {
-    const { bufferedTicks, currentTickIndex, latestTickBySymbol } = get();
+    const { bufferedTicks, currentTickIndex, latestTickBySymbol, masterData, ticksBySymbol } = get();
 
     if (bufferedTicks.length === 0) {
+      if (masterData.length > 0) {
+        const lastBarMs = isoToMs(masterData[masterData.length - 1].time) + 60000;
+        const reachedEnd = targetTimeMs >= lastBarMs;
+        const bar = findBarAtOrBefore(masterData, targetTimeMs);
+        if (bar) {
+          const sym = (bar.symbol || Object.keys(ticksBySymbol)[0] || 'SPY').toUpperCase();
+          const price = getBarSynthesizedPrice(bar, targetTimeMs);
+          const synthTick: MarketTick = {
+            time: msToIso(targetTimeMs),
+            price: Number(price.toFixed(4)),
+            volume: bar.volume || 1,
+            symbol: sym,
+            session: (bar.session as any) || 'REG',
+            source: 'STREAMING',
+          };
+          const updatedLatest = { ...latestTickBySymbol, [sym]: synthTick };
+          set({
+            currentTime: targetTimeMs,
+            currentTickIndex: -1,
+            currentTick: synthTick,
+            latestTickBySymbol: updatedLatest,
+            ...(reachedEnd ? { isPaused: true } : {}),
+          });
+          return;
+        }
+      }
       set({ currentTime: targetTimeMs });
       return;
     }
 
     const firstTickMs = bufferedTicks.length > 0 ? isoToMs(bufferedTicks[0].time) : 0;
     if (targetTimeMs < firstTickMs) {
+      if (masterData.length > 0) {
+        const bar = findBarAtOrBefore(masterData, targetTimeMs);
+        if (bar) {
+          const sym = (bar.symbol || bufferedTicks[0].symbol || 'SPY').toUpperCase();
+          const price = getBarSynthesizedPrice(bar, targetTimeMs);
+          const synthTick: MarketTick = {
+            time: msToIso(targetTimeMs),
+            price: Number(price.toFixed(4)),
+            volume: bar.volume || 1,
+            symbol: sym,
+            session: (bar.session as any) || 'REG',
+            source: 'STREAMING',
+          };
+          const updatedLatest = { ...latestTickBySymbol, [sym]: synthTick };
+          set({
+            currentTime: targetTimeMs,
+            currentTickIndex: -1,
+            currentTick: synthTick,
+            latestTickBySymbol: updatedLatest,
+          });
+          return;
+        }
+      }
       set({ currentTime: targetTimeMs });
       return;
     }
 
-    const currentTickTime = bufferedTicks[currentTickIndex] ? isoToMs(bufferedTicks[currentTickIndex].time) : 0;
-    if (targetTimeMs < currentTickTime) {
+    const currentTickTime = (currentTickIndex >= 0 && bufferedTicks[currentTickIndex]) ? isoToMs(bufferedTicks[currentTickIndex].time) : 0;
+    if (currentTickIndex >= 0 && targetTimeMs < currentTickTime) {
       get().seekTickTime(targetTimeMs);
       return;
     }
 
-    let nextIdx = currentTickIndex;
+    let nextIdx = currentTickIndex < 0 ? -1 : currentTickIndex;
     const updatedLatest = { ...latestTickBySymbol };
 
     while (nextIdx + 1 < bufferedTicks.length) {
@@ -283,14 +385,14 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       }
     }
 
-    const curr = bufferedTicks[nextIdx];
+    const curr = nextIdx >= 0 ? bufferedTicks[nextIdx] : null;
     if (curr && curr.symbol && isoToMs(curr.time) <= targetTimeMs) {
       updatedLatest[curr.symbol.toUpperCase()] = curr;
     }
 
     const lastTickMs = isoToMs(bufferedTicks[bufferedTicks.length - 1].time);
     const reachedEnd = nextIdx >= bufferedTicks.length - 1 && targetTimeMs >= lastTickMs;
-    const nextTick = bufferedTicks[nextIdx] || null;
+    const nextTick = nextIdx >= 0 ? bufferedTicks[nextIdx] : null;
 
     set({
       currentTime: targetTimeMs,
@@ -305,6 +407,15 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData, latestTickBySymbol } = get();
 
     if (bufferedTicks.length > 0) {
+      const firstTickMs = isoToMs(bufferedTicks[0].time);
+      if (currentTime !== null && currentTime < firstTickMs && masterData.length > 0) {
+        const nextBarMs = advanceTimeLogic(currentTime, stepMinutes, masterData);
+        if (nextBarMs) {
+          get().seekTickTime(nextBarMs);
+          return;
+        }
+      }
+
       if (currentTickIndex < bufferedTicks.length - 1) {
         const nextIndex = currentTickIndex < 0 ? 0 : currentTickIndex + 1;
         const nextTick = bufferedTicks[nextIndex];
@@ -339,6 +450,15 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
 
     if (bufferedTicks.length > 0) {
+      const firstTickMs = isoToMs(bufferedTicks[0].time);
+      if (currentTime !== null && currentTime <= firstTickMs && masterData.length > 0) {
+        const prevBarMs = rewindTimeLogic(currentTime, stepMinutes, masterData);
+        if (prevBarMs) {
+          get().seekTickTime(prevBarMs);
+          return;
+        }
+      }
+
       if (currentTickIndex > 0) {
         const prevIndex = currentTickIndex - 1;
         const prevTick = bufferedTicks[prevIndex];
@@ -385,24 +505,67 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   seekTickTime: (time) => {
-    const { bufferedTicks, ticksBySymbol } = get();
+    const { bufferedTicks, ticksBySymbol, masterData } = get();
     const targetMs = typeof time === 'number' ? time : isoToMs(time);
     if (bufferedTicks.length === 0) {
-      set({ currentTime: targetMs, isPaused: true });
+      let synthTick: MarketTick | null = null;
+      let updatedLatest: Record<string, MarketTick> = {};
+      if (masterData.length > 0) {
+        const bar = findBarAtOrBefore(masterData, targetMs);
+        if (bar) {
+          const sym = (bar.symbol || Object.keys(ticksBySymbol)[0] || 'SPY').toUpperCase();
+          const price = getBarSynthesizedPrice(bar, targetMs);
+          synthTick = {
+            time: msToIso(targetMs),
+            price: Number(price.toFixed(4)),
+            volume: bar.volume || 1,
+            symbol: sym,
+            session: (bar.session as any) || 'REG',
+            source: 'STREAMING',
+          };
+          updatedLatest[sym] = synthTick;
+        }
+      }
+      set({
+        currentTime: targetMs,
+        currentTickIndex: -1,
+        currentTick: synthTick,
+        latestTickBySymbol: updatedLatest,
+        isPaused: true,
+      });
       return;
     }
 
     const firstTickMs = isoToMs(bufferedTicks[0].time);
     if (targetMs < firstTickMs) {
+      let synthTick: MarketTick | null = null;
+      let updatedLatest: Record<string, MarketTick> = {};
+      if (masterData.length > 0) {
+        const bar = findBarAtOrBefore(masterData, targetMs);
+        if (bar) {
+          const sym = (bar.symbol || bufferedTicks[0].symbol || 'SPY').toUpperCase();
+          const price = getBarSynthesizedPrice(bar, targetMs);
+          synthTick = {
+            time: msToIso(targetMs),
+            price: Number(price.toFixed(4)),
+            volume: bar.volume || 1,
+            symbol: sym,
+            session: (bar.session as any) || 'REG',
+            source: 'STREAMING',
+          };
+          updatedLatest[sym] = synthTick;
+        }
+      }
       set({
         currentTickIndex: -1,
-        currentTick: null,
-        latestTickBySymbol: {},
+        currentTick: synthTick,
+        latestTickBySymbol: updatedLatest,
         currentTime: targetMs,
         isPaused: true,
       });
       return;
     }
+
 
     // Binary search for the last tick occurring at or before targetMs (tMs <= targetMs)
     let low = 0;

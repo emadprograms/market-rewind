@@ -32,6 +32,7 @@ test.describe('Chart Shaking & Viewport Jitter E2E Regression', () => {
       };
 
       const origUpdate = series.update.bind(series);
+
       series.update = (...args: any[]) => {
         (window as any).__debugLog.updateCalls++;
         return origUpdate(...args);
@@ -48,10 +49,27 @@ test.describe('Chart Shaking & Viewport Jitter E2E Regression', () => {
       });
     });
 
+    // Wait for initial session data (masterData and streaming ticks) to fully settle
+    await page.waitForFunction(() => {
+      const store = (window as any).usePlaybackStore;
+      return store && store.getState().masterData && store.getState().masterData.length > 0 && !store.getState().isLoadingTicks;
+    }, { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+
+    await page.evaluate(() => {
+      if ((window as any).__debugLog) {
+        (window as any).__debugLog.setDataCalls = 0;
+        (window as any).__debugLog.updateCalls = 0;
+        (window as any).__debugLog.rangeHistory = [];
+      }
+    });
+
+
     // 3. Start playback
     const playBtn = page.getByRole('button', { name: /PLAY/i });
     await playBtn.click();
     await expect(page.getByRole('button', { name: /PAUSE/i })).toBeVisible();
+
 
     // 4. Let playback stream live ticks for 3 seconds
     await page.waitForTimeout(3000);
@@ -215,11 +233,24 @@ test.describe('Chart Shaking & Viewport Jitter E2E Regression', () => {
       const container = document.querySelector('[data-testid="chart-container"]') as any;
       return container?.__priceSeries?.data() || [];
     });
+    const stateInfo = await page.evaluate(() => {
+      const store = (window as any).usePlaybackStore?.getState();
+      return {
+        currentTime: store?.currentTime,
+        masterDataLen: store?.masterData?.length,
+        latestTick: store?.latestTickBySymbol,
+        isPaused: store?.isPaused,
+      };
+    });
+    console.log('[Test 4 Diagnostic] stateInfo:', stateInfo);
+    console.log('[Test 4 Diagnostic] card0 data-bars-count:', await card0.getAttribute('data-bars-count'));
     console.log('[Test 4 Diagnostic] forwardBars:', {
       count: forwardBars.length,
       first: forwardBars[0],
-      last: forwardBars[forwardBars.length - 1],
+      last3: forwardBars.slice(-3),
     });
+
+
 
     // 2. Seek backward to 09:45 ET (13:45 UTC)
     const backwardMs = new Date('2026-09-25T13:45:00Z').getTime();
@@ -260,4 +291,218 @@ test.describe('Chart Shaking & Viewport Jitter E2E Regression', () => {
 
     expect(pageErrors).toEqual([]);
   });
+
+  test('seeking forward to future time and pressing play resumes streaming and continues updating candles in-place', async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+
+    await startSession(page, 'SPY', '2026-09-25', '09:30');
+    await page.waitForTimeout(500);
+
+    // 1. Instrument chart price series update calls
+    await page.evaluate(() => {
+      const container = document.querySelector('[data-testid="chart-container"]') as any;
+      if (!container || !container.__priceSeries) return;
+      (window as any).__playbackUpdates = {
+        updateCalls: 0,
+        lastUpdatedTime: null as any,
+      };
+      const origUpdate = container.__priceSeries.update.bind(container.__priceSeries);
+      container.__priceSeries.update = (bar: any) => {
+        (window as any).__playbackUpdates.updateCalls++;
+        (window as any).__playbackUpdates.lastUpdatedTime = bar.time;
+        return origUpdate(bar);
+      };
+    });
+
+    // 2. Seek forward to future time 14:50 ET (18:50 UTC) where ticks exist in bufferedTicks
+    const forwardMs = new Date('2026-09-25T18:50:00Z').getTime();
+    await page.evaluate((target) => {
+      const store = (window as any).usePlaybackStore;
+      if (store) store.getState().seekTickTime(target);
+    }, forwardMs);
+
+    await page.waitForTimeout(500);
+
+    // Verify time display shows 14:50
+    const timeDisplay = page.locator('.time-display');
+    await expect(timeDisplay).toContainText('14:50');
+
+    // Reset update counter before playing
+    await page.evaluate(() => {
+      if ((window as any).__playbackUpdates) {
+        (window as any).__playbackUpdates.updateCalls = 0;
+      }
+    });
+
+    // 3. Press PLAY
+    const playBtn = page.getByRole('button', { name: /PLAY/i });
+    await playBtn.click();
+    await expect(page.getByRole('button', { name: /PAUSE/i })).toBeVisible();
+
+    // 4. Let it stream for 3 seconds
+    await page.waitForTimeout(3000);
+
+    // 5. Inspect playback engine state and chart update counts
+    const stats = await page.evaluate(() => {
+      const store = (window as any).usePlaybackStore;
+      return {
+        updates: (window as any).__playbackUpdates?.updateCalls || 0,
+        currentTime: store?.getState().currentTime,
+        isPaused: store?.getState().isPaused,
+        currentTickIndex: store?.getState().currentTickIndex,
+      };
+    });
+
+    console.log('[Seek & Play Diagnostic]', stats);
+    expect(stats.isPaused).toBe(false);
+    expect(stats.currentTime).toBeGreaterThan(forwardMs);
+    expect(stats.updates).toBeGreaterThan(0);
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('seeking forward to 10:15 ET (historical bar period before raw ticks) and pressing play resumes playback and updates candles in-place', async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+
+    await startSession(page, 'SPY', '2026-09-25', '09:30');
+    await page.waitForTimeout(500);
+
+    // 1. Instrument chart price series update calls
+    await page.evaluate(() => {
+      const container = document.querySelector('[data-testid="chart-container"]') as any;
+      if (!container || !container.__priceSeries) return;
+      (window as any).__playbackUpdates = {
+        updateCalls: 0,
+        lastUpdatedTime: null as any,
+      };
+      const origUpdate = container.__priceSeries.update.bind(container.__priceSeries);
+      container.__priceSeries.update = (bar: any) => {
+        (window as any).__playbackUpdates.updateCalls++;
+        (window as any).__playbackUpdates.lastUpdatedTime = bar.time;
+        return origUpdate(bar);
+      };
+    });
+
+    // 2. Seek forward to 10:15 ET (14:15 UTC) where data is in masterData before raw streaming ticks
+    const forwardMs = new Date('2026-09-25T14:15:00Z').getTime();
+    await page.evaluate((target) => {
+      const store = (window as any).usePlaybackStore;
+      if (store) store.getState().seekTickTime(target);
+    }, forwardMs);
+
+    await page.waitForTimeout(500);
+
+    // Verify time display shows 10:15
+    const timeDisplay = page.locator('.time-display');
+    await expect(timeDisplay).toContainText('10:15');
+
+    // Reset update counter before playing
+    await page.evaluate(() => {
+      if ((window as any).__playbackUpdates) {
+        (window as any).__playbackUpdates.updateCalls = 0;
+      }
+    });
+
+    // 3. Press PLAY
+    const playBtn = page.getByRole('button', { name: /PLAY/i });
+    await playBtn.click();
+    await expect(page.getByRole('button', { name: /PAUSE/i })).toBeVisible();
+
+    // 4. Let it stream/advance for 3 seconds
+    await page.waitForTimeout(3000);
+
+    // 5. Inspect playback engine state and chart update counts
+    const stats = await page.evaluate(() => {
+      const store = (window as any).usePlaybackStore;
+      return {
+        updates: (window as any).__playbackUpdates?.updateCalls || 0,
+        currentTime: store?.getState().currentTime,
+        isPaused: store?.getState().isPaused,
+        currentTickIndex: store?.getState().currentTickIndex,
+      };
+    });
+
+    console.log('[Seek 10:15 & Play Diagnostic]', stats);
+    expect(stats.isPaused).toBe(false);
+    expect(stats.currentTime).toBeGreaterThan(forwardMs);
+    expect(stats.updates).toBeGreaterThan(0);
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('seeking forward via playback slider UI to future time and pressing play resumes playback and updates candles in-place', async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+
+    await startSession(page, 'SPY', '2026-09-25', '09:30');
+    await page.waitForTimeout(500);
+
+    // 1. Instrument chart price series update calls
+    await page.evaluate(() => {
+      const container = document.querySelector('[data-testid="chart-container"]') as any;
+      if (!container || !container.__priceSeries) return;
+      (window as any).__playbackUpdates = {
+        updateCalls: 0,
+        lastUpdatedTime: null as any,
+      };
+      const origUpdate = container.__priceSeries.update.bind(container.__priceSeries);
+      container.__priceSeries.update = (bar: any) => {
+        (window as any).__playbackUpdates.updateCalls++;
+        (window as any).__playbackUpdates.lastUpdatedTime = bar.time;
+        return origUpdate(bar);
+      };
+    });
+
+    // 2. Locate slider and move it forward to ~10:45 ET (14:45 UTC)
+    const slider = page.locator('[data-testid="playback-time-slider"]');
+    await expect(slider).toBeVisible();
+
+    const minVal = Number(await slider.getAttribute('min'));
+    const maxVal = Number(await slider.getAttribute('max'));
+    expect(maxVal).toBeGreaterThan(minVal);
+
+    // Move to 25% into the day (~11:00 AM ET)
+    const targetVal = Math.floor(minVal + (maxVal - minVal) * 0.25);
+    await slider.evaluate((el: HTMLInputElement, val) => {
+      el.value = String(val);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, targetVal);
+
+    await page.waitForTimeout(500);
+
+    // Reset update counter before playing
+    await page.evaluate(() => {
+      if ((window as any).__playbackUpdates) {
+        (window as any).__playbackUpdates.updateCalls = 0;
+      }
+    });
+
+    // 3. Click PLAY button
+    const playBtn = page.getByRole('button', { name: /PLAY/i });
+    await playBtn.click();
+    await expect(page.getByRole('button', { name: /PAUSE/i })).toBeVisible();
+
+    // 4. Let it play for 3 seconds
+    await page.waitForTimeout(3000);
+
+    // 5. Verify chart receives updates and time advances
+    const stats = await page.evaluate(() => {
+      const store = (window as any).usePlaybackStore;
+      return {
+        updates: (window as any).__playbackUpdates?.updateCalls || 0,
+        currentTime: store?.getState().currentTime,
+        isPaused: store?.getState().isPaused,
+        currentTickIndex: store?.getState().currentTickIndex,
+      };
+    });
+
+    console.log('[Slider Seek & Play Diagnostic]', stats);
+    expect(stats.isPaused).toBe(false);
+    expect(stats.currentTime).toBeGreaterThan(targetVal);
+    expect(stats.updates).toBeGreaterThan(0);
+
+    expect(pageErrors).toEqual([]);
+  });
 });
+
+

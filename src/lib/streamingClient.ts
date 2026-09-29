@@ -514,8 +514,10 @@ export class StreamingClient {
         volume: Number(row.volume || 0),
         session: row.session || 'REG',
         tickCount: Number(row.tick_count || 1),
+        symbol: sym,
       };
     }).sort((a, b) => a.time.localeCompare(b.time));
+
   }
 
   createReplayWebSocket(handlers: {
