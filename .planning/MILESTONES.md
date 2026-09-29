@@ -1,5 +1,38 @@
 # Project Milestones: Market Rewind
 
+## v4.0 Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination (Shipped: 2026-09-29)
+
+**Delivered:** Established a canonical, single-database architecture powered exclusively by `streaming.duckdb` (permanently retiring `historical.duckdb`), and eliminated all 9 playback, lifecycle, volume, and timeline defects from `market-rewind-diagnosis-and-plan.md` via rigorous Test-Driven Development (TDD) across 11 diagnostic replication suites.
+
+**Phases completed:** 21-24 (4 plans total)
+
+**Key accomplishments:**
+- Permanently purged `historical.duckdb` from backend, frontend, schema validation, and config, building all candles purely from `streaming.duckdb` via DuckDB `time_bucket()` in 26ms
+- Event-deduplicated volume tracking and multi-tick intra-frame high/low trade aggregation (DIAG 1, DIAG 2)
+- Reconciled canvas history prepending so older arriving bars always render (DIAG 3)
+- Immediate first-candle initialization when history is empty (DIAG 4)
+- Multi-symbol buffer ingestion cursor stability preserving active replay position (DIAG 5)
+- Elimination of synthetic premarket fallback volume compounding (DIAG 6)
+- Strict extended-hours filtering (`isRthTick`) during active playback when ETH is disabled (DIAG 7)
+- Atomic symbol switching with immediate price clearing and zero old company candle leakage (DIAG 8)
+- Zero future OHLC leakage on forming multi-minute candles at cutoff (DIAG 9)
+- Playback snapshot unfreezing on tick arrival (DIAG 10)
+- Monotonic session generation tokens preventing out-of-order date response clock overwrites (DIAG 11)
+- Time & Sales order flow tape symbol isolation and active badge filtering (RENDER-04)
+- Timeline scrubber stabilization with integer-second snapping and explicit `HH:MM:SS` jump input (SCRUB-01, SCRUB-02)
+- 100% test-first verification: Red phase verified, Green phase passing 62/62 suites (341 tests), backend 11/11 passed, Playwright 2/2 passed
+
+**Stats:**
+- 4 phases, 4 plans, 18 requirements verified (100%)
+- 62/62 Vitest test files passing (341 tests)
+- 11/11 Python pytest backend service tests passing
+- 2/2 Playwright E2E journey tests passing
+- Clean production build (998ms)
+
+**Git range:** `feat(phase-21)` → `feat(phase-24)`
+
+---
+
 ## v3.2 High-Performance Chart Playback & Data Reliability Engine (Shipped: 2026-09-28)
 
 **Delivered:** Eliminated CPU saturation during market replay and resolved the intermittent single-candle loading bug by decoupling high-frequency playback state from React, executing O(1) direct canvas series updates via lightweight-charts, preventing viewport drag-fighting during playback, and establishing comprehensive single-candle initialization safeguards.

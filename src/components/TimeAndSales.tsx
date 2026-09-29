@@ -26,12 +26,22 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
 
   const displaySymbol = symbol || currentTick?.symbol || (bufferedTicks[0]?.symbol) || 'LIVE';
   const tz = getTzForTicker(displaySymbol);
+  const latestSymbolTick = displaySymbol && displaySymbol !== 'LIVE'
+    ? usePlaybackStore((state) => state.latestTickBySymbol?.[displaySymbol.toUpperCase()]) ||
+      (currentTick?.symbol?.toUpperCase() === displaySymbol.toUpperCase() ? currentTick : null)
+    : currentTick;
 
-  // Filter or window to the last 80 executed trades up to currentTickIndex (no future ticks)
+  // Filter executed trades up to currentTickIndex strictly matching displaySymbol (RENDER-04)
   const maxDisplay = 80;
-  const startIdx = Math.max(0, currentTickIndex - maxDisplay + 1);
-  const endIdx = Math.min(bufferedTicks.length, currentTickIndex + 1);
-  const visibleTicks = bufferedTicks.slice(startIdx, endIdx);
+  const executedTicks = currentTickIndex >= 0 ? bufferedTicks.slice(0, currentTickIndex + 1) : [];
+  const symbolExecutedTicks = displaySymbol && displaySymbol !== 'LIVE'
+    ? executedTicks.filter((t) => !t.symbol || t.symbol.toUpperCase() === displaySymbol.toUpperCase())
+    : executedTicks;
+  const visibleTicks = symbolExecutedTicks.slice(-maxDisplay);
+
+  const totalSymbolTicks = displaySymbol && displaySymbol !== 'LIVE'
+    ? bufferedTicks.filter((t) => !t.symbol || t.symbol.toUpperCase() === displaySymbol.toUpperCase()).length
+    : bufferedTicks.length;
 
   const formatTapeTime = (isoTime: string) => {
     const ms = isoToMs(isoTime);
@@ -49,7 +59,7 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
   };
 
   return (
-    <div className="time-and-sales-panel" style={{
+    <div className="time-and-sales-panel" data-testid="time-and-sales" style={{
       width: '280px',
       height: '100%',
       backgroundColor: '#131722',
@@ -134,14 +144,14 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
           </div>
         ) : (
           visibleTicks.map((tick, relIdx) => {
-            const absIdx = startIdx + relIdx;
-            const prevTick = absIdx > 0 ? bufferedTicks[absIdx - 1] : null;
+            const prevTick = relIdx > 0 ? visibleTicks[relIdx - 1] : null;
             const isUptick = prevTick ? tick.price >= prevTick.price : true;
-            const isActive = absIdx === currentTickIndex;
+            const isActive = relIdx === visibleTicks.length - 1;
 
             return (
               <div 
-                key={`${tick.time}-${absIdx}`}
+                key={`${tick.time}-${relIdx}`}
+                data-testid="tape-row"
                 className={`tick-row ${isActive ? 'is-active' : ''}`}
                 style={{
                   display: 'grid',
@@ -176,9 +186,9 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
         color: '#787b86',
         fontSize: '10px',
       }}>
-        <span>TICK: {bufferedTicks.length > 0 ? `${currentTickIndex + 1}/${bufferedTicks.length}` : '0/0'}</span>
+        <span>TICK: {totalSymbolTicks > 0 ? `${symbolExecutedTicks.length}/${totalSymbolTicks}` : '0/0'}</span>
         <span style={{ color: '#2962ff', fontWeight: 600 }}>
-          {currentTick ? `$${currentTick.price.toFixed(2)}` : '--'}
+          {latestSymbolTick ? `$${latestSymbolTick.price.toFixed(2)}` : '--'}
         </span>
       </div>
     </div>

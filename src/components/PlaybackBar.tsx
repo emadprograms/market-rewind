@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, ListFilter } from 'lucide-react';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
-import { getTzForTicker, getTzLabel } from '../lib/timezones';
+import { getTzForTicker, getTzLabel, getUtcTimeFromEt } from '../lib/timezones';
 
 interface PlaybackBarProps {
   totalRealized: number;
@@ -63,20 +63,51 @@ export function PlaybackBar({
       else max = currentTime;
     }
 
-    if (min !== null && max !== null && min >= max) {
-      max = min + 60000;
+    if (min !== null && max !== null) {
+      min = Math.floor(min / 1000) * 1000;
+      max = Math.floor(max / 1000) * 1000;
+      if (min >= max) {
+        max = min + 60000;
+      }
     }
 
     return { minTime: min, maxTime: max };
   }, [bufferedTicks, masterData, currentTime]);
+
+  const [jumpTimeText, setJumpTimeText] = useState('');
 
   const sliderValue = (minTime !== null && maxTime !== null && currentTime !== null)
     ? Math.max(minTime, Math.min(currentTime, maxTime))
     : (minTime ?? 0);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10);
+    const rawVal = parseInt(e.target.value, 10);
+    const val = Math.floor(rawVal / 1000) * 1000;
+    setPaused(true);
     seekTickTime(val);
+  };
+
+  const handleJumpSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = jumpTimeText.trim();
+    if (!trimmed) return;
+    const parts = trimmed.split(':');
+    if (parts.length >= 2) {
+      const hh = parts[0].padStart(2, '0');
+      const mm = parts[1].padStart(2, '0');
+      const ss = parts[2] ? parts[2].padStart(2, '0') : '00';
+      const baseMs = currentTime || minTime || Date.now();
+      const tz = getTzForTicker(sessionTicker);
+      const dateStr = new Date(baseMs).toLocaleDateString('en-CA', { timeZone: tz });
+      const targetUtcStr = getUtcTimeFromEt(dateStr, `${hh}:${mm}`);
+      let targetMs = new Date(targetUtcStr.replace(' ', 'T') + 'Z').getTime();
+      targetMs += parseInt(ss, 10) * 1000;
+      if (!isNaN(targetMs)) {
+        setPaused(true);
+        seekTickTime(targetMs);
+        setJumpTimeText('');
+      }
+    }
   };
 
   const formatTimeOnly = (ms: number | null) => {
@@ -227,7 +258,7 @@ export function PlaybackBar({
 
       {/* Time-based scrubber slider */}
       {canPlay && minTime !== null && maxTime !== null && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', maxWidth: '340px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', maxWidth: '420px' }}>
           <input
             type="range"
             data-testid="playback-time-slider"
@@ -237,6 +268,8 @@ export function PlaybackBar({
             step={1000}
             value={sliderValue}
             onChange={handleSliderChange}
+            onMouseUp={() => setPaused(true)}
+            onTouchEnd={() => setPaused(true)}
             title={`Replay Time: ${formatTimeOnly(sliderValue)} (${currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/${totalTicks} ticks)`}
             style={{ width: '100%', accentColor: '#2962ff', cursor: 'pointer' }}
           />
@@ -247,6 +280,32 @@ export function PlaybackBar({
           >
             {formatTimeOnly(sliderValue)} / {formatTimeOnly(maxTime)}
           </span>
+          <form 
+            onSubmit={handleJumpSubmit}
+            style={{ display: 'flex', alignItems: 'center' }}
+          >
+            <input
+              type="text"
+              data-testid="time-jump-input"
+              aria-label="Jump to time HH:MM:SS"
+              placeholder="HH:MM:SS"
+              value={jumpTimeText}
+              onChange={(e) => setJumpTimeText(e.target.value)}
+              style={{
+                width: '64px',
+                height: '20px',
+                padding: '2px 4px',
+                fontSize: '10px',
+                fontFamily: 'JetBrains Mono, monospace',
+                backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                border: '1px solid #2a2e39',
+                borderRadius: '3px',
+                color: '#d1d4dc',
+                textAlign: 'center',
+              }}
+              title="Jump to specific time (e.g. 09:30:00 or 10:15)"
+            />
+          </form>
           {/* Subtle tick counter display */}
           <span 
             data-testid="tick-counter" 

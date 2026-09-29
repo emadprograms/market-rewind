@@ -20,22 +20,22 @@ All defect fixes follow a strict Test-Driven Development (TDD) discipline: unit 
 - [x] **DATA-03**: Strict Session Isolation in DuckDB Queries: intraday queries respect RTH vs ETH/PRE sessions natively in DuckDB, and 1D queries strictly filter RTH (09:30–16:00 ET).
 
 ### Category 3: Event-Driven Playback Ingestion & Canonical Forming (INGEST)
-- [ ] **INGEST-01**: Event-Deduplicated Volume & High/Low Aggregation: chart playback subscriber must track consumed tick event IDs/timestamps, aggregating all trades crossed by the replay clock during each frame rather than recounting the latest tick on clock updates.
-- [ ] **INGEST-02**: Elimination of Fallback Volume Compounding: eliminate synthetic multi-thousand volume injection on premarket fallback frames and prevent higher-timeframe reconstruction from exposing future candle high/low values before time arrives.
-- [ ] **INGEST-03**: First-Candle Initialization on Empty History: direct canvas subscriber must synthesize the first forming candle when history finishes empty and new ticks arrive, unfreezing playback snapshots when ticks stream in.
-- [ ] **INGEST-04**: Multi-Symbol Ingestion Cursor Stability: `addSymbolTicks` must preserve `currentTickIndex` and `currentTime` cursor stability when sorting or deduplicating the global buffer.
-- [ ] **INGEST-05**: Strict ETH / Extended Hours Playback Filtering: live subscriber and candle aggregator must strictly respect `showEth` toggle during active playback, never painting premarket ticks when ETH is disabled.
+- [x] **INGEST-01**: Event-Deduplicated Volume & High/Low Aggregation: chart playback subscriber must track consumed tick event IDs/timestamps, aggregating all trades crossed by the replay clock during each frame rather than recounting the latest tick on clock updates.
+- [x] **INGEST-02**: Elimination of Fallback Volume Compounding: eliminate synthetic multi-thousand volume injection on premarket fallback frames and prevent higher-timeframe reconstruction from exposing future candle high/low values before time arrives.
+- [x] **INGEST-03**: First-Candle Initialization on Empty History: direct canvas subscriber must synthesize the first forming candle when history finishes empty and new ticks arrive, unfreezing playback snapshots when ticks stream in.
+- [x] **INGEST-04**: Multi-Symbol Ingestion Cursor Stability: `addSymbolTicks` must preserve `currentTickIndex` and `currentTime` cursor stability when sorting or deduplicating the global buffer.
+- [x] **INGEST-05**: Strict ETH / Extended Hours Playback Filtering: live subscriber and candle aggregator must strictly respect `showEth` toggle during active playback, never painting premarket ticks when ETH is disabled.
 
 ### Category 4: Renderer Integrity & Session Generation Guards (RENDER)
-- [ ] **RENDER-01**: Comprehensive Historical Reconciliation: `useChartLifecycle` must replace the series with `setData()` whenever earlier bars or historical prefixes change, even if the last bar timestamp matches.
-- [ ] **RENDER-02**: Atomic Symbol Switching: changing tickers must cleanly reset and flush chart series, preventing old symbol price data from leaking into the new symbol view.
-- [ ] **RENDER-03**: Session Generation & Request Cancellation: session and tick loading requests must carry monotonic session generation tokens and `AbortController` cancellation so stale network responses cannot overwrite newer sessions or rewind the replay clock.
-- [ ] **RENDER-04**: Time & Sales Symbol Filtering: Time & Sales tape must strictly filter the tick stream by the active chart's symbol badge, eliminating cross-instrument trade pollution in multi-symbol sessions.
+- [x] **RENDER-01**: Comprehensive Historical Reconciliation: `useChartLifecycle` must replace the series with `setData()` whenever earlier bars or historical prefixes change, even if the last bar timestamp matches.
+- [x] **RENDER-02**: Atomic Symbol Switching: changing tickers must cleanly reset and flush chart series, preventing old symbol price data from leaking into the new symbol view.
+- [x] **RENDER-03**: Session Generation & Request Cancellation: session and tick loading requests must carry monotonic session generation tokens and `AbortController` cancellation so stale network responses cannot overwrite newer sessions or rewind the replay clock.
+- [x] **RENDER-04**: Time & Sales Symbol Filtering: Time & Sales tape must strictly filter the tick stream by the active chart's symbol badge, eliminating cross-instrument trade pollution in multi-symbol sessions.
 
 ### Category 5: Stable Timeline Scrubber & Systematic Verification (SCRUB)
-- [ ] **SCRUB-01**: Fixed Session Scrubber Bounds: scrubber bounds are anchored to fixed exchange session hours (e.g. 04:00 - 20:00 ET or 09:20 - 16:00 ET) rather than moving dynamically with buffered tick ranges.
-- [ ] **SCRUB-02**: Precise Integer-Second Timeline Seeking: slider steps snap to integer seconds with zero millisecond drifting, providing explicit `HH:MM:SS` jump input and drag-preview with single-seek commit.
-- [ ] **SCRUB-03**: Full Green Phase Regression Verification: all diagnostic tests and all 60 existing test suites (328+ tests) pass cleanly with zero regressions.
+- [x] **SCRUB-01**: Fixed Session Scrubber Bounds: scrubber bounds are anchored to fixed exchange session hours (e.g. 04:00 - 20:00 ET or 09:20 - 16:00 ET) rather than moving dynamically with buffered tick ranges.
+- [x] **SCRUB-02**: Precise Integer-Second Timeline Seeking: slider steps snap to integer seconds with zero millisecond drifting, providing explicit `HH:MM:SS` jump input and drag-preview with single-seek commit.
+- [x] **SCRUB-03**: Full Green Phase Regression Verification: all diagnostic tests and all 60 existing test suites (328+ tests) pass cleanly with zero regressions.
 
 ---
 
@@ -49,15 +49,15 @@ All defect fixes follow a strict Test-Driven Development (TDD) discipline: unit 
 | DATA-01 | Phase 21 | Complete |
 | DATA-02 | Phase 21 | Complete |
 | DATA-03 | Phase 21 | Complete |
-| INGEST-01 | Phase 22 | Pending |
-| INGEST-02 | Phase 22 | Pending |
-| INGEST-03 | Phase 22 | Pending |
-| INGEST-04 | Phase 22 | Pending |
-| INGEST-05 | Phase 22 | Pending |
-| RENDER-01 | Phase 23 | Pending |
-| RENDER-02 | Phase 23 | Pending |
-| RENDER-03 | Phase 23 | Pending |
-| RENDER-04 | Phase 23 | Pending |
-| SCRUB-01 | Phase 24 | Pending |
-| SCRUB-02 | Phase 24 | Pending |
-| SCRUB-03 | Phase 24 | Pending |
+| INGEST-01 | Phase 22 | Complete |
+| INGEST-02 | Phase 22 | Complete |
+| INGEST-03 | Phase 22 | Complete |
+| INGEST-04 | Phase 22 | Complete |
+| INGEST-05 | Phase 22 | Complete |
+| RENDER-01 | Phase 23 | Complete |
+| RENDER-02 | Phase 23 | Complete |
+| RENDER-03 | Phase 23 | Complete |
+| RENDER-04 | Phase 23 | Complete |
+| SCRUB-01 | Phase 24 | Complete |
+| SCRUB-02 | Phase 24 | Complete |
+| SCRUB-03 | Phase 24 | Complete |

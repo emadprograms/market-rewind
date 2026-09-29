@@ -133,4 +133,26 @@ describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
     expect(usePlaybackStore.getState().currentTime).toBe(time1015Ms);
     expect(usePlaybackStore.getState().isPaused).toBe(true);
   });
+
+  it('seeks accurately when submitting explicit HH:MM:SS jump input (SCRUB-02)', async () => {
+    const { getByTestId } = render(
+      <PlaybackBar
+        totalRealized={0}
+        totalUnrealized={0}
+        isDbLoaded={true}
+        sessionTicker="TSLA"
+        onResetToOpen={vi.fn()}
+        minStepMinutes={1}
+      />
+    );
+
+    const jumpInput = getByTestId('time-jump-input');
+    await act(async () => {
+      fireEvent.change(jumpInput, { target: { value: '10:15:00' } });
+      fireEvent.submit(jumpInput.closest('form')!);
+    });
+
+    expect(usePlaybackStore.getState().currentTime).toBe(time1015Ms);
+    expect(usePlaybackStore.getState().isPaused).toBe(true);
+  });
 });

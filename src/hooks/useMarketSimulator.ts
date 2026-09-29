@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 import { streamingClient } from '../lib/streamingClient';
 import type { RawBar } from '../types';
@@ -15,8 +15,10 @@ export function useMarketSimulator(
   const setPaused = usePlaybackStore((state) => state.setPaused);
   const seekTickTime = usePlaybackStore((state) => state.seekTickTime);
   const masterData = usePlaybackStore((state) => state.masterData);
+  const sessionGenRef = useRef(0);
 
   const loadMarketData = useCallback(async () => {
+    const currentGen = ++sessionGenRef.current;
     // Synchronously anchor replay cursor to target time before awaiting candles
     const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
     const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
@@ -34,6 +36,10 @@ export function useMarketSimulator(
       });
     } catch {
       // Fallback
+    }
+
+    if (currentGen !== sessionGenRef.current) {
+      return;
     }
 
     setMasterData(data || []);

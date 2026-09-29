@@ -97,8 +97,14 @@ export function useChartData({
 
     updateStaticState(usePlaybackStore.getState());
 
+    let prevTicks = usePlaybackStore.getState().ticksBySymbol?.[sym];
     const unsub = usePlaybackStore.subscribe((state) => {
-      if (state.isPaused) {
+      const currentTicks = state.ticksBySymbol?.[sym];
+      const ticksChanged = currentTicks !== prevTicks;
+      if (ticksChanged) {
+        prevTicks = currentTicks;
+      }
+      if (state.isPaused || ticksChanged) {
         updateStaticState(state);
       }
     });
@@ -187,6 +193,7 @@ export function useChartData({
   const pendingHistoryPrependRef = useRef<HistoryPrependState | null>(null);
 
   const dataTimeframeRef = useRef(timeframe);
+  const loadedTickerRef = useRef<string>(ticker);
   const isFirstRender = useRef(true);
 
   // Report timeframe to parent
@@ -250,9 +257,18 @@ export function useChartData({
         earliestLoadedDateRef.current = data[0].time;
       }
       dataTimeframeRef.current = timeframe;
+      const tickerChanged = loadedTickerRef.current !== ticker;
+      loadedTickerRef.current = ticker;
       setLocalMasterData((prev: RawBar[]) => {
-        if (prev === data) return prev;
-        if (prev.length === data?.length && prev[prev.length - 1]?.time === data[data.length - 1]?.time && prev[0]?.time === data[0]?.time) {
+        if (!tickerChanged && prev === data) return prev;
+        if (
+          !tickerChanged &&
+          prev.length === data?.length &&
+          prev[prev.length - 1]?.time === data[data.length - 1]?.time &&
+          prev[0]?.time === data[0]?.time &&
+          prev[0]?.open === data[0]?.open &&
+          prev[prev.length - 1]?.close === data[data.length - 1]?.close
+        ) {
           return prev;
         }
         return (data || []) as RawBar[];
@@ -428,7 +444,7 @@ export function useChartData({
         const rthOpenMs = startOfTodayMs + (9.5 * 3600000);
         const rthCloseMs = startOfTodayMs + (16 * 3600000);
 
-        const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0)
+        const candidateBars = (masterData && masterData.length > 0 && (!masterData[0].symbol || masterData[0].symbol.toUpperCase() === ticker.toUpperCase()))
           ? masterData
           : localMasterData;
 
@@ -603,8 +619,8 @@ export function useChartData({
         const durationMs = durationSec * 1000;
         const currentBucketStartMs = Math.floor(effectiveCutoff / durationMs) * durationMs;
 
-        const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0) 
-          ? masterData 
+        const candidateBars = (masterData && masterData.length > 0 && (!masterData[0].symbol || masterData[0].symbol.toUpperCase() === ticker.toUpperCase()))
+          ? masterData
           : localMasterData;
 
         if (candidateBars && candidateBars.length > 0) {
@@ -622,6 +638,18 @@ export function useChartData({
             if (!showEth && !isRthBar(b, ticker)) return false;
             const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
             return bMs >= startMs && bMs <= effectiveCutoff;
+          }).map(b => {
+            const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
+            if (isReplayMode && bMs === effectiveCutoff) {
+              return {
+                ...b,
+                high: b.open,
+                low: b.open,
+                close: b.open,
+                volume: 0,
+              };
+            }
+            return b;
           });
 
           if (validBars.length > 0) {

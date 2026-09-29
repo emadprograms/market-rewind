@@ -257,11 +257,27 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
         updatedLatest[sym] = mergedSymbol[0];
       }
 
+      let updatedIndex = state.currentTickIndex;
+      if (state.currentTick && combined.length > 0) {
+        const found = combined.indexOf(state.currentTick);
+        if (found !== -1) {
+          updatedIndex = found;
+        } else if (state.currentTime) {
+          for (let i = combined.length - 1; i >= 0; i--) {
+            if (ensureTickMs(combined[i]) <= state.currentTime) {
+              updatedIndex = i;
+              break;
+            }
+          }
+        }
+      }
+
       return {
         bufferedTicks: combined,
         ticksBySymbol: updatedTicksBySymbol,
         latestTickBySymbol: updatedLatest,
         totalTicks: combined.length,
+        currentTickIndex: updatedIndex,
       };
     });
   },
@@ -318,7 +334,8 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             symbol: sym,
             session: (bar.session as any) || 'REG',
             source: 'STREAMING',
-          };
+            isSynthesized: true,
+          } as any;
           const updatedLatest = { ...latestTickBySymbol, [sym]: synthTick };
           set({
             currentTime: targetTimeMs,
@@ -348,7 +365,8 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             symbol: sym,
             session: (bar.session as any) || 'REG',
             source: 'STREAMING',
-          };
+            isSynthesized: true,
+          } as any;
           const updatedLatest = { ...latestTickBySymbol, [sym]: synthTick };
           set({
             currentTime: targetTimeMs,

@@ -2,6 +2,11 @@
 
 ## Completed Milestones
 
+### Milestone v4.0: Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination ✅
+- **Shipped**: 2026-09-29
+- **Phases**: 21–24 (4 phases, 4 plans, 100% verified)
+- **Archive**: [v4.0-ROADMAP.md](./milestones/v4.0-ROADMAP.md) | [v4.0-REQUIREMENTS.md](./milestones/v4.0-REQUIREMENTS.md) | [v4.0-MILESTONE-AUDIT.md](./milestones/v4.0-MILESTONE-AUDIT.md)
+
 ### Milestone v3.2: High-Performance Chart Playback & Data Reliability Engine ✅
 - **Shipped**: 2026-09-28
 - **Phases**: 18–20 (3 phases, 3 plans, 100% verified)
@@ -29,44 +34,27 @@
 
 ---
 
-## Current Milestone: v4.0 Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination
+## Milestone Details: v4.0 Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination ✅
 
-### Phase 21: Test-First Harness & Pure Single-DB (`streaming.db`) Backend Purge
+### Phase 21: Test-First Harness & Pure Single-DB (`streaming.db`) Backend Purge ✅
 - **Goal:** Build the complete TDD harness replicating all 9 failure modes from `market-rewind-diagnosis-and-plan.md` in unit and Playwright tests, verify Red failure state, and permanently eliminate `historical.duckdb` from backend and frontend, routing all candle aggregation through DuckDB `time_bucket()` on `streaming.duckdb`.
 - **Requirements Covered:** TEST-01, TEST-02, TEST-03, DATA-01, DATA-02, DATA-03
-- **Success Criteria:**
-  1. Diagnostic unit test suites and Playwright E2E tests are added and execute in failing (Red) state against the baseline.
-  2. All references, options, connections, and fallback queries to `historical.duckdb` / `historical_db` are completely removed.
-  3. `backend/streaming_service` dynamic aggregation generates all candle intervals (1s to 1D) directly from `ticks` via DuckDB in <50ms without secondary database splicing.
-  4. Backend pytest suite passes with single-database assertions.
+- **Status:** Complete (100% verified)
 
-### Phase 22: Event-Driven Playback Ingestion & Canonical Candle Aggregation
+### Phase 22: Event-Driven Playback Ingestion & Canonical Candle Aggregation ✅
 - **Goal:** Fix volume overcounting, trade omission, and premarket fallback defects by introducing event-aware tick tracking, intra-frame trade aggregation, empty history first-candle startup, and strict ETH filtering during active playback.
 - **Requirements Covered:** INGEST-01, INGEST-02, INGEST-03, INGEST-04, INGEST-05
-- **Success Criteria:**
-  1. Chart playback subscriber tracks consumed event identities and never increments volume on clock-only updates.
-  2. All intra-frame trades crossed by the replay clock aggregate correctly into high, low, and volume.
-  3. Premarket fallback volume compounding is eliminated and future candle values are never exposed.
-  4. Incoming ticks create a first candle on charts where history was empty.
-  5. Multi-symbol tick ingestion preserves global buffer cursor position, and `showEth=false` strictly filters premarket ticks during live playback.
+- **Status:** Complete (100% verified)
 
-### Phase 23: Canvas Lifecycle Reconciliation, Session Guards & Tape Filtering
+### Phase 23: Canvas Lifecycle Reconciliation, Session Guards & Tape Filtering ✅
 - **Goal:** Resolve canvas history omission, symbol-switch price leakage, out-of-order session overwrites, and multi-symbol tape trade pollution.
 - **Requirements Covered:** RENDER-01, RENDER-02, RENDER-03, RENDER-04
-- **Success Criteria:**
-  1. `useChartLifecycle` replaces the series via `setData()` whenever earlier bars or historical prefixes change, ensuring newly arriving history is always installed.
-  2. Ticker switches atomically reset prices and flush old company candles immediately.
-  3. Monotonic session generation tokens and request cancellation prevent stale date responses from overwriting the active session or rewinding the clock.
-  4. Time & Sales order flow tape filters trades by the active chart's symbol badge.
+- **Status:** Complete (100% verified)
 
-### Phase 24: Scrubber Timeline Stabilization & Full Autonomous E2E Verification
+### Phase 24: Scrubber Timeline Stabilization & Full Autonomous E2E Verification ✅
 - **Goal:** Anchor the timeline scrubber to a stable exchange session domain with integer-second precision and exact time seeking, and verify that all 11 diagnostic suites and 60 regression suites pass cleanly with zero defects.
 - **Requirements Covered:** SCRUB-01, SCRUB-02, SCRUB-03
-- **Success Criteria:**
-  1. Scrubber bounds remain stable across the trading session without dynamic boundary jumping.
-  2. Seeking snaps to integer seconds without millisecond drift, with drag-preview and atomic commit on release.
-  3. All 11 diagnostic suites and Playwright journey tests pass (Green phase).
-  4. All 60 test suites (328+ tests) and production build compile with zero regressions.
+- **Status:** Complete (100% verified)
 
 ---
 

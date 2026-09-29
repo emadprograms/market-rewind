@@ -68,6 +68,15 @@ export default function App() {
     selectedChartId
   } = useWorkspace();
 
+  const activeChartTicker = useWorkspaceStore((state) => {
+    const activeId = selectedChartId !== null && selectedChartId !== undefined ? String(selectedChartId) : (state.selectedId || '0');
+    const group = state.groups[activeId] || 'none';
+    if (group !== 'none' && state.groupTickers[group]) {
+      return state.groupTickers[group];
+    }
+    return state.tickers[activeId] || sessionTicker;
+  });
+
   const {
     totalRealized,
     totalUnrealized,
@@ -255,7 +264,7 @@ export default function App() {
             <TimeAndSales
               isOpen={isTapeOpen}
               onClose={() => setIsTapeOpen(false)}
-              symbol={sessionTicker}
+              symbol={activeChartTicker || sessionTicker}
             />
           )}
         </div>
