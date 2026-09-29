@@ -310,6 +310,7 @@ export class StreamingClient {
       limit?: number;
       offset?: number;
       direction?: 'asc' | 'desc';
+      signal?: AbortSignal;
     } = {}
   ): Promise<MarketTick[]> {
     const params = new URLSearchParams({
@@ -322,15 +323,23 @@ export class StreamingClient {
     if (options.endTime) params.append('end_time', options.endTime);
 
     let rawTicks: any[] = [];
+    const timeoutSignal = AbortSignal.timeout(10000);
+    const fetchSignal = options.signal
+      ? (typeof AbortSignal.any === 'function' ? AbortSignal.any([options.signal, timeoutSignal]) : options.signal)
+      : timeoutSignal;
 
     try {
-      const res = await fetch(`${this.getBaseUrl()}/api/ticks?${params.toString()}`);
+      const res = await fetch(`${this.getBaseUrl()}/api/ticks?${params.toString()}`, {
+        signal: fetchSignal,
+      });
       if (res.ok) {
         const data = await res.json();
         rawTicks = Array.isArray(data) ? data : (data.ticks || []);
       }
-    } catch (e) {
-      console.warn(`Failed to fetch ticks for ${symbol}:`, e);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        console.warn(`Failed to fetch ticks for ${symbol}:`, e);
+      }
     }
 
     const mapped: MarketTick[] = (rawTicks || []).map((t: any) => {
@@ -400,6 +409,7 @@ export class StreamingClient {
       endTime?: string;
       limit?: number;
       session?: string;
+      signal?: AbortSignal;
     } = {}
   ): Promise<RawBar[]> {
     const sym = symbol.toUpperCase();
@@ -437,27 +447,43 @@ export class StreamingClient {
     if (options.endTime) params.append('end', options.endTime);
 
     let rawList: any[] = [];
+    const timeoutSignal = AbortSignal.timeout(8000);
+    const fetchSignal = options.signal
+      ? (typeof AbortSignal.any === 'function' ? AbortSignal.any([options.signal, timeoutSignal]) : options.signal)
+      : timeoutSignal;
+
     try {
       const res = await fetch(`${endpoint}?${params.toString()}`, {
-        signal: AbortSignal.timeout(20000),
+        signal: fetchSignal,
       });
       if (res.ok) {
         const data = await res.json();
         rawList = Array.isArray(data) ? data : (data.candles || []);
       }
-    } catch (e) {
+    } catch (e: any) {
+      const isAborted = e?.name === 'AbortError' || options.signal?.aborted;
+      const isTimeout = e?.name === 'TimeoutError' || timeoutSignal.aborted;
+      if (isAborted || isTimeout) {
+        return [];
+      }
       console.warn(`Failed to fetch candles from ${endpoint} for ${symbol}:`, e);
       const fallbackEndpoint = isSubSecond ? `${this.getBaseUrl()}/api/candles` : `${this.getBaseUrl()}/api/streaming/candles`;
       try {
+        const fallbackTimeout = AbortSignal.timeout(8000);
+        const fallbackSignal = options.signal
+          ? (typeof AbortSignal.any === 'function' ? AbortSignal.any([options.signal, fallbackTimeout]) : options.signal)
+          : fallbackTimeout;
         const streamRes = await fetch(`${fallbackEndpoint}?${params.toString()}`, {
-          signal: AbortSignal.timeout(20000),
+          signal: fallbackSignal,
         });
         if (streamRes.ok) {
           const data = await streamRes.json();
           rawList = Array.isArray(data) ? data : (data.candles || []);
         }
-      } catch (err2) {
-        console.warn(`Failed to fetch candles from fallback ${fallbackEndpoint} for ${symbol}:`, err2);
+      } catch (err2: any) {
+        if (err2?.name !== 'AbortError') {
+          console.warn(`Failed to fetch candles from fallback ${fallbackEndpoint} for ${symbol}:`, err2);
+        }
       }
     }
 
