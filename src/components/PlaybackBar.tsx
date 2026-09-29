@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, ListFilter } from 'lucide-react';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { getTzForTicker, getTzLabel, getUtcTimeFromEt } from '../lib/timezones';
@@ -43,6 +43,13 @@ export function PlaybackBar({
   const seekTickIndex = usePlaybackStore((state) => state.seekTickIndex);
   const seekTickTime = usePlaybackStore((state) => state.seekTickTime);
 
+  // Persisted session bounds across seeks (REV-SCRUB-01 / PROBE 6)
+  const sessionBoundsRef = useRef<{
+    sessionKey: string;
+    min: number | null;
+    max: number | null;
+  }>({ sessionKey: '', min: null, max: null });
+
   const { minTime, maxTime } = useMemo(() => {
     let min: number | null = null;
     let max: number | null = null;
@@ -63,6 +70,33 @@ export function PlaybackBar({
       else max = currentTime;
     }
 
+    const dataTime = bufferedTicks[0]?.time ?? masterData[0]?.time ?? (currentTime !== null ? new Date(currentTime).toISOString() : '');
+    const dateStr = dataTime ? dataTime.replace('T', ' ').split(' ')[0] : '';
+    const currentSessionKey = `${sessionTicker}_${dateStr}`;
+
+    if (!dataTime && currentTime === null) {
+      sessionBoundsRef.current = { sessionKey: '', min: null, max: null };
+    } else if (currentSessionKey !== sessionBoundsRef.current.sessionKey) {
+      sessionBoundsRef.current = {
+        sessionKey: currentSessionKey,
+        min: min !== null ? Math.floor(min / 1000) * 1000 : null,
+        max: max !== null ? Math.floor(max / 1000) * 1000 : null,
+      };
+    } else {
+      if (min !== null) {
+        if (sessionBoundsRef.current.min !== null) {
+          min = Math.min(min, sessionBoundsRef.current.min);
+        }
+        sessionBoundsRef.current.min = Math.floor(min / 1000) * 1000;
+      }
+      if (max !== null) {
+        if (sessionBoundsRef.current.max !== null) {
+          max = Math.max(max, sessionBoundsRef.current.max);
+        }
+        sessionBoundsRef.current.max = Math.floor(max / 1000) * 1000;
+      }
+    }
+
     if (min !== null && max !== null) {
       min = Math.floor(min / 1000) * 1000;
       max = Math.floor(max / 1000) * 1000;
@@ -72,7 +106,7 @@ export function PlaybackBar({
     }
 
     return { minTime: min, maxTime: max };
-  }, [bufferedTicks, masterData, currentTime]);
+  }, [bufferedTicks, masterData, currentTime, sessionTicker]);
 
   const [jumpTimeText, setJumpTimeText] = useState('');
 
