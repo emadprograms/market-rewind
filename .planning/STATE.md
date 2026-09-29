@@ -7,10 +7,10 @@ last_updated: "2026-09-30T00:13:00.000Z"
 last_activity: 2026-09-30
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -31,10 +31,11 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** Starting Phase 25: Test-First Transition & Review Harness.
+**Current focus:** Phase 27: Temporal Isolation & Volume Accumulation.
 
 ## Current Position
 
-Phase: Phase 25 (0/4 phases complete, 0%)
+Phase: Phase 27: Temporal Isolation & Volume Accumulation (2/4 phases complete, 50%)
 Status: In Progress
-Last activity: 2026-09-30 — Initialized Milestone v4.1 to address all findings from market-rewind-review-2026-09-29.md with strict TDD.
+Last activity: 2026-09-30 — Completed Phase 26 (REV-SYNC-01..04 verified, Codex test suites imported). Starting Phase 27.
+

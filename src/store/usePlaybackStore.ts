@@ -540,6 +540,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             symbol: sym,
             session: (bar.session as any) || 'REG',
             source: 'STREAMING',
+            isSynthesized: true,
           };
           updatedLatest[sym] = synthTick;
         }
@@ -570,6 +571,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             symbol: sym,
             session: (bar.session as any) || 'REG',
             source: 'STREAMING',
+            isSynthesized: true,
           };
           updatedLatest[sym] = synthTick;
         }

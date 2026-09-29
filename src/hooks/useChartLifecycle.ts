@@ -19,6 +19,33 @@ const getBucketTime = (timestampMs: number, tf: Timeframe): number => {
   return Math.floor(bucketStartMs / 1000);
 };
 
+const getTickMs = (t: any): number => {
+  if (!t) return 0;
+  if (typeof t.time === 'number') {
+    return t.time < 1e11 ? t.time * 1000 : t.time;
+  }
+  const str = String(t.time);
+  return new Date(str.replace(' ', 'T') + (str.includes('Z') ? '' : 'Z')).getTime();
+};
+
+const findFirstTickAfter = (ticks: any[], targetMs: number): number => {
+  let low = 0;
+  let high = ticks.length - 1;
+  let result = ticks.length;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const tMs = getTickMs(ticks[mid]);
+    if (tMs > targetMs) {
+      result = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+  return result;
+};
+
 interface UseChartLifecycleParams {
   chartContainerRef: React.RefObject<HTMLDivElement | null>;
   ticker: string;
@@ -214,11 +241,16 @@ export function useChartLifecycle({
 
   const lastDataCountRef = useRef(0);
   const priceLineRef = useRef<IPriceLine | null>(null);
+  const initialPlayback = usePlaybackStore.getState();
   const lastTickerRef = useRef(ticker);
   const lastTfRef = useRef(timeframe);
   const lastEthRef = useRef(showEth);
-  const lastConsumedTickRef = useRef<any>(null);
-  const lastConsumedTimeRef = useRef<number>(0);
+  const lastConsumedTickRef = useRef<any>(
+    initialPlayback.latestTickBySymbol?.[ticker.toUpperCase()] ||
+    (initialPlayback.currentTick?.symbol?.toUpperCase() === ticker.toUpperCase() ? initialPlayback.currentTick : null)
+  );
+  const lastConsumedTimeRef = useRef<number>(initialPlayback.currentTime || 0);
+  const wasPausedRef = useRef<boolean>(initialPlayback.isPaused);
   
   const isDrawingModeRef = useRef(isDrawingMode);
   const currentTickerRef = useRef(ticker);
@@ -230,12 +262,18 @@ export function useChartLifecycle({
   useEffect(() => {
     currentTickerRef.current = ticker;
     setIsHydrated(false);
+    const playbackState = usePlaybackStore.getState();
+    const symUpper = ticker.toUpperCase();
+    lastConsumedTimeRef.current = playbackState.currentTime || 0;
+    lastConsumedTickRef.current = playbackState.latestTickBySymbol?.[symUpper] ||
+      (playbackState.currentTick?.symbol?.toUpperCase() === symUpper ? playbackState.currentTick : null);
   }, [ticker]);
 
   const hasScrolledToRealTimeRef = useRef(false);
   useEffect(() => {
     setIsHydrated(false);
     hasScrolledToRealTimeRef.current = false;
+    lastConsumedTimeRef.current = usePlaybackStore.getState().currentTime || 0;
   }, [timeframe, ticker]);
 
   const prevLoadingRef = useRef(isLoadingHistory);
@@ -437,6 +475,15 @@ export function useChartLifecycle({
         }
       }
 
+      // REV-SYNC-02: Synchronize consumed cursor with seek snapshot
+      const currentPlayback = usePlaybackStore.getState();
+      const symUpper = ticker.toUpperCase();
+      if (currentPlayback.currentTime) {
+        lastConsumedTimeRef.current = currentPlayback.currentTime;
+      }
+      lastConsumedTickRef.current = currentPlayback.latestTickBySymbol?.[symUpper] ||
+        (currentPlayback.currentTick?.symbol?.toUpperCase() === symUpper ? currentPlayback.currentTick : null);
+
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
@@ -453,6 +500,8 @@ export function useChartLifecycle({
       initVolumeSeriesRef.current.setData([]);
       lastCandleRef.current = null;
       lastDataCountRef.current = 0;
+      lastConsumedTickRef.current = null;
+      lastConsumedTimeRef.current = usePlaybackStore.getState().currentTime || 0;
     }
 
   }, [chartData, ticker, timeframe, showEth, syncViewport, theme, isLoadingHistory]);
@@ -489,8 +538,27 @@ export function useChartLifecycle({
     const sym = ticker.toUpperCase();
 
     const unsubscribe = usePlaybackStore.subscribe((state) => {
+      // REV-SYNC-02 & REV-SYNC-03: Temporal discontinuity detection (rewind during pause or playback)
+      if (state.currentTime !== null && state.currentTime !== undefined) {
+        if (lastConsumedTimeRef.current > state.currentTime) {
+          lastConsumedTimeRef.current = state.currentTime;
+          lastConsumedTickRef.current = null;
+        }
+
+        if (state.isPaused) {
+          wasPausedRef.current = true;
+          return;
+        }
+      }
+
       // Guard: Only update if playing, series are ready, and chart is hydrated
-      if (state.isPaused || !initPriceSeriesRef.current || !initVolumeSeriesRef.current || !isHydratedRef.current) return;
+      if (state.isPaused || !initPriceSeriesRef.current || !initVolumeSeriesRef.current || !isHydratedRef.current) {
+        wasPausedRef.current = state.isPaused;
+        return;
+      }
+
+      const isUnpausing = wasPausedRef.current && !state.isPaused;
+      wasPausedRef.current = state.isPaused;
 
       const latestTick = state.latestTickBySymbol?.[sym] ||
         (state.currentTick?.symbol?.toUpperCase() === sym ? state.currentTick : null);
@@ -518,18 +586,20 @@ export function useChartLifecycle({
       // INGEST-05: Strict ETH-off filtering for intraday charts
       if (!showEth && !isRthTick(latestTick, ticker)) return;
 
-      // INGEST-01: Multi-tick / Intra-frame aggregation
+      // INGEST-01 & REV-SYNC-04: Multi-tick / Intra-frame aggregation with binary search cursor
       const symbolTicks = state.ticksBySymbol?.[sym];
       let newlyElapsedTicks: any[] = [];
 
       if (symbolTicks && symbolTicks.length > 0 && state.currentTime) {
         const lastTime = lastConsumedTimeRef.current;
-        for (let i = 0; i < symbolTicks.length; i++) {
+        const startIdx = findFirstTickAfter(symbolTicks, lastTime);
+        for (let i = startIdx; i < symbolTicks.length; i++) {
           const t = symbolTicks[i];
-          const tMs = typeof t.time === 'number'
-            ? (t.time < 1e11 ? t.time * 1000 : t.time)
-            : new Date(String(t.time).replace(' ', 'T') + (String(t.time).includes('Z') ? '' : 'Z')).getTime();
-          if (tMs > lastTime && tMs <= state.currentTime) {
+          const tMs = getTickMs(t);
+          if (tMs > state.currentTime) {
+            break; // Stop scanning future ticks!
+          }
+          if (tMs > lastTime) {
             if (showEth || isRthTick(t, ticker)) {
               newlyElapsedTicks.push(t);
             }
@@ -540,9 +610,20 @@ export function useChartLifecycle({
       if (newlyElapsedTicks.length === 0) {
         if (latestTick && latestTick !== lastConsumedTickRef.current) {
           newlyElapsedTicks = [latestTick];
-        } else {
-          return; // No new trade events to consume in this frame
         }
+      }
+
+      if (newlyElapsedTicks.length === 0) {
+        if (isUnpausing && lastCandleRef.current) {
+          initVolumeSeriesRef.current.update({
+            time: lastCandleRef.current.time as any,
+            value: lastCandleRef.current.volume,
+            color: lastCandleRef.current.close >= lastCandleRef.current.open
+              ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+              : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+          });
+        }
+        return; // No new trade events to consume in this frame
       }
 
       lastConsumedTickRef.current = latestTick;
@@ -552,9 +633,7 @@ export function useChartLifecycle({
 
       // Process newly elapsed ticks in order
       for (const tick of newlyElapsedTicks) {
-        const tickTimeMs = typeof tick.time === 'number'
-          ? (tick.time < 1e11 ? tick.time * 1000 : tick.time)
-          : new Date(String(tick.time).replace(' ', 'T') + (String(tick.time).includes('Z') ? '' : 'Z')).getTime();
+        const tickTimeMs = getTickMs(tick);
 
         const bucketTime = getBucketTime(tickTimeMs, timeframe);
         const lastCandle = lastCandleRef.current;

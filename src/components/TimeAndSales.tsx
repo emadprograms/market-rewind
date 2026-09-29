@@ -13,6 +13,7 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
   const bufferedTicks = usePlaybackStore((state) => state.bufferedTicks);
   const currentTickIndex = usePlaybackStore((state) => state.currentTickIndex);
   const currentTick = usePlaybackStore((state) => state.currentTick);
+  const latestTickBySymbol = usePlaybackStore((state) => state.latestTickBySymbol);
 
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -27,7 +28,7 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
   const displaySymbol = symbol || currentTick?.symbol || (bufferedTicks[0]?.symbol) || 'LIVE';
   const tz = getTzForTicker(displaySymbol);
   const latestSymbolTick = displaySymbol && displaySymbol !== 'LIVE'
-    ? usePlaybackStore((state) => state.latestTickBySymbol?.[displaySymbol.toUpperCase()]) ||
+    ? latestTickBySymbol?.[displaySymbol.toUpperCase()] ||
       (currentTick?.symbol?.toUpperCase() === displaySymbol.toUpperCase() ? currentTick : null)
     : currentTick;
 
