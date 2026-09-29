@@ -380,6 +380,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       currentTick: targetTick,
       latestTickBySymbol: updatedLatest,
       currentTime: isoToMs(targetTick.time),
+      isPaused: true,
     });
   },
 
@@ -387,7 +388,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     const { bufferedTicks, ticksBySymbol } = get();
     const targetMs = typeof time === 'number' ? time : isoToMs(time);
     if (bufferedTicks.length === 0) {
-      set({ currentTime: targetMs });
+      set({ currentTime: targetMs, isPaused: true });
       return;
     }
 
@@ -398,6 +399,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
         currentTick: null,
         latestTickBySymbol: {},
         currentTime: targetMs,
+        isPaused: true,
       });
       return;
     }
@@ -443,6 +445,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       currentTick: targetTick,
       latestTickBySymbol: updatedLatest,
       currentTime: targetMs,
+      isPaused: true,
     });
   },
 

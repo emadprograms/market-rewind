@@ -74,6 +74,11 @@ export function PlaybackBar({
     ? Math.max(minTime, Math.min(currentTime, maxTime))
     : (minTime ?? 0);
 
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseInt(e.target.value, 10);
+    seekTickTime(val);
+  };
+
   const formatTimeOnly = (ms: number | null) => {
     if (!ms) return '--:--:--';
     const tz = getTzForTicker(sessionTicker);
@@ -231,7 +236,7 @@ export function PlaybackBar({
             max={maxTime}
             step={1000}
             value={sliderValue}
-            onChange={(e) => seekTickTime(parseInt(e.target.value, 10))}
+            onChange={handleSliderChange}
             title={`Replay Time: ${formatTimeOnly(sliderValue)} (${currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/${totalTicks} ticks)`}
             style={{ width: '100%', accentColor: '#2962ff', cursor: 'pointer' }}
           />

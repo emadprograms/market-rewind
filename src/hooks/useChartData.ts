@@ -483,81 +483,147 @@ export function useChartData({
       }
     } else if (effectiveCutoff && latestTick && symbolTicks && symbolTicks.length > 0 && tickTimestampsMs.length > 0) {
       const durationSec = TF_SECONDS[timeframe] || 60;
-      const currentBucketStartMs = Math.floor(effectiveCutoff / (durationSec * 1000)) * (durationSec * 1000);
-      const bucketTime = getBucketTimestamp(currentBucketStartMs, timeframe);
+      const durationMs = durationSec * 1000;
+      const currentBucketStartMs = Math.floor(effectiveCutoff / durationMs) * durationMs;
 
-      // Binary search for the first tick >= currentBucketStartMs using pre-cached timestamps
+      // Determine where resampled bars currently end
+      let lastBarTimeMs = -1;
+      if (resampled.length > 0) {
+        const lastBar = resampled[resampled.length - 1];
+        lastBarTimeMs = typeof lastBar.time === 'number'
+          ? (lastBar.time > 1e11 ? lastBar.time : lastBar.time * 1000)
+          : new Date(String(lastBar.time).replace(' ', 'T') + (String(lastBar.time).includes('Z') ? '' : 'Z')).getTime();
+      }
+
+      // If resampled ends before currentBucketStartMs, synthesize all elapsed buckets from ticks
+      const startMs = lastBarTimeMs >= currentBucketStartMs ? currentBucketStartMs : (lastBarTimeMs > 0 ? lastBarTimeMs + durationMs : 0);
+
+      // Binary search for the first tick >= startMs using pre-cached timestamps
       let lo = 0, hi = tickTimestampsMs.length - 1;
       while (lo < hi) {
         const mid = (lo + hi) >> 1;
-        if (tickTimestampsMs[mid] < currentBucketStartMs) lo = mid + 1;
+        if (tickTimestampsMs[mid] < startMs) lo = mid + 1;
         else hi = mid;
       }
 
-      // Collect bucket ticks from binary search start to effectiveCutoff
-      const bucketTicks: MarketTick[] = [];
-      for (let i = lo; i < symbolTicks.length; i++) {
-        if (tickTimestampsMs[i] > effectiveCutoff) break;
-        if (tickTimestampsMs[i] >= currentBucketStartMs) {
-          bucketTicks.push(symbolTicks[i]);
-        }
-      }
+      if (lo < symbolTicks.length && tickTimestampsMs[lo] <= effectiveCutoff) {
+        // Group ticks into buckets of durationMs up to effectiveCutoff
+        let currentBucketTicks: MarketTick[] = [];
+        let currentBucketMs = -1;
 
-      if (bucketTicks.length > 0) {
-        const formingCandle = buildCandleFromTickSlice(
-          bucketTicks,
-          0,
-          bucketTicks.length - 1,
-          bucketTime,
-          latestTick.session || 'REG'
-        );
-        if (formingCandle) {
-          if (resampled.length > 0 && resampled[resampled.length - 1].time === bucketTime) {
-            const last = resampled[resampled.length - 1];
-            resampled = [
-              ...resampled.slice(0, -1),
-              {
-                ...last,
-                high: Math.max(last.high, formingCandle.high),
-                low: Math.min(last.low, formingCandle.low),
-                close: formingCandle.close,
-                volume: (last.volume || 0) + formingCandle.volume,
-              }
-            ];
+        for (let i = lo; i < symbolTicks.length; i++) {
+          const tMs = tickTimestampsMs[i];
+          if (tMs > effectiveCutoff) break;
+
+          const t = symbolTicks[i];
+          if (!showEth && !isRthTick(t, ticker)) continue;
+
+          const bMs = Math.floor(tMs / durationMs) * durationMs;
+          if (bMs < startMs) continue;
+
+          if (currentBucketMs === -1) {
+            currentBucketMs = bMs;
+            currentBucketTicks = [t];
+          } else if (bMs === currentBucketMs) {
+            currentBucketTicks.push(t);
           } else {
-            resampled = [...resampled, formingCandle];
+            // Push completed candle for previous bucket
+            if (currentBucketTicks.length > 0) {
+              const bTime = getBucketTimestamp(currentBucketMs, timeframe);
+              const candle = buildCandleFromTickSlice(
+                currentBucketTicks,
+                0,
+                currentBucketTicks.length - 1,
+                bTime,
+                currentBucketTicks[0]?.session || 'REG'
+              );
+              if (candle) {
+                resampled.push(candle);
+              }
+            }
+            currentBucketMs = bMs;
+            currentBucketTicks = [t];
+          }
+        }
+
+        // Handle the final (current forming) bucket
+        if (currentBucketTicks.length > 0 && currentBucketMs !== -1) {
+          const bTime = getBucketTimestamp(currentBucketMs, timeframe);
+          const candle = buildCandleFromTickSlice(
+            currentBucketTicks,
+            0,
+            currentBucketTicks.length - 1,
+            bTime,
+            latestTick.session || 'REG'
+          );
+          if (candle) {
+            if (resampled.length > 0 && resampled[resampled.length - 1].time === bTime) {
+              const last = resampled[resampled.length - 1];
+              resampled = [
+                ...resampled.slice(0, -1),
+                {
+                  ...last,
+                  high: Math.max(last.high, candle.high),
+                  low: Math.min(last.low, candle.low),
+                  close: candle.close,
+                  volume: (last.volume || 0) + candle.volume,
+                }
+              ];
+            } else {
+              resampled = [...resampled, candle];
+            }
           }
         }
       }
     } else if (latestTick) {
       resampled = applyTickToCandles(resampled, latestTick, timeframe);
     } else if ((timeframe as string) !== '1min' && (timeframe as string) !== '1D') {
-      // Synthesize forming multi-minute/hour candle from 1m masterData up to effectiveCutoff
+      // Synthesize missing and forming multi-minute/hour candles from 1m candidateBars up to effectiveCutoff
       const durationSec = TF_SECONDS[timeframe] || 60;
-      const currentBucketStartMs = Math.floor(effectiveCutoff / (durationSec * 1000)) * (durationSec * 1000);
-      const bucketTime = getBucketTimestamp(currentBucketStartMs, timeframe);
+      const durationMs = durationSec * 1000;
+      const currentBucketStartMs = Math.floor(effectiveCutoff / durationMs) * durationMs;
 
       const candidateBars = (ticker.toUpperCase() === 'SPY' && masterData && masterData.length > 0) 
         ? masterData 
         : localMasterData;
 
-      const bucketBars = candidateBars.filter(b => {
-        const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
-        return bMs >= currentBucketStartMs && bMs <= effectiveCutoff;
-      });
+      if (candidateBars && candidateBars.length > 0) {
+        let lastBarTimeMs = -1;
+        if (resampled.length > 0) {
+          const lastBar = resampled[resampled.length - 1];
+          lastBarTimeMs = typeof lastBar.time === 'number'
+            ? (lastBar.time > 1e11 ? lastBar.time : lastBar.time * 1000)
+            : new Date(String(lastBar.time).replace(' ', 'T') + (String(lastBar.time).includes('Z') ? '' : 'Z')).getTime();
+        }
 
-      if (bucketBars.length > 0) {
-        const formingCandle: RawBar = {
-          time: bucketTime,
-          open: bucketBars[0].open,
-          high: Math.max(...bucketBars.map(b => b.high)),
-          low: Math.min(...bucketBars.map(b => b.low)),
-          close: bucketBars[bucketBars.length - 1].close,
-          volume: bucketBars.reduce((s, b) => s + (b.volume || 0), 0),
-          session: bucketBars[bucketBars.length - 1].session || 'REG',
-          tickCount: bucketBars.reduce((s, b) => s + (b.tickCount || 1), 0),
-        };
-        resampled = [...resampled, formingCandle];
+        const startMs = lastBarTimeMs >= currentBucketStartMs ? currentBucketStartMs : (lastBarTimeMs > 0 ? lastBarTimeMs + durationMs : 0);
+
+        const validBars = candidateBars.filter(b => {
+          if (!showEth && !isRthBar(b, ticker)) return false;
+          const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
+          return bMs >= startMs && bMs <= effectiveCutoff;
+        });
+
+        if (validBars.length > 0) {
+          const extraCandles = resampleData(validBars, timeframe);
+          for (const c of extraCandles) {
+            if (resampled.length > 0 && resampled[resampled.length - 1].time === c.time) {
+              const last = resampled[resampled.length - 1];
+              resampled = [
+                ...resampled.slice(0, -1),
+                {
+                  ...last,
+                  high: Math.max(last.high, c.high),
+                  low: Math.min(last.low, c.low),
+                  close: c.close,
+                  volume: (last.volume || 0) + c.volume,
+                }
+              ];
+            } else {
+              resampled = [...resampled, c];
+            }
+          }
+        }
       }
     }
 

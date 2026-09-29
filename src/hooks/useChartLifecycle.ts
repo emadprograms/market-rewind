@@ -393,7 +393,10 @@ export function useChartLifecycle({
       }
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
-      if (!canIncrement || !isSameContext) {
+      // SEEK-FIX: Only call syncViewport on actual context changes (ticker/timeframe/ETH switch)
+      // or pending history prepends. When seeking within the same context, the data count changes
+      // rapidly and calling syncViewport on each change causes chart shaking/jitter.
+      if (!isSameContext || hasPendingPrepend) {
         syncViewport(isSameContext);
       }
 

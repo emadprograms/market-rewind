@@ -85,14 +85,25 @@ export function useChartViewport({
       } else if (wasAtEnd) {
         // Priority 2: Manual Shift (End-of-chart)
         const shift = chartData.length - lastDataCountRef.current;
-        if (shift > 0) {
+        if (shift !== 0) {
           ts.setVisibleLogicalRange({
             from: oldLogicalRange.from + shift,
             to: oldLogicalRange.to + shift
           });
         }
       } else {
-        ts.setVisibleLogicalRange(oldLogicalRange);
+        // User had manually panned back into history. Keep relative viewport stable,
+        // but guard against out-of-bounds when data count shrank below visible range.
+        if (oldLogicalRange.from >= chartData.length) {
+          const rangeSpan = Math.max(10, oldLogicalRange.to - oldLogicalRange.from);
+          const newTo = Math.max(rangeSpan, chartData.length - 1);
+          ts.setVisibleLogicalRange({
+            from: Math.max(0, newTo - rangeSpan),
+            to: newTo
+          });
+        } else {
+          ts.setVisibleLogicalRange(oldLogicalRange);
+        }
       }
     } else if (pendingHistoryPrependRef.current) {
         // Handle prepend even if context changed

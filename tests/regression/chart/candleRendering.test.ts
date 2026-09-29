@@ -52,15 +52,16 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
         { time: 1790294400, time_str: '2026-09-25 00:00:00', open: 771.0, high: 772.2, low: 770.1, close: 771.4, volume: 500, source: 'CAPITAL_STREAM', session: 'REG', tick_count: 500 },
       ];
 
-      global.fetch = vi.fn().mockImplementation(async (url: string) => {
-        if (url.includes('/api/streaming/candles') || url.includes('/api/candles')) {
-          expect(url).toContain('tf=1d');
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/api/streaming/candles') || urlStr.includes('/api/candles')) {
+          expect(urlStr).toContain('tf=1d');
           return {
             ok: true,
             json: async () => ({ candles: mockStreamCandles, count: mockStreamCandles.length }),
-          };
+          } as any;
         }
-        return { ok: false };
+        return { ok: false } as any;
       });
 
       const candles = await streamingClient.getCandles('SPY', { timeframe: '1D' });
@@ -89,10 +90,10 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
         { time: '2026-09-25T20:50:00', open: 341.07, high: 341.215, low: 341.04, close: 341.195, volume: 19.0, tick_count: 19 },
       ];
 
-      global.fetch = vi.fn().mockImplementation(async () => ({
+      vi.spyOn(global, 'fetch').mockImplementation(async () => ({
         ok: true,
         json: async () => mockStreamCandles,
-      }));
+      }) as any);
 
       const candles = await streamingClient.getCandles('AAPL', { timeframe: '5min' });
       expect(candles).toHaveLength(2);
@@ -102,12 +103,12 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
 
     it('should map timeframe strings to valid Data Harvester query parameters', async () => {
       const requestedUrls: string[] = [];
-      global.fetch = vi.fn().mockImplementation(async (url: string) => {
-        requestedUrls.push(url);
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
+        requestedUrls.push(String(url));
         return {
           ok: true,
           json: async () => ({ candles: [] }),
-        };
+        } as any;
       });
 
       await streamingClient.getCandles('QQQ', { timeframe: '5min' });
@@ -136,14 +137,15 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
         { timestamp: '2026-09-25 20:59:55.000', price: 745.1, volume: 15, bid: 745.05, ask: 745.25, symbol: 'QQQ' },
       ];
 
-      global.fetch = vi.fn().mockImplementation(async (url: string) => {
-        if (url.includes('/api/stream/tape')) {
+      vi.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/api/stream/tape')) {
           return {
             ok: true,
             json: async () => ({ ticks: mockDescendingTicks, count: 3 }),
-          };
+          } as any;
         }
-        return { ok: false };
+        return { ok: false } as any;
       });
 
       const ticks = await streamingClient.getLiveTape('QQQ', 10);
