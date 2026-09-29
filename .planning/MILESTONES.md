@@ -1,5 +1,30 @@
 # Project Milestones: Market Rewind
 
+## v3.2 High-Performance Chart Playback & Data Reliability Engine (Shipped: 2026-09-28)
+
+**Delivered:** Eliminated CPU saturation during market replay and resolved the intermittent single-candle loading bug by decoupling high-frequency playback state from React, executing O(1) direct canvas series updates via lightweight-charts, preventing viewport drag-fighting during playback, and establishing comprehensive single-candle initialization safeguards.
+
+**Phases completed:** 18-20 (3 plans total)
+
+**Key accomplishments:**
+- Decoupled playback state from React render tree (0 React re-renders/sec during 60fps playback)
+- Direct O(1) lightweight-charts series updates for price and volume (<0.02ms per frame)
+- Non-blocking viewport interaction allowing free panning and zooming during playback
+- Single-candle loading bug elimination with boundary validation and load suppression
+- 50/50 test suites and 282/282 tests passing with zero regressions
+
+**Stats:**
+- 3 phases, 3 plans, 12 tasks
+- 12/12 requirements verified (100%)
+- 50/50 test suites passing, 282/282 tests passing
+- Clean production build (828ms)
+
+**Git range:** `feat(phase-18)` → `feat(phase-20)` (`0c2de80` → `9edd9c4`)
+
+**What's next:** Milestone v4.0 Canonical Single-Database (`streaming.db`) Replay Engine & Comprehensive Defect Elimination
+
+---
+
 ## v3.1 Pure Streaming DuckDB Replay Engine, Global Multi-Asset Sync & Playwright Hardening (Shipped: 2026-09-26)
 
 **Delivered:** Re-architected Market Rewind to run exclusively on `streaming.duckdb`, synchronizing real-time market playback across all active charts and groups simultaneously, with strict date boundaries, removal of legacy SQLite/Vercel artifacts, and a comprehensive test-first Playwright/unit test suite.

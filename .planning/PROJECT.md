@@ -31,6 +31,9 @@ High-fidelity, deterministic tick-by-tick market replay with sub-second timefram
 - ✓ **SYNC-01 – SYNC-04**: Global Multi-Asset Playback Synchronization (v3.1)
 - ✓ **PERF-01**: O(1) Incremental Candle Updates (<0.05ms) (v3.1)
 - ✓ **TAPE-01**: High-Frequency Millisecond Time & Sales Streaming (v3.1)
+- ✓ **DATA-01 – DATA-04**: Single-Candle Reliability & Initial Data Load Guards (v3.2)
+- ✓ **PERF-01 – PERF-04**: Decoupled High-Performance Playback (v3.2)
+- ✓ **VIEW-01 – VIEW-04**: Viewport & Lifecycle Stabilization (v3.2)
 
 ## Key Decisions
 
