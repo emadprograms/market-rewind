@@ -640,7 +640,9 @@ export function useChartData({
             return bMs >= startMs && bMs <= effectiveCutoff;
           }).map(b => {
             const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
-            if (isReplayMode && bMs === effectiveCutoff) {
+            // REV-FORM-01: Protect forming bucket across entire interval until minute closes
+            const isConstituentForming = isReplayMode && bMs <= effectiveCutoff && bMs + 60000 > effectiveCutoff;
+            if (isConstituentForming) {
               return {
                 ...b,
                 high: b.open,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Activity } from 'lucide-react';
 
 // Hooks
@@ -105,9 +105,12 @@ export default function App() {
     setStepMinutes(activeStepMinutes);
   }, [activeStepMinutes, setStepMinutes]);
 
+  const sessionGenRef = useRef(0);
+
   // Buffer live ticks when session begins or date/ticker changes
   const loadStreamingTicks = useCallback(async () => {
     if (!sessionTicker) return;
+    const currentGen = ++sessionGenRef.current;
     const { setIsLoadingTicks, setBufferedTicks } = usePlaybackStore.getState();
     setIsLoadingTicks(true);
     try {
@@ -139,6 +142,11 @@ export default function App() {
         )
       );
 
+      // REV-FORM-03: Stale response guard
+      if (currentGen !== sessionGenRef.current) {
+        return;
+      }
+
       const allTicks = results.flat().sort(
         (a, b) => isoToMs(a.time) - isoToMs(b.time)
       );
@@ -155,10 +163,13 @@ export default function App() {
         usePlaybackStore.getState().setPaused(true);
       }
     } catch (e) {
+      if (currentGen !== sessionGenRef.current) return;
       console.warn('Could not load streaming ticks into replay buffer:', e);
       setBufferedTicks([]);
     } finally {
-      setIsLoadingTicks(false);
+      if (currentGen === sessionGenRef.current) {
+        setIsLoadingTicks(false);
+      }
     }
   }, [sessionTicker, selectedDate, entryTime, getUtcTimeFromEt]);
 

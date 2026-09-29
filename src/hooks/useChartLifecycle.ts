@@ -251,6 +251,10 @@ export function useChartLifecycle({
   );
   const lastConsumedTimeRef = useRef<number>(initialPlayback.currentTime || 0);
   const wasPausedRef = useRef<boolean>(initialPlayback.isPaused);
+  const syntheticBucketVolumesRef = useRef<{ bucketTime: number; minutes: Map<number, number> }>({
+    bucketTime: -1,
+    minutes: new Map(),
+  });
   
   const isDrawingModeRef = useRef(isDrawingMode);
   const currentTickerRef = useRef(ticker);
@@ -267,6 +271,7 @@ export function useChartLifecycle({
     lastConsumedTimeRef.current = playbackState.currentTime || 0;
     lastConsumedTickRef.current = playbackState.latestTickBySymbol?.[symUpper] ||
       (playbackState.currentTick?.symbol?.toUpperCase() === symUpper ? playbackState.currentTick : null);
+    syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
   }, [ticker]);
 
   const hasScrolledToRealTimeRef = useRef(false);
@@ -274,6 +279,7 @@ export function useChartLifecycle({
     setIsHydrated(false);
     hasScrolledToRealTimeRef.current = false;
     lastConsumedTimeRef.current = usePlaybackStore.getState().currentTime || 0;
+    syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
   }, [timeframe, ticker]);
 
   const prevLoadingRef = useRef(isLoadingHistory);
@@ -488,6 +494,7 @@ export function useChartLifecycle({
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
       lastDataCountRef.current = chartData.length;
+      syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
 
       if (!isHydratedRef.current) {
         requestAnimationFrame(() => {
@@ -502,6 +509,7 @@ export function useChartLifecycle({
       lastDataCountRef.current = 0;
       lastConsumedTickRef.current = null;
       lastConsumedTimeRef.current = usePlaybackStore.getState().currentTime || 0;
+      syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
     }
 
   }, [chartData, ticker, timeframe, showEth, syncViewport, theme, isLoadingHistory]);
@@ -543,6 +551,7 @@ export function useChartLifecycle({
         if (lastConsumedTimeRef.current > state.currentTime) {
           lastConsumedTimeRef.current = state.currentTime;
           lastConsumedTickRef.current = null;
+          syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
         }
 
         if (state.isPaused) {
@@ -640,7 +649,14 @@ export function useChartLifecycle({
 
         // INGEST-03: Create first candle if history was empty
         if (!lastCandle) {
+          const isSynthetic = Boolean((tick as any).isSynthesized);
           const tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
+          if (isSynthetic) {
+            syntheticBucketVolumesRef.current = {
+              bucketTime,
+              minutes: new Map([[Math.floor(tickTimeMs / 60000) * 60000, tickVol]]),
+            };
+          }
           const firstCandle = {
             time: bucketTime,
             open: tick.price,
@@ -676,9 +692,21 @@ export function useChartLifecycle({
           lastCandle.high = Math.max(lastCandle.high, tick.price);
           lastCandle.low = Math.min(lastCandle.low, tick.price);
           lastCandle.close = tick.price;
-          // INGEST-02: For synthetic fallback ticks, cap or assign directly rather than compounding
+          // REV-FORM-02: For synthetic fallback ticks, accumulate constituent minutes within this higher-tf bucket
           if (isSynthetic) {
-            lastCandle.volume = tickVol;
+            if (syntheticBucketVolumesRef.current.bucketTime !== bucketTime) {
+              syntheticBucketVolumesRef.current = {
+                bucketTime,
+                minutes: new Map(),
+              };
+            }
+            const minuteKey = Math.floor(tickTimeMs / 60000) * 60000;
+            syntheticBucketVolumesRef.current.minutes.set(minuteKey, tickVol);
+            let totalBucketVol = 0;
+            for (const vol of syntheticBucketVolumesRef.current.minutes.values()) {
+              totalBucketVol += vol;
+            }
+            lastCandle.volume = Number(totalBucketVol.toFixed(4));
           } else {
             lastCandle.volume = Number((lastCandle.volume + tickVol).toFixed(4));
           }
@@ -700,13 +728,21 @@ export function useChartLifecycle({
           });
         } else {
           // New candle bucket!
+          let initVol = tickVol;
+          if (isSynthetic) {
+            syntheticBucketVolumesRef.current = {
+              bucketTime,
+              minutes: new Map([[Math.floor(tickTimeMs / 60000) * 60000, tickVol]]),
+            };
+            initVol = tickVol;
+          }
           const newCandle = {
             time: bucketTime,
             open: tick.price,
             high: tick.price,
             low: tick.price,
             close: tick.price,
-            volume: tickVol,
+            volume: initVol,
           };
           lastCandleRef.current = newCandle;
 

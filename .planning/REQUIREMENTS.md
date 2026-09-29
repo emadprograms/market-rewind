@@ -42,8 +42,8 @@ All defect fixes follow strict Test-Driven Development (TDD): unit and Playwrigh
 | REV-SYNC-02 | Phase 26 | Complete |
 | REV-SYNC-03 | Phase 26 | Complete |
 | REV-SYNC-04 | Phase 26 | Complete |
-| REV-FORM-01 | Phase 27 | Pending |
-| REV-FORM-02 | Phase 27 | Pending |
-| REV-FORM-03 | Phase 27 | Pending |
+| REV-FORM-01 | Phase 27 | Complete |
+| REV-FORM-02 | Phase 27 | Complete |
+| REV-FORM-03 | Phase 27 | Complete |
 | REV-SCRUB-01 | Phase 28 | Pending |
 | REV-VERIFY-01 | Phase 28 | Pending |

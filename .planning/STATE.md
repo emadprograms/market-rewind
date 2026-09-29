@@ -7,10 +7,10 @@ last_updated: "2026-09-30T00:13:00.000Z"
 last_activity: 2026-09-30
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 50
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -31,11 +31,11 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** Phase 27: Temporal Isolation & Volume Accumulation.
+**Current focus:** Phase 28: Scrubber Session Anchoring & Systematic Verification.
 
 ## Current Position
 
-Phase: Phase 27: Temporal Isolation & Volume Accumulation (2/4 phases complete, 50%)
+Phase: Phase 28: Scrubber Session Anchoring & Systematic Verification (3/4 phases complete, 75%)
 Status: In Progress
-Last activity: 2026-09-30 — Completed Phase 26 (REV-SYNC-01..04 verified, Codex test suites imported). Starting Phase 27.
+Last activity: 2026-09-30 — Completed Phase 27 (REV-FORM-01..03 verified). 6/7 review probes pass. Starting Phase 28.
 
