@@ -1,21 +1,21 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.2
-milestone_name: High-Performance Chart Playback & Data Reliability Engine
-status: completed
-last_updated: "2026-09-28T20:44:00.000Z"
-last_activity: 2026-09-28
+milestone: v4.0
+milestone_name: Canonical Single-Database (streaming.db) Replay Engine & Defect Elimination
+status: ready
+last_updated: "2026-09-29T18:34:00.000Z"
+last_activity: 2026-09-29
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 4
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-## Milestone: v3.2 — High-Performance Chart Playback & Data Reliability Engine ✅ (Completed)
+## Milestone: v4.0 — Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination
 
 ### Completed Milestones
 - **Milestone v1.0**: Stability Guardrails & Multi-Chart Core (Shipped 2026-09-25)
@@ -30,11 +30,11 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** Milestone v3.2 Complete — All 3 phases (Phases 18, 19, 20) 100% verified with 50/50 test suites passing.
+**Current focus:** Milestone v4.0 Initialized — Phase 21: Test-First Harness & Pure Single-DB (`streaming.db`) Backend Purge.
 
 ## Current Position
 
-Phase: All Phases Complete (20/20 phases complete, 100% verified)
-Plan: —
-Status: Milestone v3.2 Complete
-Last activity: 2026-09-28 — Milestone v3.2 finished: decoupled playback state, O(1) direct lightweight-charts canvas updates, viewport stabilization, and single-candle reliability guards.
+Phase: Phase 21 (0/4 phases complete)
+Plan: Ready to plan/execute Phase 21
+Status: Ready for Phase 21 Test-First Harness & Backend Purge
+Last activity: 2026-09-29 — Milestone v4.0 initialized with strict TDD test harness plan and single-database architecture requirement.

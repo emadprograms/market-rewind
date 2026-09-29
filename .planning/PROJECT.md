@@ -6,9 +6,9 @@ Market Rewind is a high-performance local-first market replay and charting analy
 ## Core Value
 High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
 
-## Current Milestone: Milestone v3.2 — High-Performance Chart Playback & Data Reliability Engine
+## Current Milestone: Milestone v4.0 — Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination
 
-**Goal:** Eliminate CPU hogging and UI freezing during market playback by decoupling high-frequency playback state from the React render tree, executing O(1) direct canvas series updates via lightweight-charts, preventing viewport drag-fighting during playback, and resolving the intermittent single-candle loading bug with robust data validation and initialization safeguards.
+**Goal:** Permanently remove `historical.duckdb` and all dual-database fallback logic so that every candle (from sub-second to 1D) is dynamically aggregated solely from `streaming.duckdb` (101.4M ticks from Databento & Capital.com). Fix all 9 core defects from `market-rewind-diagnosis-and-plan.md` using strict TDD: unit and Playwright tests created and confirmed failing first, then resolved across ingestion, lifecycle, session, and timeline domains.
 
 ## Validated Requirements
 - ✓ Basic market replay engine (v1.0)
@@ -39,7 +39,11 @@ High-fidelity, deterministic tick-by-tick market replay with sub-second timefram
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Pure Streaming DuckDB Storage (`streaming.duckdb`) | Dual-database architecture (`historical` + `streaming`) and legacy SQLite caused subtle data blending leaks, complex fallback branches, and date desyncs. Relying solely on `streaming.duckdb` (101.4M ticks) simplifies data flow and guarantees true tick fidelity. | — Adopted in v3.1 |
+| Pure Single Database (`streaming.duckdb` only) | Splicing `historical.duckdb` (1m bars from external source) with `streaming.duckdb` (ticks from Databento/Capital) produces volume spikes, mismatching prices, and "Frankenstein" charts. DuckDB `time_bucket()` aggregates 100M+ ticks into candles in <30ms natively. Removing `historical.duckdb` guarantees 100% price and volume fidelity. | — Adopted in v4.0 |
+| Strict TDD Red-Phase Verification | Tests for all 9 confirmed defects in `market-rewind-diagnosis-and-plan.md` must be committed and verified failing before any implementation code is modified. | — Adopted in v4.0 |
+| Event-Aware Ingestion Tracking | Volume and price updates during replay must track consumed trade event IDs/timestamps, aggregating all trades crossed in a frame rather than recounting the last tick on clock ticks. | — Adopted in v4.0 |
+| Monotonic Session Generation Tokens | Prevent asynchronous race conditions where an old date or symbol query resolves late and overwrites the active chart state or rewinds the clock. | — Adopted in v4.0 |
+| Universal Market Timeline | Replay clock must advance global market time rather than an individual symbol's tick buffer, enabling multi-chart setups (e.g. AAPL + AMD) to progress in parallel like a real trading session. | — Adopted in v3.1 |
 | Universal Market Timeline | Replay clock must advance global market time rather than an individual symbol's tick buffer, enabling multi-chart setups (e.g. AAPL + AMD) to progress in parallel like a real trading session. | — Adopted in v3.1 |
 | Strict Temporal Query Boundaries | Never fall back to unconstrained tape endpoints or future dates. If no data exists for a day (e.g. holiday), the UI explicitly indicates the session is closed rather than loading subsequent days. | — Adopted in v3.1 |
 | Test-First Playwright & Unit Hardening | Write reproducible Playwright and Vitest tests proving the failures and establishing expected behaviors before making core architectural changes. | — Adopted in v3.1 |
