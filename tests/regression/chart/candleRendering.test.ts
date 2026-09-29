@@ -90,12 +90,13 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
         { time: '2026-09-25T20:50:00', open: 341.07, high: 341.215, low: 341.04, close: 341.195, volume: 19.0, tick_count: 19 },
       ];
 
-      vi.spyOn(global, 'fetch').mockImplementation(async () => ({
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation(async () => ({
         ok: true,
         json: async () => mockStreamCandles,
       }) as any);
 
       const candles = await streamingClient.getCandles('AAPL', { timeframe: '5min' });
+      fetchSpy.mockRestore();
       expect(candles).toHaveLength(2);
       expect(candles[0].open).toBe(341.015);
       expect(candles[1].close).toBe(341.195);
@@ -103,7 +104,7 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
 
     it('should map timeframe strings to valid Data Harvester query parameters', async () => {
       const requestedUrls: string[] = [];
-      vi.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
         requestedUrls.push(String(url));
         return {
           ok: true,
@@ -125,6 +126,7 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
       requestedUrls.length = 0;
       await streamingClient.getCandles('QQQ', { timeframe: '1s' });
       expect(requestedUrls.some(u => u.includes('streaming/candles') && u.includes('tf=1s'))).toBe(true);
+      fetchSpy.mockRestore();
     });
   });
 
@@ -137,7 +139,7 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
         { timestamp: '2026-09-25 20:59:55.000', price: 745.1, volume: 15, bid: 745.05, ask: 745.25, symbol: 'QQQ' },
       ];
 
-      vi.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation(async (url: any) => {
         const urlStr = String(url);
         if (urlStr.includes('/api/stream/tape')) {
           return {
@@ -149,6 +151,7 @@ describe('Candle Rendering & History Integrity Regression Tests', () => {
       });
 
       const ticks = await streamingClient.getLiveTape('QQQ', 10);
+      fetchSpy.mockRestore();
       expect(ticks).toHaveLength(3);
 
       // Verify oldest tick is first (ascending chronological order)

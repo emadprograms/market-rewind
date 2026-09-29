@@ -155,26 +155,8 @@ export function useChartLifecycle({
     isHydratedRef.current = isHydrated;
   }, [isHydrated]);
 
-  // Seed lastCandleRef from chartData so ticks extend the latest completed candle
-  useEffect(() => {
-    if (chartData.length > 0) {
-      const last = chartData[chartData.length - 1];
-      const timeSec = typeof last.time === 'number'
-        ? (last.time > 1e11 ? Math.floor(last.time / 1000) : last.time)
-        : Math.floor(new Date(String(last.time).replace(' ', 'T') + (String(last.time).includes('Z') ? '' : 'Z')).getTime() / 1000);
+  // lastCandleRef is maintained directly by the data update effect and PERF-01 tick subscriber
 
-      lastCandleRef.current = {
-        time: timeSec,
-        open: last.open,
-        high: last.high,
-        low: last.low,
-        close: last.close,
-        volume: last.volume || 0,
-      };
-    } else {
-      lastCandleRef.current = null;
-    }
-  }, [chartData]);
 
   useEffect(() => {
     chartRef.current = initChartRef.current;
@@ -337,44 +319,79 @@ export function useChartLifecycle({
       };
 
       const formatted: any[] = chartData.map(formatBar);
+      const hasPendingPrepend = pendingHistoryPrependRef.current !== null;
 
-      if (vpPluginRef.current) {
-        vpPluginRef.current.setData(formatted);
+      let updatedIncrementally = false;
+
+      // Incremental candle update:
+      // When in same context, no history prepend, and we have a rendered last candle whose timestamp exists in formatted data
+      if (isSameContext && !hasPendingPrepend && lastCandleRef.current && lastDataCountRef.current > 0) {
+        const lastTime = lastCandleRef.current.time;
+        let matchIdx = -1;
+        for (let i = formatted.length - 1; i >= 0; i--) {
+          if (formatted[i].time === lastTime) {
+            matchIdx = i;
+            break;
+          }
+        }
+
+        if (matchIdx !== -1) {
+          try {
+            // Update the candle at matchIdx (forming candle or recently closed candle)
+            const curBar = formatted[matchIdx];
+            initPriceSeriesRef.current.update({
+              time: curBar.time,
+              open: curBar.open,
+              high: curBar.high,
+              low: curBar.low,
+              close: curBar.close,
+            });
+            initVolumeSeriesRef.current.update({
+              time: curBar.time,
+              value: curBar.volume,
+              color: curBar.close >= curBar.open
+                ? (theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+                : (theme === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+            });
+
+            // If there are subsequent new candles, append them in chronological order
+            for (let i = matchIdx + 1; i < formatted.length; i++) {
+              const bar = formatted[i];
+              initPriceSeriesRef.current.update({
+                time: bar.time,
+                open: bar.open,
+                high: bar.high,
+                low: bar.low,
+                close: bar.close,
+              });
+              initVolumeSeriesRef.current.update({
+                time: bar.time,
+                value: bar.volume,
+                color: bar.close >= bar.open
+                  ? (theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+                  : (theme === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+              });
+            }
+
+            const lastBar = formatted[formatted.length - 1];
+            lastCandleRef.current = {
+              time: lastBar.time as number,
+              open: lastBar.open,
+              high: lastBar.high,
+              low: lastBar.low,
+              close: lastBar.close,
+              volume: lastBar.volume || 0,
+            };
+            updatedIncrementally = true;
+          } catch (err) {
+            console.warn('[useChartLifecycle] Incremental update threw error, falling back to setData:', err);
+            updatedIncrementally = false;
+          }
+        }
       }
 
-      const hasPendingPrepend = pendingHistoryPrependRef.current !== null;
-      const canIncrement = isSameContext && chartData.length >= lastDataCountRef.current && lastDataCountRef.current > 0 && !hasPendingPrepend;
-
-      if (canIncrement) {
-        try {
-          const prevCount = lastDataCountRef.current;
-          if (prevCount > 0) {
-            const lastBar = formatted[prevCount - 1];
-            initPriceSeriesRef.current.update({ time: lastBar.time, open: lastBar.open, high: lastBar.high, low: lastBar.low, close: lastBar.close });
-            initVolumeSeriesRef.current.update({
-              time: lastBar.time,
-              value: lastBar.volume,
-              color: lastBar.close >= lastBar.open ? (theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a') : (theme === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350')
-            });
-          }
-          for (let i = prevCount; i < formatted.length; i++) {
-            const bar = formatted[i];
-            initPriceSeriesRef.current.update({ time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
-            initVolumeSeriesRef.current.update({
-              time: bar.time,
-              value: bar.volume,
-              color: bar.close >= bar.open ? (theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a') : (theme === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350')
-            });
-          }
-        } catch {
-          initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
-            time, open, high, low, close
-          })));
-          initVolumeSeriesRef.current.setData(formatted.map(({ time, volume, open, close }) => ({
-            time, value: volume, color: close >= open ? (theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a') : (theme === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350')
-          })));
-        }
-      } else {
+      if (!updatedIncrementally) {
+        // Full dataset load (initial load, context switch, timeline seek/jump, or history prepend)
         try {
           initPriceSeriesRef.current.setData(formatted.map(({ time, open, high, low, close }) => ({
             time, open, high, low, close
@@ -390,14 +407,26 @@ export function useChartLifecycle({
         } catch (err) {
           console.warn('lightweight-charts volume series error:', err);
         }
-      }
 
-      initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
-      // SEEK-FIX: Only call syncViewport on actual context changes (ticker/timeframe/ETH switch)
-      // or pending history prepends. When seeking within the same context, the data count changes
-      // rapidly and calling syncViewport on each change causes chart shaking/jitter.
-      if (!isSameContext || hasPendingPrepend) {
-        syncViewport(isSameContext);
+        if (vpPluginRef.current) {
+          vpPluginRef.current.setData(formatted);
+        }
+
+        const lastBar = formatted[formatted.length - 1];
+        lastCandleRef.current = {
+          time: lastBar.time as number,
+          open: lastBar.open,
+          high: lastBar.high,
+          low: lastBar.low,
+          close: lastBar.close,
+          volume: lastBar.volume || 0,
+        };
+
+        // Only apply autoScale and sync viewport on context changes, history prepends, or initial load
+        if (!isSameContext || hasPendingPrepend || lastDataCountRef.current === 0) {
+          initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
+          syncViewport(isSameContext);
+        }
       }
 
       lastTickerRef.current = ticker;
@@ -414,9 +443,11 @@ export function useChartLifecycle({
     } else if (initPriceSeriesRef.current && initVolumeSeriesRef.current && chartData.length === 0) {
       initPriceSeriesRef.current.setData([]);
       initVolumeSeriesRef.current.setData([]);
+      lastCandleRef.current = null;
+      lastDataCountRef.current = 0;
     }
 
-  }, [chartData, syncViewport, theme, isLoadingHistory]);
+  }, [chartData, ticker, timeframe, showEth, syncViewport, theme, isLoadingHistory]);
 
   // 3b. Refresh shading plugin when ticker/timeframe/ETH changes
   useEffect(() => {

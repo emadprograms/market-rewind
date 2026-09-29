@@ -538,7 +538,21 @@ export function useChartData({
                 currentBucketTicks[0]?.session || 'REG'
               );
               if (candle) {
-                resampled.push(candle);
+                if (resampled.length > 0 && resampled[resampled.length - 1].time === bTime) {
+                  const last = resampled[resampled.length - 1];
+                  resampled = [
+                    ...resampled.slice(0, -1),
+                    {
+                      ...last,
+                      high: Math.max(last.high, candle.high),
+                      low: Math.min(last.low, candle.low),
+                      close: candle.close,
+                      volume: (last.volume || 0) + candle.volume,
+                    }
+                  ];
+                } else {
+                  resampled.push(candle);
+                }
               }
             }
             currentBucketMs = bMs;
