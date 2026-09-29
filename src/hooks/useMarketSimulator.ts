@@ -30,7 +30,7 @@ export function useMarketSimulator(
       data = await streamingClient.getCandles(sessionTicker, {
         timeframe: '1min',
         endTime: endBoundary,
-        limit: 25000,
+        limit: 5000,
       });
     } catch {
       // Fallback

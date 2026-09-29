@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StreamingClient } from '../../src/lib/streamingClient';
 
 describe('TDD: streamingClient Timeout & Abort Handling', () => {
-  const originalFetch = global.fetch;
   let client: StreamingClient;
 
   beforeEach(() => {
@@ -11,13 +10,12 @@ describe('TDD: streamingClient Timeout & Abort Handling', () => {
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
   it('passes user-provided AbortSignal to getCandles and cancels fetch immediately when aborted', async () => {
     const controller = new AbortController();
-    global.fetch = vi.fn().mockImplementation((_url, init) => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((_url, init) => {
       return new Promise((_, reject) => {
         if (init?.signal) {
           init.signal.addEventListener('abort', () => {
@@ -43,7 +41,7 @@ describe('TDD: streamingClient Timeout & Abort Handling', () => {
 
   it('does NOT execute redundant fallback endpoint on timeout or abort', async () => {
     let callCount = 0;
-    global.fetch = vi.fn().mockImplementation(() => {
+    vi.spyOn(global, 'fetch').mockImplementation(() => {
       callCount++;
       return Promise.reject(new DOMException('Timeout', 'TimeoutError'));
     });
@@ -58,7 +56,7 @@ describe('TDD: streamingClient Timeout & Abort Handling', () => {
     const controller = new AbortController();
     let receivedSignal: AbortSignal | undefined;
 
-    global.fetch = vi.fn().mockImplementation((_url, init) => {
+    vi.spyOn(global, 'fetch').mockImplementation((_url, init) => {
       receivedSignal = init?.signal;
       return new Promise((_, reject) => {
         if (init?.signal) {

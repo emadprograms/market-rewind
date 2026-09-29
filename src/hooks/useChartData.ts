@@ -12,6 +12,8 @@ import { getUtcTimeFromEt, isRthBar, isRthTick } from '../lib/timezones';
 import type { MarketTick } from '../types';
 
 const EMPTY_TICKS: MarketTick[] = [];
+const inFlightTickFetches = new Set<string>();
+const INITIAL_CANDLE_LIMIT = 1500;
 
 interface UseChartDataParams {
   initialTicker: string;
@@ -125,8 +127,12 @@ export function useChartData({
     const sym = ticker.toUpperCase();
     const existingTicks = usePlaybackStore.getState().ticksBySymbol?.[sym];
     if (existingTicks && existingTicks.length > 0) return;
+    if (inFlightTickFetches.has(sym)) return;
 
+    inFlightTickFetches.add(sym);
     let cancelled = false;
+    const abortCtrl = new AbortController();
+
     async function loadTicksForNewSymbol() {
       try {
         const startTime = getUtcTimeFromEt(selectedDate, '09:20');
@@ -136,16 +142,23 @@ export function useChartData({
           endTime,
           limit: 100000,
           direction: 'asc',
+          signal: abortCtrl.signal,
         });
         if (!cancelled && newTicks && newTicks.length > 0) {
           usePlaybackStore.getState().addSymbolTicks(sym, newTicks);
         }
       } catch {
         // Symbol ticks not available
+      } finally {
+        inFlightTickFetches.delete(sym);
       }
     }
     loadTicksForNewSymbol();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      abortCtrl.abort();
+      inFlightTickFetches.delete(sym);
+    };
   }, [ticker, isReplayMode, selectedDate]);
 
   const localMasterDataRef = useRef(localMasterData);
@@ -183,6 +196,8 @@ export function useChartData({
 
   useEffect(() => {
     let cancelled = false;
+    const abortCtrl = new AbortController();
+
     async function load() {
       console.log(`[useChartData ${id}] load() START: ${ticker} (${timeframe}) date=${selectedDate}`);
       setIsLoadingHistory(true);
@@ -192,12 +207,19 @@ export function useChartData({
       let data: RawBar[] = [];
       const endBoundary = selectedDate ? `${selectedDate} 23:59:59` : undefined;
       try {
-        data = await streamingClient.getCandles(ticker, { timeframe, endTime: endBoundary, limit: 10000 });
-      } catch (err) {
-        console.warn(`[useChartData ${id}] getCandles ERROR:`, err);
+        data = await streamingClient.getCandles(ticker, {
+          timeframe,
+          endTime: endBoundary,
+          limit: INITIAL_CANDLE_LIMIT,
+          signal: abortCtrl.signal,
+        });
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          console.warn(`[useChartData ${id}] getCandles ERROR:`, err);
+        }
       }
 
-      if (cancelled) {
+      if (cancelled || abortCtrl.signal.aborted) {
         console.log(`[useChartData ${id}] load() CANCELLED before setLocalMasterData: ${ticker} (${timeframe})`);
         return;
       }
@@ -208,13 +230,19 @@ export function useChartData({
       if (data && data.length === 1 && timeframe !== '1D') {
         console.warn(`[useChartData ${id}] Suspicious single bar received for ${ticker} (${timeframe}). Retrying with open end boundary...`);
         try {
-          const retryData = await streamingClient.getCandles(ticker, { timeframe, limit: 10000 });
-          if (!cancelled && retryData && retryData.length > 1) {
+          const retryData = await streamingClient.getCandles(ticker, {
+            timeframe,
+            limit: INITIAL_CANDLE_LIMIT,
+            signal: abortCtrl.signal,
+          });
+          if (!cancelled && !abortCtrl.signal.aborted && retryData && retryData.length > 1) {
             console.log(`[useChartData ${id}] Retry succeeded: received ${retryData.length} bars`);
             data = retryData;
           }
-        } catch (retryErr) {
-          console.warn(`[useChartData ${id}] Retry failed:`, retryErr);
+        } catch (retryErr: any) {
+          if (retryErr?.name !== 'AbortError') {
+            console.warn(`[useChartData ${id}] Retry failed:`, retryErr);
+          }
         }
       }
 
@@ -234,6 +262,7 @@ export function useChartData({
     load();
     return () => { 
       cancelled = true; 
+      abortCtrl.abort();
       console.log(`[useChartData ${id}] load() CLEANUP: ${ticker} (${timeframe}) date=${selectedDate}`);
     };
   }, [ticker, selectedDate, timeframe, id]);
@@ -249,7 +278,8 @@ export function useChartData({
       const currentEarliest = earliestLoadedDateRef.current;
       // When scrolled near the left edge of loaded bars, fetch previous chunk
       if (
-        newLogicalRange.from < 50 &&
+        localMasterDataRef.current.length >= 100 &&
+        newLogicalRange.from < 25 &&
         !isLoadingHistory &&
         currentEarliest &&
         hasMoreHistoryRef.current &&

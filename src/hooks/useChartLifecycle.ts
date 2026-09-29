@@ -254,6 +254,14 @@ export function useChartLifecycle({
     hasScrolledToRealTimeRef.current = false;
   }, [timeframe, ticker]);
 
+  const prevLoadingRef = useRef(isLoadingHistory);
+  useEffect(() => {
+    if (prevLoadingRef.current && !isLoadingHistory && chartData.length === 0) {
+      setIsHydrated(true);
+    }
+    prevLoadingRef.current = isLoadingHistory;
+  }, [isLoadingHistory, chartData.length]);
+
   useEffect(() => {
     if (isHydrated && chartData.length > 0 && !hasScrolledToRealTimeRef.current) {
       hasScrolledToRealTimeRef.current = true;
@@ -394,9 +402,11 @@ export function useChartLifecycle({
       lastEthRef.current = showEth;
       lastDataCountRef.current = chartData.length;
 
-      requestAnimationFrame(() => {
-        setIsHydrated(true);
-      });
+      if (!isHydratedRef.current) {
+        requestAnimationFrame(() => {
+          setIsHydrated(true);
+        });
+      }
 
     } else if (initPriceSeriesRef.current && initVolumeSeriesRef.current && chartData.length === 0) {
       initPriceSeriesRef.current.setData([]);
