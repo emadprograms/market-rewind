@@ -89,11 +89,14 @@ export function getSessionType(timestamp: number, ticker?: string): 'PRE' | 'RTH
  * Determines if a bar belongs to Regular Trading Hours (RTH).
  * Checks the session field first ('REG' or 'RTH'), then falls back to timestamp-based session calculation.
  */
-export function isRthBar(bar: { time: string; session?: string }, ticker?: string): boolean {
+export function isRthBar(bar: { time: string; session?: string }, ticker?: string, timeframe?: string): boolean {
   const normalizedTime = bar.time.includes('T') ? bar.time.replace('T', ' ') : bar.time;
-  const isDaily = /^\d{4}-\d{2}-\d{2}$/.test(bar.time.trim()) || 
+  const isDaily = timeframe === '1D' ||
+                  /^\d{4}-\d{2}-\d{2}$/.test(bar.time.trim()) || 
                   normalizedTime.endsWith(' 00:00:00') || 
-                  normalizedTime.endsWith(' 12:00:00');
+                  normalizedTime.endsWith(' 12:00:00') ||
+                  normalizedTime.endsWith(' 04:00:00') ||
+                  normalizedTime.endsWith(' 05:00:00');
 
   if (isDaily) {
     if (bar.session) {

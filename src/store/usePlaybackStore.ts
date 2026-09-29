@@ -55,6 +55,14 @@ export const msToIso = (ms: number): string => {
   return new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
 };
 
+export const ensureTickMs = (t: MarketTick): number => {
+  if (!t) return 0;
+  if ((t as any)._ms !== undefined) return (t as any)._ms;
+  const ms = isoToMs(t.time);
+  (t as any)._ms = ms;
+  return ms;
+};
+
 const advanceTimeLogic = (currentMs: number | null, stepMinutes: number, masterData: RawBar[]) => {
   if (!currentMs || masterData.length === 0) return null;
   
@@ -140,8 +148,13 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
 
   addTicks: (newTicks) => {
     set((state) => {
+      for (let i = 0; i < newTicks.length; i++) {
+        if ((newTicks[i] as any)._ms === undefined) {
+          (newTicks[i] as any)._ms = isoToMs(newTicks[i].time);
+        }
+      }
       const combined = [...state.bufferedTicks, ...newTicks].sort(
-        (a, b) => isoToMs(a.time) - isoToMs(b.time)
+        (a, b) => ensureTickMs(a) - ensureTickMs(b)
       );
       const ticksBySymbol: Record<string, MarketTick[]> = {};
       for (const t of combined) {
@@ -160,9 +173,14 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   addSymbolTicks: (symbol: string, newTicks: MarketTick[]) => {
     set((state) => {
       const sym = symbol.toUpperCase();
+      for (let i = 0; i < newTicks.length; i++) {
+        if ((newTicks[i] as any)._ms === undefined) {
+          (newTicks[i] as any)._ms = isoToMs(newTicks[i].time);
+        }
+      }
       const existing = state.ticksBySymbol[sym] || [];
       const mergedSymbol = [...existing, ...newTicks].sort(
-        (a, b) => isoToMs(a.time) - isoToMs(b.time)
+        (a, b) => ensureTickMs(a) - ensureTickMs(b)
       );
       
       const updatedTicksBySymbol = {
@@ -171,13 +189,13 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       };
 
       const combined = [...state.bufferedTicks, ...newTicks].sort(
-        (a, b) => isoToMs(a.time) - isoToMs(b.time)
+        (a, b) => ensureTickMs(a) - ensureTickMs(b)
       );
 
       const updatedLatest = { ...state.latestTickBySymbol };
       if (state.currentTime) {
         for (let i = mergedSymbol.length - 1; i >= 0; i--) {
-          if (isoToMs(mergedSymbol[i].time) <= state.currentTime) {
+          if (ensureTickMs(mergedSymbol[i]) <= state.currentTime) {
             updatedLatest[sym] = mergedSymbol[i];
             break;
           }

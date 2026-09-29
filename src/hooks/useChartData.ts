@@ -328,7 +328,7 @@ export function useChartData({
     let filtered: RawBar[];
     if (timeframe === '1D') {
       // 1D chart strictly uses RTH hours, never ETH / full 24h day
-      filtered = localMasterData.filter((d) => isRthBar(d, ticker));
+      filtered = localMasterData.filter((d) => isRthBar(d, ticker, timeframe));
     } else if (showEth) {
       filtered = localMasterData;
     } else {
