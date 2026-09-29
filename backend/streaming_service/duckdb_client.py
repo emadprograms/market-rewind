@@ -1,8 +1,7 @@
 """
 DuckDB Client for Market Rewind.
-Direct read-only zero-copy integration with data-harvester's dedicated databases:
-- streaming.duckdb: 37.8M+ raw tick records (ticks table)
-- historical.duckdb: 8.8M+ 1-minute historical candles (market_data table)
+Direct read-only zero-copy integration with data-harvester's dedicated database:
+- streaming.duckdb: 101.4M+ raw tick records (ticks table) from Databento & Capital.com
 """
 import os
 import time
@@ -18,10 +17,6 @@ DEFAULT_DATA_HARVESTER_DIR = ROOT_DIR.parent / "data-harvester" / "data"
 STREAMING_DB_PATH = os.environ.get(
     "STREAMING_DB_PATH",
     str(DEFAULT_DATA_HARVESTER_DIR / "streaming.duckdb")
-)
-HISTORICAL_DB_PATH = os.environ.get(
-    "HISTORICAL_DB_PATH",
-    str(DEFAULT_DATA_HARVESTER_DIR / "historical.duckdb")
 )
 
 INTERVAL_MAP = {
@@ -41,14 +36,12 @@ INTERVAL_MAP = {
 
 
 class DuckDBService:
-    def __init__(self, streaming_path: Optional[str] = None, historical_path: Optional[str] = None):
+    def __init__(self, streaming_path: Optional[str] = None):
         self.streaming_path = streaming_path or STREAMING_DB_PATH
-        self.historical_path = historical_path or HISTORICAL_DB_PATH
         self._validate_paths()
 
     def _validate_paths(self):
         self.has_streaming = os.path.exists(self.streaming_path)
-        self.has_historical = os.path.exists(self.historical_path)
 
     def get_connection(self, db_path: str, max_retries: int = 5, retry_delay: float = 0.05) -> duckdb.DuckDBPyConnection:
         """Connects to DuckDB with read_only=True and retries on concurrent lock."""
@@ -75,12 +68,6 @@ class DuckDBService:
                 "size_bytes": os.path.getsize(self.streaming_path) if self.has_streaming else 0,
                 "tick_count": 0,
             },
-            "historical_db": {
-                "path": self.historical_path,
-                "exists": self.has_historical,
-                "size_bytes": os.path.getsize(self.historical_path) if self.has_historical else 0,
-                "candle_count": 0,
-            },
         }
 
         if self.has_streaming:
@@ -91,15 +78,6 @@ class DuckDBService:
                 conn.close()
             except Exception as e:
                 status["streaming_db"]["error"] = str(e)
-
-        if self.has_historical:
-            try:
-                conn = self.get_connection(self.historical_path)
-                res = conn.execute("SELECT count(*) FROM market_data").fetchone()
-                status["historical_db"]["candle_count"] = res[0] if res else 0
-                conn.close()
-            except Exception as e:
-                status["historical_db"]["error"] = str(e)
 
         return status
 
@@ -321,90 +299,4 @@ class DuckDBService:
             finally:
                 conn.close()
 
-        # If fewer candles than requested limit were found and historical DB exists, backfill from historical
-        if self.has_historical and len(candles) < clamped_limit:
-            remaining_limit = clamped_limit - len(candles)
-            hist_end_time = candles[0]["time"] if candles else end_time
-            hist_candles = self._query_historical_candles(
-                symbol=symbol,
-                timeframe=timeframe,
-                start_time=start_time,
-                end_time=hist_end_time,
-                limit=remaining_limit,
-                direction=direction,
-                session=session
-            )
-            if candles and hist_candles and hist_candles[-1]["time"] == candles[0]["time"]:
-                hist_candles = hist_candles[:-1]
-            candles = hist_candles + candles
-
         return candles
-
-    def _query_historical_candles(
-        self,
-        symbol: str,
-        timeframe: str,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None,
-        limit: int = 15000,
-        direction: Optional[str] = None,
-        session: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Queries 1-minute historical candles from historical.duckdb with optional resampling."""
-        interval = INTERVAL_MAP.get(timeframe.lower(), "1 minute")
-        conn = self.get_connection(self.historical_path)
-        try:
-            where_clauses = ["symbol = ?"]
-            params: List[Any] = [symbol.upper()]
-
-            if session and session.upper() != "ALL":
-                where_clauses.append("upper(session) = ?")
-                params.append(session.upper())
-            elif not session and timeframe.lower() in ("1d", "1 day"):
-                where_clauses.append("(upper(session) = 'REG' OR session = 'RTH')")
-
-            if start_time:
-                where_clauses.append("timestamp >= ?::TIMESTAMP")
-                params.append(start_time)
-            if end_time:
-                where_clauses.append("timestamp <= ?::TIMESTAMP")
-                params.append(end_time)
-
-            where_stmt = " AND ".join(where_clauses)
-            clamped_limit = min(max(1, limit), 50000)
-            order_desc = (direction.lower() == "desc") if direction else (start_time is None and end_time is not None)
-            order_dir = "DESC" if order_desc else "ASC"
-
-            query = f"""
-                SELECT 
-                    time_bucket(INTERVAL '{interval}', timestamp::TIMESTAMP) AS bucket_time,
-                    first(open ORDER BY timestamp) AS open,
-                    max(high) AS high,
-                    min(low) AS low,
-                    last(close ORDER BY timestamp) AS close,
-                    sum(coalesce(volume, 0.0)) AS volume,
-                    count(*) AS candle_count
-                FROM market_data
-                WHERE {where_stmt}
-                GROUP BY bucket_time
-                ORDER BY bucket_time {order_dir}
-                LIMIT {clamped_limit}
-            """
-            rows = conn.execute(query, params).fetchall()
-            if order_desc:
-                rows.reverse()
-
-            return [
-                {
-                    "time": row[0].isoformat() if hasattr(row[0], "isoformat") else str(row[0]),
-                    "open": float(row[1]),
-                    "high": float(row[2]),
-                    "low": float(row[3]),
-                    "close": float(row[4]),
-                    "volume": float(row[5]),
-                    "tick_count": int(row[6]),
-                }
-                for row in rows
-            ]
-        finally:
-            conn.close()

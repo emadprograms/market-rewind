@@ -272,8 +272,8 @@ class StreamingApp:
         return ws
 
 
-def create_app(streaming_db=None, historical_db=None):
-    db_service = DuckDBService(streaming_path=streaming_db, historical_path=historical_db)
+def create_app(streaming_db=None):
+    db_service = DuckDBService(streaming_path=streaming_db)
     server = StreamingApp(db_service)
     return server.app
 
@@ -283,10 +283,9 @@ def main():
     parser.add_argument("--host", default="0.0.0.0", help="Host interface (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=8765, help="Port to listen on (default: 8765)")
     parser.add_argument("--streaming-db", default=None, help="Path to streaming.duckdb")
-    parser.add_argument("--historical-db", default=None, help="Path to historical.duckdb")
 
     args = parser.parse_args()
-    app = create_app(streaming_db=args.streaming_db, historical_db=args.historical_db)
+    app = create_app(streaming_db=args.streaming_db)
 
     print(f"🚀 Starting Market Rewind Streaming Service on http://{args.host}:{args.port}")
     web.run_app(app, host=args.host, port=args.port)

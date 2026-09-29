@@ -10,14 +10,14 @@ All defect fixes follow a strict Test-Driven Development (TDD) discipline: unit 
 ## Requirements
 
 ### Category 1: Test Harness & Red-Phase Verification (TEST)
-- [ ] **TEST-01**: Diagnostic Vitest Test Suite replicating all 9 failure modes from `market-rewind-diagnosis-and-plan.md` (volume recounting on clock updates, intra-frame trade omission, older history render skips, empty history first-candle startup, buffer cursor desync on multi-symbol merge, fallback volume compounding, ETH-off live filtering, symbol switch price leakage, 5m future OHLC leakage, and stale session response overwrite).
-- [ ] **TEST-02**: Diagnostic Playwright E2E Suite verifying end-to-end browser manifestations (TSLA 09:20 premarket load, timeline seek across historical & tick periods, symbol switch after open, and multi-symbol Time & Sales isolation).
-- [ ] **TEST-03**: Red Phase Execution Verification: all diagnostic test suites execute and fail predictably against the baseline, confirming genuine defect reproduction before altering code.
+- [x] **TEST-01**: Diagnostic Vitest Test Suite replicating all 9 failure modes from `market-rewind-diagnosis-and-plan.md` (volume recounting on clock updates, intra-frame trade omission, older history render skips, empty history first-candle startup, buffer cursor desync on multi-symbol merge, fallback volume compounding, ETH-off live filtering, symbol switch price leakage, 5m future OHLC leakage, and stale session response overwrite).
+- [x] **TEST-02**: Diagnostic Playwright E2E Suite verifying end-to-end browser manifestations (TSLA 09:20 premarket load, timeline seek across historical & tick periods, symbol switch after open, and multi-symbol Time & Sales isolation).
+- [x] **TEST-03**: Red Phase Execution Verification: all diagnostic test suites execute and fail predictably against the baseline, confirming genuine defect reproduction before altering code.
 
 ### Category 2: Pure Single-Database (`streaming.db`) Engine (DATA)
-- [ ] **DATA-01**: Pure `streaming.duckdb` Architecture: permanently purge all references, configuration options, connections, schema checks, and fallback queries to `historical.duckdb` / `historical_db` from `backend/streaming_service` (`duckdb_client.py`, `server.py`) and frontend (`streamingClient.ts`).
-- [ ] **DATA-02**: Dynamic High-Performance Aggregation: all historical candles (from sub-second to 1D) are built solely from raw `ticks` in `streaming.duckdb` via DuckDB `time_bucket()` with sub-50ms execution, eliminating Frankenstein dual-database splicing.
-- [ ] **DATA-03**: Strict Session Isolation in DuckDB Queries: intraday queries respect RTH vs ETH/PRE sessions natively in DuckDB, and 1D queries strictly filter RTH (09:30–16:00 ET).
+- [x] **DATA-01**: Pure `streaming.duckdb` Architecture: permanently purge all references, configuration options, connections, schema checks, and fallback queries to `historical.duckdb` / `historical_db` from `backend/streaming_service` (`duckdb_client.py`, `server.py`) and frontend (`streamingClient.ts`).
+- [x] **DATA-02**: Dynamic High-Performance Aggregation: all historical candles (from sub-second to 1D) are built solely from raw `ticks` in `streaming.duckdb` via DuckDB `time_bucket()` with sub-50ms execution, eliminating Frankenstein dual-database splicing.
+- [x] **DATA-03**: Strict Session Isolation in DuckDB Queries: intraday queries respect RTH vs ETH/PRE sessions natively in DuckDB, and 1D queries strictly filter RTH (09:30–16:00 ET).
 
 ### Category 3: Event-Driven Playback Ingestion & Canonical Forming (INGEST)
 - [ ] **INGEST-01**: Event-Deduplicated Volume & High/Low Aggregation: chart playback subscriber must track consumed tick event IDs/timestamps, aggregating all trades crossed by the replay clock during each frame rather than recounting the latest tick on clock updates.
@@ -43,12 +43,12 @@ All defect fixes follow a strict Test-Driven Development (TDD) discipline: unit 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEST-01 | Phase 21 | Pending |
-| TEST-02 | Phase 21 | Pending |
-| TEST-03 | Phase 21 | Pending |
-| DATA-01 | Phase 21 | Pending |
-| DATA-02 | Phase 21 | Pending |
-| DATA-03 | Phase 21 | Pending |
+| TEST-01 | Phase 21 | Complete |
+| TEST-02 | Phase 21 | Complete |
+| TEST-03 | Phase 21 | Complete |
+| DATA-01 | Phase 21 | Complete |
+| DATA-02 | Phase 21 | Complete |
+| DATA-03 | Phase 21 | Complete |
 | INGEST-01 | Phase 22 | Pending |
 | INGEST-02 | Phase 22 | Pending |
 | INGEST-03 | Phase 22 | Pending |

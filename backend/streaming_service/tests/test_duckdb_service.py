@@ -11,7 +11,7 @@ def test_service_status(service):
     status = service.get_status()
     assert status["status"] == "ok"
     assert "streaming_db" in status
-    assert "historical_db" in status
+    assert "historical_db" not in status
     assert status["streaming_db"]["exists"] is True
 
 
