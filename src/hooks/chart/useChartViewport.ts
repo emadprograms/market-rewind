@@ -90,8 +90,6 @@ export function useChartViewport({
             from: oldLogicalRange.from + shift,
             to: oldLogicalRange.to + shift
           });
-        } else {
-          ts.setVisibleLogicalRange(oldLogicalRange);
         }
       } else {
         ts.setVisibleLogicalRange(oldLogicalRange);

@@ -347,16 +347,9 @@ export function useChartData({
     }
 
     if (timeframe === '1D') {
-      const probeDate = new Date(`${selectedDate}T14:00:00Z`);
-      const nyHour = new Intl.DateTimeFormat('en-US', { 
-        timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' 
-      }).format(probeDate);
-      const offsetHours = 14 - parseInt(nyHour, 10);
-      const startOfTodayMs = new Date(`${selectedDate}T00:00:00Z`).getTime() + (offsetHours * 3600000);
-      
       // In replay mode, drop today's completed bar so it is formed live from RTH bars/ticks
-      if (isReplayMode || globalTime) {
-        filtered = filtered.filter((_, i) => filteredTimestamps[i] < startOfTodayMs);
+      if (selectedDate && (isReplayMode || globalTime)) {
+        filtered = filtered.filter((d) => d.time.slice(0, 10) < selectedDate);
       }
     } else {
       const durationSec = TF_SECONDS[timeframe] || 60;

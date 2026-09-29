@@ -3,11 +3,28 @@ import { streamingClient } from '../../../src/lib/streamingClient';
 import { usePlaybackStore, isoToMs } from '../../../src/store/usePlaybackStore';
 
 describe('TEST-01: Date Reset Temporal Isolation & Boundary Integrity', () => {
+  const originalFetch = global.fetch;
+
   beforeEach(() => {
     usePlaybackStore.getState().reset();
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes('start_time=2026-09-07')) {
+        return { ok: true, json: async () => ({ ticks: [], count: 0 }) };
+      }
+      if (url.includes('start_time=2026-09-04')) {
+        const mockTicks = [
+          { time: '2026-09-04 13:20:00.000', price: 224.5, volume: 100, symbol: 'AAPL', session: 'REG' },
+          { time: '2026-09-04 13:25:00.000', price: 224.8, volume: 150, symbol: 'AAPL', session: 'REG' },
+          { time: '2026-09-04 14:00:00.000', price: 225.0, volume: 200, symbol: 'AAPL', session: 'REG' },
+        ];
+        return { ok: true, json: async () => ({ ticks: mockTicks, count: mockTicks.length }) };
+      }
+      return { ok: true, json: async () => ({ ticks: [], count: 0 }) };
+    });
   });
 
   afterEach(() => {
+    global.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 

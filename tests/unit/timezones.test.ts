@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTzForTicker, getTzLabel, getUtcTimeFromEt, getSessionType } from '../../src/lib/timezones';
+import { getTzForTicker, getTzLabel, getUtcTimeFromEt, getSessionType, isRthBar } from '../../src/lib/timezones';
 
 describe('timezones utility tests', () => {
   describe('getTzForTicker', () => {
@@ -110,6 +110,35 @@ describe('timezones utility tests', () => {
         if (type === 'RTH') count++;
       }
       expect(count).toBeGreaterThan(0);
+    });
+  });
+
+  describe('isRthBar Daily & Intraday Filtering', () => {
+    it('preserves daily bars with composite session strings containing REG', () => {
+      expect(isRthBar({ time: '2026-09-24 00:00:00', session: 'POST, PRE, REG' }, 'SPY')).toBe(true);
+      expect(isRthBar({ time: '2026-09-24 00:00:00', session: 'REG, POST' }, 'SPY')).toBe(true);
+      expect(isRthBar({ time: '2026-09-24 00:00:00', session: 'REG' }, 'SPY')).toBe(true);
+    });
+
+    it('preserves daily bars with ISO T formatting or date-only format', () => {
+      expect(isRthBar({ time: '2026-09-24T00:00:00' }, 'SPY')).toBe(true);
+      expect(isRthBar({ time: '2026-09-24T12:00:00' }, 'SPY')).toBe(true);
+      expect(isRthBar({ time: '2026-09-24' }, 'SPY')).toBe(true);
+    });
+
+    it('rejects daily bars that strictly lack regular trading hours', () => {
+      expect(isRthBar({ time: '2026-09-24 00:00:00', session: 'PRE' }, 'SPY')).toBe(false);
+      expect(isRthBar({ time: '2026-09-24 00:00:00', session: 'POST' }, 'SPY')).toBe(false);
+      expect(isRthBar({ time: '2026-09-24 00:00:00', session: 'ETH' }, 'SPY')).toBe(false);
+    });
+
+    it('strictly enforces RTH on intraday bars', () => {
+      // 08:30 ET (12:30 UTC) PRE bar
+      expect(isRthBar({ time: '2026-09-24 12:30:00', session: 'PRE' }, 'SPY')).toBe(false);
+      // 09:35 ET (13:35 UTC) REG bar
+      expect(isRthBar({ time: '2026-09-24 13:35:00', session: 'REG' }, 'SPY')).toBe(true);
+      // 16:30 ET (20:30 UTC) POST bar
+      expect(isRthBar({ time: '2026-09-24 20:30:00', session: 'POST' }, 'SPY')).toBe(false);
     });
   });
 });

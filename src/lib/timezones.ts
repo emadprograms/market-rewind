@@ -90,6 +90,28 @@ export function getSessionType(timestamp: number, ticker?: string): 'PRE' | 'RTH
  * Checks the session field first ('REG' or 'RTH'), then falls back to timestamp-based session calculation.
  */
 export function isRthBar(bar: { time: string; session?: string }, ticker?: string): boolean {
+  const normalizedTime = bar.time.includes('T') ? bar.time.replace('T', ' ') : bar.time;
+  const isDaily = /^\d{4}-\d{2}-\d{2}$/.test(bar.time.trim()) || 
+                  normalizedTime.endsWith(' 00:00:00') || 
+                  normalizedTime.endsWith(' 12:00:00');
+
+  if (isDaily) {
+    if (bar.session) {
+      const s = bar.session.toUpperCase();
+      // If daily bar contains regular trading hours, preserve it
+      if (s.includes('REG') || s.includes('RTH')) {
+        return true;
+      }
+      // If daily bar is strictly outside regular trading hours (e.g. only PRE or only POST)
+      if (s.includes('PRE') || s.includes('POST') || s.includes('ETH') || s === 'OTHER') {
+        return false;
+      }
+    }
+    // Daily bars without explicit session (or default daily aggregates) are preserved
+    return true;
+  }
+
+  // Intraday bars: check session first
   if (bar.session) {
     const s = bar.session.toUpperCase();
     if (s.includes('PRE') || s.includes('POST') || s.includes('ETH') || s === 'OTHER') {
@@ -98,11 +120,6 @@ export function isRthBar(bar: { time: string; session?: string }, ticker?: strin
     if (s === 'REG' || s === 'RTH' || s.includes('REG')) {
       return true;
     }
-  }
-
-  // Daily bars bucketed at 12:00:00 or 00:00:00 without explicit session are preserved
-  if (bar.time.endsWith(' 12:00:00') || bar.time.endsWith(' 00:00:00')) {
-    return true;
   }
 
   const rawTime = bar.time.includes('T') ? bar.time : bar.time.replace(' ', 'T') + (bar.time.includes('Z') ? '' : 'Z');

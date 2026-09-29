@@ -4,6 +4,7 @@ import { usePlaybackStore, isoToMs } from '../../src/store/usePlaybackStore';
 
 describe('TEST-04: Genuine Tick Replay & Anti-Capping', () => {
   beforeEach(() => {
+    streamingClient.setServiceUrl('http://100.72.128.22:8420');
     usePlaybackStore.getState().reset();
   });
 

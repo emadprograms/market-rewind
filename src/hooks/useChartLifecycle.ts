@@ -248,15 +248,18 @@ export function useChartLifecycle({
     setIsHydrated(false);
   }, [ticker]);
 
+  const hasScrolledToRealTimeRef = useRef(false);
   useEffect(() => {
     setIsHydrated(false);
-  }, [timeframe]);
+    hasScrolledToRealTimeRef.current = false;
+  }, [timeframe, ticker]);
 
   useEffect(() => {
-    if (isHydrated && chartData.length > 0) {
+    if (isHydrated && chartData.length > 0 && !hasScrolledToRealTimeRef.current) {
+      hasScrolledToRealTimeRef.current = true;
       scrollToRealTime();
     }
-  }, [isHydrated, scrollToRealTime]);
+  }, [isHydrated, chartData.length, scrollToRealTime]);
 
   // Update chart timezone and timeframe-aware formatters
   useEffect(() => {
@@ -382,7 +385,9 @@ export function useChartLifecycle({
       }
 
       initChartRef.current.priceScale('right').applyOptions({ autoScale: true });
-      syncViewport(isSameContext);
+      if (!canIncrement || !isSameContext) {
+        syncViewport(isSameContext);
+      }
 
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
