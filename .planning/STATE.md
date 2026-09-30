@@ -33,10 +33,10 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** All Milestones (v1.0 - v4.2) and Follow-up Review (c3a3791) Fully Resolved & Closed — 100% test pass rate across unit (389 tests across 76 files), backend pytest (11/11), and Playwright journey suites (65/65).
+**Current focus:** All Milestones (v1.0 - v4.2) and Follow-up Reviews (c3a3791 & 356b1e2) Fully Resolved & Closed — 100% test pass rate across unit (398 tests across 77 files), backend pytest (11/11), and Playwright journey suites (65/65).
 
 ## Current Position
 
 Phase: Phase 33: State Machine Convergence & Systematic Verification (All phases & milestones complete, 100%)
 Status: Complete
-Last activity: 2026-09-30 — Resolved market-rewind-c3a3791-review.md findings (daily synthetic fallback volume isolation, premarket volume hydration filtering, hardened convergence tests). Verified 100% pass across all 389 Vitest unit tests, 11 backend pytest tests, 65 Playwright journey tests, and production build (0 errors). All previous milestones closed.
+Last activity: 2026-09-30 — Resolved market-rewind-356b1e2-review.md findings (daily synthetic fallback volume isolation in live playback, real data hooks in convergence tests, hardened Playwright replay boundary assertion). Verified 100% pass across all 398 Vitest unit tests, 11 backend pytest tests, 65 Playwright journey tests, and production build (0 errors). All previous milestones closed.

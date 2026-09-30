@@ -10,7 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { beginReplay, collectPageErrors, chartCard } from '../mocks/replayJourney';
+import { beginReplay, collectPageErrors, chartCard, readBarData, utcToEtClock } from '../mocks/replayJourney';
 
 test.describe('JOURNEY 12 — Replay Convergence & Temporal Strictness', () => {
   test('CONV E2E 1: Exact timeline seek using time input field navigates accurately without page errors', async ({
@@ -51,10 +51,12 @@ test.describe('JOURNEY 12 — Replay Convergence & Temporal Strictness', () => {
     await expect(card).toHaveAttribute('data-ticker', 'NVDA', { timeout: 20_000 });
     await expect(card).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 20_000 });
 
-    // Verify temporal containment: last rendered bar never exceeds active session replay boundary
-    const lastBarTime = await card.getAttribute('data-last-bar-time');
-    expect(lastBarTime).toBeTruthy();
-    expect(lastBarTime! <= '2026-09-22 23:59:59').toBe(true);
+    // Verify temporal containment: last rendered bar strictly adheres to the 09:20 anchor without future leaks
+    const bar = await readBarData(card);
+    expect(bar.lastBarTime).toBeTruthy();
+    const etClock = utcToEtClock(bar.lastBarTime!);
+    expect(etClock).toMatch(/^09:(1\d|20)$/);
+    expect(etClock).not.toMatch(/^(1[0-9]|2[0-3]):/);
 
     const canvas = page.locator('canvas').first();
     await expect(canvas).toBeVisible();

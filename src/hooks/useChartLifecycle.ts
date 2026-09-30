@@ -508,7 +508,7 @@ export function useChartLifecycle({
           if (!showEth && !isRthBar(bar, ticker, timeframe)) continue;
           const barMs = isoToMs(bar.time);
           if (getBucketTime(barMs, timeframe) === bucketTime) {
-            if (barMs < currentCutoffMs) {
+            if (barMs + 60000 <= currentCutoffMs) {
               bucketMinutes.set(Math.floor(barMs / 60000) * 60000, bar.volume || 0);
             }
           }
@@ -682,11 +682,17 @@ export function useChartLifecycle({
         // INGEST-03: Create first candle if history was empty
         if (!lastCandle) {
           const isSynthetic = Boolean((tick as any).isSynthesized);
-          const tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
+          let tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
+          if (timeframe === '1D' && isSynthetic) {
+            const minuteStart = Math.floor(tickTimeMs / 60000) * 60000;
+            if (minuteStart + 60000 > tickTimeMs) {
+              tickVol = 0;
+            }
+          }
           if (isSynthetic) {
             syntheticBucketVolumesRef.current = {
               bucketTime,
-              minutes: new Map([[Math.floor(tickTimeMs / 60000) * 60000, tickVol]]),
+              minutes: new Map(tickVol > 0 ? [[Math.floor(tickTimeMs / 60000) * 60000, tickVol]] : []),
             };
           }
           const firstCandle = {
@@ -721,6 +727,65 @@ export function useChartLifecycle({
         const tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
 
         if (lastCandle.time === bucketTime) {
+          if (timeframe === '1D' && isSynthetic) {
+            // Daily chart with synthetic fallback: mirror useChartData policy
+            const masterData = state.masterData || [];
+            let completedVol = 0;
+            let maxHigh = -Infinity;
+            let minLow = Infinity;
+            let lastBarClose = lastCandle.open;
+            let foundAny = false;
+
+            for (const bar of masterData) {
+              if (bar.symbol && bar.symbol.toUpperCase() !== sym) continue;
+              if (!isRthBar(bar, ticker, timeframe)) continue;
+              const barMs = isoToMs(bar.time);
+              if (getBucketTime(barMs, timeframe) === bucketTime && barMs <= tickTimeMs) {
+                foundAny = true;
+                const isForming = barMs + 60000 > tickTimeMs;
+                if (isForming) {
+                  maxHigh = Math.max(maxHigh, bar.open);
+                  minLow = Math.min(minLow, bar.open);
+                  lastBarClose = bar.open;
+                } else {
+                  completedVol += (bar.volume || 0);
+                  maxHigh = Math.max(maxHigh, bar.high);
+                  minLow = Math.min(minLow, bar.low);
+                  lastBarClose = bar.close;
+                }
+              }
+            }
+
+            if (foundAny) {
+              lastCandle.high = Math.max(lastCandle.open, maxHigh);
+              lastCandle.low = Math.min(lastCandle.open, minLow);
+              lastCandle.close = lastBarClose;
+              lastCandle.volume = Number(completedVol.toFixed(4));
+            } else {
+              lastCandle.high = lastCandle.open;
+              lastCandle.low = lastCandle.open;
+              lastCandle.close = lastCandle.open;
+              lastCandle.volume = 0;
+            }
+
+            initPriceSeriesRef.current.update({
+              time: bucketTime as any,
+              open: lastCandle.open,
+              high: lastCandle.high,
+              low: lastCandle.low,
+              close: lastCandle.close,
+            });
+
+            initVolumeSeriesRef.current.update({
+              time: bucketTime as any,
+              value: lastCandle.volume,
+              color: lastCandle.close >= lastCandle.open
+                ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+                : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+            });
+            continue;
+          }
+
           lastCandle.high = Math.max(lastCandle.high, tick.price);
           lastCandle.low = Math.min(lastCandle.low, tick.price);
           lastCandle.close = tick.price;

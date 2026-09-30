@@ -145,6 +145,40 @@ async function mountLifecycle(bars: RawBar[] = [initialBar], extra = {}) {
   return hook;
 }
 
+async function mountCombined(bars: RawBar[] = [initialBar], ticks: MarketTick[] = [], extra: any = {}) {
+  const tf = extra.timeframe || '5min';
+  const eth = extra.showEth !== undefined ? extra.showEth : true;
+  const sym = extra.ticker || 'TSLA';
+  vi.mocked(streamingClient.getCandles).mockResolvedValue(bars);
+  vi.mocked(streamingClient.getTicks).mockResolvedValue(ticks);
+
+  const hook = renderHook(() => {
+    const data = useChartData({
+      ...chartDataParams,
+      initialTicker: sym,
+      initialTf: tf,
+      initialEth: eth,
+      tickers: [sym],
+    });
+    useChartLifecycle({
+      ...lifecycleParams,
+      ...extra,
+      ticker: sym,
+      timeframe: tf,
+      showEth: eth,
+      chartData: data.chartData,
+      localMasterData: data.localMasterData,
+      isLoadingHistory: data.isLoadingHistory,
+      pendingHistoryPrependRef: data.pendingHistoryPrependRef,
+    });
+    return data;
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 60));
+  });
+  return hook;
+}
+
 describe('Replay Review 2026-09-30 Regression Probes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -274,13 +308,15 @@ describe('Replay Review 2026-09-30 Regression Probes', () => {
     expect(res1).toEqual(expectedCandle);
     hook1.unmount();
 
-    // Path 2: Direct Seek to 13:22:30
+    // Path 2: Direct Seek to 13:22:30 using combined real useChartData and useChartLifecycle
     vi.clearAllMocks();
     usePlaybackStore.getState().setBufferedTicks(rawTicks);
     act(() => usePlaybackStore.getState().seekTickTime(targetTimeMs));
-    const hook2 = await mountLifecycle([
-      { ...initialBar, high: 110, low: 95, close: 108, volume: 210 },
-    ]);
+    const hook2 = await mountCombined(
+      [{ ...initialBar, volume: 0 }],
+      rawTicks,
+      { timeframe: '5min', showEth: true }
+    );
     const p2PriceBar = mockPriceSeries.setData.mock.calls.at(-1)?.[0]?.at(-1);
     const p2VolBar = mockVolumeSeries.setData.mock.calls.at(-1)?.[0]?.at(-1);
     const res2 = { high: p2PriceBar?.high, low: p2PriceBar?.low, close: p2PriceBar?.close, volume: p2VolBar?.value };

@@ -144,6 +144,40 @@ async function mountLifecycle(bars: RawBar[] = [initialBar], extra = {}) {
   return hook;
 }
 
+async function mountCombined(bars: RawBar[] = [initialBar], ticks: MarketTick[] = [], extra: any = {}) {
+  const tf = extra.timeframe || '5min';
+  const eth = extra.showEth !== undefined ? extra.showEth : true;
+  const sym = extra.ticker || 'TSLA';
+  vi.mocked(streamingClient.getCandles).mockResolvedValue(bars);
+  vi.mocked(streamingClient.getTicks).mockResolvedValue(ticks);
+
+  const hook = renderHook(() => {
+    const data = useChartData({
+      ...chartDataParams,
+      initialTicker: sym,
+      initialTf: tf,
+      initialEth: eth,
+      tickers: [sym],
+    });
+    useChartLifecycle({
+      ...lifecycleParams,
+      ...extra,
+      ticker: sym,
+      timeframe: tf,
+      showEth: eth,
+      chartData: data.chartData,
+      localMasterData: data.localMasterData,
+      isLoadingHistory: data.isLoadingHistory,
+      pendingHistoryPrependRef: data.pendingHistoryPrependRef,
+    });
+    return data;
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 60));
+  });
+  return hook;
+}
+
 describe('Follow-up Review Probes (market-rewind-c3a3791-review.md)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -245,14 +279,16 @@ describe('Follow-up Review Probes (market-rewind-c3a3791-review.md)', () => {
     expect(res1).toEqual(expectedCandle);
     hook1.unmount();
 
-    // Path 2: Direct Seek to 13:22:30
+    // Path 2: Direct Seek to 13:22:30 using combined real useChartData and useChartLifecycle
     vi.clearAllMocks();
     usePlaybackStore.getState().setBufferedTicks(rawTicks);
     act(() => usePlaybackStore.getState().seekTickTime(targetTimeMs));
-    const hook2 = await mountLifecycle([
-      { ...initialBar, high: 110, low: 95, close: 108, volume: 210 },
-    ]);
-    // Inspect actual setData calls received by the price and volume series
+    const hook2 = await mountCombined(
+      [{ ...initialBar, volume: 0 }],
+      rawTicks,
+      { timeframe: '5min', showEth: true }
+    );
+    // Inspect actual setData calls received by the price and volume series from useChartData
     const p2PriceBar = mockPriceSeries.setData.mock.calls.at(-1)?.[0]?.at(-1);
     const p2VolBar = mockVolumeSeries.setData.mock.calls.at(-1)?.[0]?.at(-1);
     const res2 = { high: p2PriceBar?.high, low: p2PriceBar?.low, close: p2PriceBar?.close, volume: p2VolBar?.value };
@@ -288,5 +324,51 @@ describe('Follow-up Review Probes (market-rewind-c3a3791-review.md)', () => {
     const res4 = { high: p4Price?.high, low: p4Price?.low, close: p4Price?.close, volume: p4Vol };
     expect(res4).toEqual(expectedCandle);
     hook4.unmount();
+  });
+
+  it('P2: 1D synthetic fallback equivalence across direct seek, continuous play, pause, and rewind', async () => {
+    const masterBars: RawBar[] = [
+      { time: '2026-09-22 13:30:00', open: 101, high: 150, low: 80, close: 120, volume: 10000, symbol: 'TSLA', session: 'REG' },
+    ];
+    const targetMs = ms('2026-09-22 13:30:01');
+    const expected01 = { open: 101, high: 101, low: 101, close: 101, volume: 0 };
+
+    // Path 1: Continuous Play to 13:30:01
+    vi.clearAllMocks();
+    usePlaybackStore.setState({ masterData: masterBars, bufferedTicks: [], isPaused: true });
+    usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:30:00'));
+    const hook1 = await mountCombined([], [], { timeframe: '1D', showEth: false });
+    act(() => usePlaybackStore.getState().setPaused(false));
+    act(() => usePlaybackStore.getState().advanceSimulationTime(targetMs));
+    const p1Price = mockPriceSeries.update.mock.calls.at(-1)?.[0];
+    const p1Vol = mockVolumeSeries.update.mock.calls.at(-1)?.[0]?.value;
+    expect({ open: p1Price?.open, high: p1Price?.high, low: p1Price?.low, close: p1Price?.close, volume: p1Vol }).toEqual(expected01);
+    hook1.unmount();
+
+    // Path 2: Direct Seek to 13:30:01
+    vi.clearAllMocks();
+    usePlaybackStore.setState({ masterData: masterBars, bufferedTicks: [], isPaused: true });
+    act(() => usePlaybackStore.getState().seekTickTime(targetMs));
+    const hook2 = await mountCombined([], [], { timeframe: '1D', showEth: false });
+    const p2Price = mockPriceSeries.setData.mock.calls.at(-1)?.[0]?.at(-1);
+    const p2Vol = mockVolumeSeries.setData.mock.calls.at(-1)?.[0]?.at(-1)?.value;
+    expect({ open: p2Price?.open, high: p2Price?.high, low: p2Price?.low, close: p2Price?.close, volume: p2Vol }).toEqual(expected01);
+    hook2.unmount();
+
+    // Path 3: Seek past, then Rewind to 13:30:01
+    vi.clearAllMocks();
+    usePlaybackStore.setState({ masterData: masterBars, bufferedTicks: [], isPaused: true });
+    act(() => usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:31:00')));
+    const hook3 = await mountCombined([], [], { timeframe: '1D', showEth: false });
+    act(() => usePlaybackStore.getState().seekTickTime(targetMs));
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    const p3PriceUpdate = mockPriceSeries.update.mock.calls.at(-1)?.[0];
+    const p3VolUpdate = mockVolumeSeries.update.mock.calls.at(-1)?.[0]?.value;
+    const p3PriceSet = mockPriceSeries.setData.mock.calls.at(-1)?.[0]?.at(-1);
+    const p3VolSet = mockVolumeSeries.setData.mock.calls.at(-1)?.[0]?.at(-1)?.value;
+    const p3Price = p3PriceUpdate || p3PriceSet;
+    const p3Vol = p3VolUpdate !== undefined ? p3VolUpdate : p3VolSet;
+    expect({ open: p3Price?.open, high: p3Price?.high, low: p3Price?.low, close: p3Price?.close, volume: p3Vol }).toEqual(expected01);
+    hook3.unmount();
   });
 });
