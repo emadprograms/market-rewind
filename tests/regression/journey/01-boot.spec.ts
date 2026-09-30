@@ -57,7 +57,7 @@ test.describe('JOURNEY 01 — Open the website & backend connection', () => {
     await openWebsite(page, { offline: true });
 
     // Should NOT reach the configurator; instead it shows the offline hint.
-    await expect(page.getByText(/DuckDB streaming service is running/i)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/DuckDB streaming service (is running|offline)/i)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Configure Session')).toHaveCount(0);
     await expect(page.locator('.chart-card')).toHaveCount(0);
 

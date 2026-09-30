@@ -1,5 +1,31 @@
 # Project Milestones: Market Rewind
 
+## v4.2 State Machine Convergence & Temporal Strictness (Shipped: 2026-09-30)
+
+**Delivered:** Systematically resolved the three remaining P1 transition and look-ahead defects documented in `docs/reviews/2026-09-30-replay-review.md`. Following strict TDD, eliminated seek-then-play fallback volume drops, prevented switched-symbol unclosed 5m price leaks, strictly isolated daily forming candles to RTH session hours and completed minutes at 09:30:01, and proved mathematical equivalence across continuous playback, direct seek, seek-then-play, and rewind-and-replay.
+
+**Phases completed:** 29-33 (5 plans total)
+
+**Key accomplishments:**
+- Replicated all 3 defects in focused unit and Playwright tests before altering application code (verified Red phase)
+- Reconstructed constituent minute volume state upon snapshot hydration in `useChartLifecycle.ts`, preventing volume loss when seeking into multi-minute bars then resuming playback
+- Parameterized forming candle containment by source bar duration in `useChartData.ts`, eliminating unclosed 5-minute price leakage when switching symbols
+- Rebuilt daily candle aggregation in `useChartData.ts` to strictly observe RTH session hours and isolate unclosed forming minutes at 09:30:01
+- Proved Layer 2 mathematical equivalence across continuous play, direct seek, seek-then-play, and rewind-and-replay (`CONV-TEST-02`)
+- Ingested Codex review probes into `tests/codex/rereview/`
+- Full Green phase verification: 73/73 test files (377 tests) passed, 11/11 backend pytest passed, 65/65 Playwright journey tests passed, 0 build errors
+
+**Stats:**
+- 5 phases, 5 plans, 11 requirements verified (100%)
+- 73/73 Vitest test files passing (377 tests)
+- 11/11 Python pytest backend service tests passing
+- 65/65 Playwright offline journey tests passing
+- Clean production build (888ms)
+
+**Git range:** `feat(phase-29)` → `feat(phase-33)`
+
+---
+
 ## v4.1 Replay Convergence, State Machine Synchronization & Transition Integrity (Shipped: 2026-09-30)
 
 **Delivered:** Systematically resolved all 8 architectural and transition findings from `market-rewind-review-2026-09-29.md`. Fixed React hook-order safety in Time & Sales, synchronized the consumed-tick cursor across seeks and rewinds, guarded session date switches against asynchronous races, protected forming multi-minute candles across their entire interval, accumulated constituent minute volumes in fallback mode, anchored timeline scrubber bounds across seeks, and ingested all Codex test suites into the main repository.

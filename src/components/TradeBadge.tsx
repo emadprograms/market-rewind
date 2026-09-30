@@ -178,7 +178,7 @@ export function TradeBadge({
 
       <div 
         onPointerDown={(e) => onPointerDown?.(e)}
-        className="trade-badge-tv" 
+        className="trade-badge trade-badge-tv" 
         style={{
           cursor: cursor || 'default',
           background: '#f8f9fa',

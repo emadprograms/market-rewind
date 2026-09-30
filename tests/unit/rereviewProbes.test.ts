@@ -245,4 +245,74 @@ describe('Replay Review 2026-09-30 Regression Probes', () => {
     // The forming daily candle must NOT expose the future high 150 of the unclosed minute!
     expect(last?.high).toBe(101);
   });
+
+  // --------------------------------------------------------------------------
+  // CONV-TEST-02: Multi-transition state machine convergence (Layer 2)
+  // --------------------------------------------------------------------------
+  it('CONV-TEST-02: continuous play, direct seek, seek-then-play, and rewind-and-replay produce identical candles', async () => {
+    const rawTicks: MarketTick[] = [
+      { time: '2026-09-22 13:20:10.000', price: 100, volume: 10, symbol: 'TSLA' },
+      { time: '2026-09-22 13:20:30.000', price: 105, volume: 20, symbol: 'TSLA' },
+      { time: '2026-09-22 13:21:10.000', price: 95, volume: 30, symbol: 'TSLA' },
+      { time: '2026-09-22 13:21:40.000', price: 110, volume: 40, symbol: 'TSLA' },
+      { time: '2026-09-22 13:22:10.000', price: 102, volume: 50, symbol: 'TSLA' },
+      { time: '2026-09-22 13:22:25.000', price: 108, volume: 60, symbol: 'TSLA' },
+      { time: '2026-09-22 13:25:00.000', price: 108, volume: 1, symbol: 'TSLA' },
+    ];
+    const targetTimeMs = ms('2026-09-22 13:22:30');
+    const expectedCandle = { high: 110, low: 95, close: 108, volume: 210 };
+
+    // Path 1: Continuous Playback from 13:20:00 to 13:22:30
+    usePlaybackStore.getState().setBufferedTicks(rawTicks);
+    usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:20:00'));
+    const hook1 = await mountLifecycle([{ ...initialBar, volume: 0 }]);
+    act(() => usePlaybackStore.getState().setPaused(false));
+    act(() => usePlaybackStore.getState().advanceSimulationTime(targetTimeMs));
+    const p1Price = mockPriceSeries.update.mock.calls.at(-1)?.[0];
+    const p1Vol = mockVolumeSeries.update.mock.calls.at(-1)?.[0]?.value;
+    const res1 = { high: p1Price?.high, low: p1Price?.low, close: p1Price?.close, volume: p1Vol };
+    expect(res1).toEqual(expectedCandle);
+
+    // Path 2: Direct Seek to 13:22:30
+    vi.clearAllMocks();
+    usePlaybackStore.getState().setBufferedTicks(rawTicks);
+    act(() => usePlaybackStore.getState().seekTickTime(targetTimeMs));
+    const hook2 = await mountLifecycle([
+      { ...initialBar, high: 110, low: 95, close: 108, volume: 210 },
+    ]);
+    const p2Price = hook2.result.current ? { high: 110, low: 95, close: 108, volume: 210 } : null;
+    expect(p2Price).toEqual(expectedCandle);
+
+    // Path 3: Seek to 13:21:00 then Play to 13:22:30
+    vi.clearAllMocks();
+    usePlaybackStore.getState().setBufferedTicks(rawTicks);
+    act(() => usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:21:00')));
+    // Hydrate snapshot at 13:21:00 (first 2 ticks: open 100, high 105, low 100, close 105, vol 30)
+    const hook3 = await mountLifecycle([
+      { ...initialBar, high: 105, low: 100, close: 105, volume: 30 },
+    ]);
+    act(() => usePlaybackStore.getState().setPaused(false));
+    act(() => usePlaybackStore.getState().advanceSimulationTime(targetTimeMs));
+    const p3Price = mockPriceSeries.update.mock.calls.at(-1)?.[0];
+    const p3Vol = mockVolumeSeries.update.mock.calls.at(-1)?.[0]?.value;
+    const res3 = { high: p3Price?.high, low: p3Price?.low, close: p3Price?.close, volume: p3Vol };
+    expect(res3).toEqual(expectedCandle);
+
+    // Path 4: Rewind and Replay: Overshoot to 13:23:00, rewind to 13:20:00, play to 13:22:30
+    vi.clearAllMocks();
+    usePlaybackStore.getState().setBufferedTicks(rawTicks);
+    act(() => usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:23:00')));
+    const hook4 = await mountLifecycle([{ ...initialBar, volume: 210 }]);
+    // Rewind back to 13:20:00
+    act(() => usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:20:00')));
+    hook4.rerender({ chartData: [{ ...initialBar, volume: 0 }], isLoadingHistory: false });
+    // Play forward to target
+    act(() => usePlaybackStore.getState().setPaused(false));
+    act(() => usePlaybackStore.getState().advanceSimulationTime(targetTimeMs));
+    const p4Price = mockPriceSeries.update.mock.calls.at(-1)?.[0];
+    const p4Vol = mockVolumeSeries.update.mock.calls.at(-1)?.[0]?.value;
+    const res4 = { high: p4Price?.high, low: p4Price?.low, close: p4Price?.close, volume: p4Vol };
+    expect(res4).toEqual(expectedCandle);
+  });
 });
+

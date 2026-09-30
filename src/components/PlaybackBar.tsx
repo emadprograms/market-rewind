@@ -185,7 +185,15 @@ export function PlaybackBar({
     }
   };
 
-  const canPlay = bufferedTicks.length > 0 || masterData.length > 0;
+  const currentDateStr = useMemo(() => {
+    if (!currentTime) return '';
+    const tz = getTzForTicker(sessionTicker);
+    return new Date(currentTime).toLocaleDateString('en-CA', { timeZone: tz });
+  }, [currentTime, sessionTicker]);
+
+  const canPlay = bufferedTicks.length > 0 || (
+    Boolean(currentDateStr) && masterData.some((b) => b.time.startsWith(currentDateStr))
+  );
 
   return (
     <div 

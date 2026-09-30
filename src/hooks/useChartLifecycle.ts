@@ -774,6 +774,13 @@ export function useChartLifecycle({
             volume: initVol,
           };
           lastCandleRef.current = newCandle;
+          lastDataCountRef.current = (lastDataCountRef.current || 0) + 1;
+          const cardEl = chartContainerRef.current?.closest('.chart-card');
+          if (cardEl) {
+            cardEl.setAttribute('data-bars-count', String(lastDataCountRef.current));
+            const isoTime = new Date(bucketTime * 1000).toISOString().replace('T', ' ').slice(0, 19);
+            cardEl.setAttribute('data-last-bar-time', isoTime);
+          }
 
           initPriceSeriesRef.current.update({
             time: bucketTime as any,
