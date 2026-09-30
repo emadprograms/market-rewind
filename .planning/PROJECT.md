@@ -6,9 +6,13 @@ Market Rewind is a high-performance local-first market replay and charting analy
 ## Core Value
 High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
 
-## Current Milestone: Milestone v4.1 — Replay Convergence, State Machine Synchronization & Transition Integrity
+## Current Milestone: Milestone v4.2 — State Machine Convergence & Temporal Strictness
 
-**Goal:** Address all findings from `market-rewind-review-2026-09-29.md` to ensure that playing and seeking to the same time produce identical results under all rewind, date, symbol, and timeframe transitions. Fix React hook-order error in Time & Sales, synchronize consumed-tick cursors on seeks/rewinds, eliminate session tick loader races, protect the entire forming candle interval from future OHLC leaks, accumulate multi-minute fallback volume, anchor slider bounds to fixed session hours, replace per-frame full tick scans with cursor-based binary search, and expand Playwright E2E coverage.
+**Goal:** Eliminate the three remaining P1 transition and look-ahead defects identified in `docs/reviews/2026-09-30-replay-review.md`. Implement strict Test-Driven Development (TDD) with tests first:
+1. Reconstruct constituent fallback volume upon snapshot hydration in `useChartLifecycle.ts`, guaranteeing that seek followed by play retains completed minute volume.
+2. Incorporate source-resolution duration into `useChartData.ts` candidate bar protection, preventing switched symbols from leaking unclosed higher-timeframe candles.
+3. Align daily candle aggregation in `useChartData.ts` with strict RTH boundary rules and forming-minute isolation, ensuring forming daily candles never expose future intra-minute highs, lows, or volume.
+4. Establish absolute state-machine convergence across continuous playback, direct seeking, seek-then-play, and rewind-and-replay, validated by 100% test pass rates across unit, backend, and Playwright suites.
 
 ## Validated Requirements
 - ✓ Basic market replay engine (v1.0)
@@ -31,6 +35,10 @@ High-fidelity, deterministic tick-by-tick market replay with sub-second timefram
 - ✓ **INGEST-01 – INGEST-05**: Event-Driven Ingestion & Volume Deduplication (v4.0)
 - ✓ **RENDER-01 – RENDER-04**: Lifecycle Reconciliation & Tape Symbol Filtering (v4.0)
 - ✓ **SCRUB-01 – SCRUB-03**: Timeline Scrubber Stabilization & 341-Test Verification (v4.0)
+- ✓ **REV-TEST-01 – REV-TEST-03**: 7-Probe Review Transition Harness & Red Phase Verification (v4.1)
+- ✓ **REV-SYNC-01 – REV-SYNC-04**: Hook Order Safety & Cursor Coherence (v4.1)
+- ✓ **REV-FORM-01 – REV-FORM-03**: Bucket Lookahead Protection & Loader Race Guard (v4.1)
+- ✓ **REV-SCRUB-01 & REV-VERIFY-01**: Scrubber Premarket Retention & 70-Suite Verification (v4.1)
 
 ## Key Decisions
 

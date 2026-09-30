@@ -2,6 +2,11 @@
 
 ## Completed Milestones
 
+### Milestone v4.1: Replay Convergence, State Machine Synchronization & Transition Integrity ✅
+- **Shipped**: 2026-09-30
+- **Phases**: 25–28 (4 phases, 4 plans, 100% verified)
+- **Archive**: [v4.1-ROADMAP.md](./milestones/v4.1-ROADMAP.md) | [v4.1-REQUIREMENTS.md](./milestones/v4.1-REQUIREMENTS.md) | [v4.1-MILESTONE-AUDIT.md](./milestones/v4.1-MILESTONE-AUDIT.md)
+
 ### Milestone v4.0: Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination ✅
 - **Shipped**: 2026-09-29
 - **Phases**: 21–24 (4 phases, 4 plans, 100% verified)
@@ -34,40 +39,49 @@
 
 ---
 
-## Current Milestone: v4.1 Replay Convergence, State Machine Synchronization & Transition Integrity
+## Current Milestone: v4.2 State Machine Convergence & Temporal Strictness
 
-### Phase 25: Test-First Transition & Review Harness
-- **Goal:** Build the complete automated TDD harness replicating all 7 review probes from `market-rewind-review-2026-09-29.md` in unit tests (`tests/unit/reviewTransitions.test.ts`) and Playwright tests (`tests/regression/journey/11-review-e2e-hardening.spec.ts`), and verify Red failure state against current baseline.
-- **Requirements Covered:** REV-TEST-01, REV-TEST-02, REV-TEST-03
+### Phase 29: Test-First Harness & Review Reproduction
+- **Goal:** Build the complete automated TDD regression suite replicating all 3 P1 failure modes from `docs/reviews/2026-09-30-replay-review.md` in unit tests (`tests/unit/rereviewProbes.test.ts`) and Playwright tests (`tests/regression/journey/12-replay-convergence.spec.ts`), ingest the local codex rereview probes into `tests/codex/rereview/`, and verify Red failure state against current baseline.
+- **Requirements Covered:** CONV-TEST-01, CONV-TEST-02, CONV-TEST-03, CONV-TEST-04
 - **Success Criteria:**
-  1. Diagnostic unit test suite and Playwright journey tests are added and execute in failing (Red) state against current codebase.
-  2. Failure modes match review findings: hook-order throw on tape toggle, post-seek volume doubling, rewind trade omission, fallback volume drop, stale tick date overwrite, 1s look-ahead leak, and scrubber premarket domain loss.
+  1. Diagnostic unit test suites and Playwright journey tests are added and execute in failing (Red) state against current codebase.
+  2. Failure modes match review findings: seek→play fallback volume loss (drops to 200 instead of >=1000), switched symbol 5m candle future high leak at 09:21 (150 instead of 101), and daily candle 09:30:01 future minute high leak (150 instead of 101).
 
-### Phase 26: Playback State Synchronization & Cursor Coherence
-- **Goal:** Fix the React hook-order crash in `TimeAndSales.tsx` and synchronize the consumed-tick cursor across seeking, rewinding, and snapshot mounting in `useChartLifecycle.ts`. Replace per-frame linear tick scans with O(log N) binary search.
-- **Requirements Covered:** REV-SYNC-01, REV-SYNC-02, REV-SYNC-03, REV-SYNC-04
+### Phase 30: Snapshot Fallback Constituent Volume Hydration
+- **Goal:** Reconstruct and preserve constituent fallback volume state upon snapshot hydration in `useChartLifecycle.ts`, ensuring that seeking into a multi-minute candle followed by playback retains completed constituent minute volumes without double-counting.
+- **Requirements Covered:** CONV-VOL-01, CONV-VOL-02
 - **Success Criteria:**
-  1. `TimeAndSales.tsx` renders without throwing when toggling between closed and open states.
-  2. `useChartLifecycle` synchronizes `lastConsumedTimeRef` with seek snapshots so playing after a seek never re-counts rendered trades.
-  3. Replay after rewind aggregates intermediate trades properly without suppression.
-  4. Intra-frame tick consumption uses binary-search cursor advancement, terminating loops early upon reaching `currentTime`.
+  1. Hydrating a seek snapshot restores constituent minute volume state rather than wiping it.
+  2. Resuming playback at 09:21:01 retains the 1,000 shares from the 09:20 minute and adds the 200 shares from the 09:21 minute.
+  3. Probe 1 in `review.test.ts` turns 100% Green.
 
-### Phase 27: Temporal Isolation & Volume Accumulation
-- **Goal:** Protect forming candles against look-ahead leaks across the entire forming interval, accumulate constituent minute volumes in multi-minute fallbacks, and eliminate the session tick loader race condition in `src/App.tsx`.
-- **Requirements Covered:** REV-FORM-01, REV-FORM-02, REV-FORM-03
+### Phase 31: Timeframe-Aware Source Duration & Switched Symbol Protection
+- **Goal:** Parameterize forming candle containment in `useChartData.ts` with the actual duration of source bars. When switching symbols without matching global minute history, ensure unclosed source bars (e.g. 5m, 15m) never expose completed high, low, close, or volume before the source bucket closes.
+- **Requirements Covered:** CONV-TIME-01, CONV-TIME-02
 - **Success Criteria:**
-  1. Forming candle synthesis bounds the entire bucket interval so no completed high/low/volume leaks 1s past the boundary.
-  2. Multi-minute fallbacks accumulate prior constituent minute volumes instead of overwriting with only the latest minute.
-  3. `App.tsx` guards `loadTicksForSession` with session generation tokens and cancellation so older date responses cannot overwrite active session time.
+  1. `candidateBars` protection accounts for source bar duration rather than assuming 60 seconds.
+  2. A switched symbol at 09:21 displays opening-price placeholder/currently known values (101) rather than the unclosed 5m bar's final high (150).
+  3. Probe 2 in `data.test.ts` turns 100% Green.
 
-### Phase 28: Scrubber Session Anchoring & Systematic Verification
-- **Goal:** Anchor the timeline scrubber to fixed session start and end times independently of `currentTime`, harden Playwright tests to open and inspect the tape, and verify that all review probes and regression suites pass 100% cleanly.
-- **Requirements Covered:** REV-SCRUB-01, REV-VERIFY-01
+### Phase 32: Daily Forming Candle RTH & Minute Boundary Containment
+- **Goal:** Rebuild daily candle aggregation in `useChartData.ts` to strictly observe RTH session hours and forming-minute boundaries. Ensure unclosed minute bars never expose their completed OHLCV at 09:30:01, and exclude pre/post market trades from daily candles.
+- **Requirements Covered:** CONV-DAILY-01, CONV-DAILY-02
 - **Success Criteria:**
-  1. Scrubber `minTime` remains firmly anchored to session start (e.g. 09:20 ET) after seeking to 09:34 or beyond.
-  2. Playwright E2E suite explicitly opens the tape, verifies rows and symbol isolation, and tests slider bounds.
-  3. All 7 review probes pass (Green phase).
-  4. All 62 test suites (341+ tests) and backend pytest suite pass with zero regressions.
+  1. Daily candle aggregation at 09:30:01 only admits completed bars plus eligible elapsed events in the forming minute.
+  2. The forming daily candle at 09:30:01 exposes current open (101) rather than the unclosed minute's completed high (150).
+  3. Pre/post market events never contribute to daily OHLCV.
+  4. Probe 3 in `data.test.ts` turns 100% Green.
+
+### Phase 33: State Machine Convergence & Systematic Verification
+- **Goal:** Verify that continuous play, direct seek, seek-then-play, and rewind-and-replay produce identical candles across all timeframes. Run the complete Playwright E2E journey suite, full Vitest suite (70+ files), backend pytest suite, and production build with zero regressions.
+- **Requirements Covered:** CONV-VERIFY-01
+- **Success Criteria:**
+  1. All 3 review probes and Layer 1/2 tests pass 100% cleanly.
+  2. All 11 diagnostic suites and 7 previous review suites pass.
+  3. Full unit suite (366+ tests) and backend pytest (11/11) pass.
+  4. Playwright E2E journey tests pass offline and deterministically.
+  5. `npm run build` exits 0.
 
 ---
 

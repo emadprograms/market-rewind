@@ -1,21 +1,21 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.1
-milestone_name: Replay Convergence, State Machine Synchronization & Transition Integrity
-status: completed
-last_updated: "2026-09-30T00:38:00.000Z"
+milestone: v4.2
+milestone_name: State Machine Convergence & Temporal Strictness
+status: in_progress
+last_updated: "2026-09-30T07:17:00.000Z"
 last_activity: 2026-09-30
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-## Milestone: v4.1 — Replay Convergence, State Machine Synchronization & Transition Integrity ✅
+## Milestone: v4.2 — State Machine Convergence & Temporal Strictness
 
 ### Completed Milestones
 - **Milestone v1.0**: Stability Guardrails & Multi-Chart Core (Shipped 2026-09-25)
@@ -32,11 +32,10 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** Milestone v4.1 Completed.
+**Current focus:** Phase 29: Test-First Harness & Review Reproduction (TDD Red Phase).
 
 ## Current Position
 
-Phase: All 4 phases complete (100%)
-Status: Completed
-Last activity: 2026-09-30 — Completed Phase 28 (REV-SCRUB-01, REV-VERIFY-01). All 7 review probes and 11 diagnostic suites 100% green. 70/70 test suites passing. Backend and Playwright passing.
-
+Phase: Phase 29: Test-First Harness & Review Reproduction (0/5 phases complete, 0%)
+Status: Starting Phase 29
+Last activity: 2026-09-30 — Initialized Milestone v4.2 based on `docs/reviews/2026-09-30-replay-review.md`.

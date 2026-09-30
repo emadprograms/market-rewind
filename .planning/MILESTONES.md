@@ -1,5 +1,33 @@
 # Project Milestones: Market Rewind
 
+## v4.1 Replay Convergence, State Machine Synchronization & Transition Integrity (Shipped: 2026-09-30)
+
+**Delivered:** Systematically resolved all 8 architectural and transition findings from `market-rewind-review-2026-09-29.md`. Fixed React hook-order safety in Time & Sales, synchronized the consumed-tick cursor across seeks and rewinds, guarded session date switches against asynchronous races, protected forming multi-minute candles across their entire interval, accumulated constituent minute volumes in fallback mode, anchored timeline scrubber bounds across seeks, and ingested all Codex test suites into the main repository.
+
+**Phases completed:** 25-28 (4 plans total)
+
+**Key accomplishments:**
+- Fixed React hook-order mismatch in `TimeAndSales.tsx` by unconditionally declaring `usePlaybackStore` subscriptions at the top level
+- Synchronized `lastConsumedTimeRef` with seek snapshots and added temporal discontinuity resets for rewind in `useChartLifecycle.ts`
+- Optimized per-frame tick ingestion from $O(N)$ full scans to $O(\log N)$ binary search (`findFirstTickAfter`) with early break
+- Extended forming candle look-ahead protection to the entire bucket interval (`bMs <= effectiveCutoff && bMs + 60000 > effectiveCutoff`) in `useChartData.ts`
+- Tracked constituent minute volumes in `syntheticBucketVolumesRef`, summing constituent minutes instead of replacing with the latest minute
+- Added monotonic `sessionGenRef` to `loadStreamingTicks` in `src/App.tsx`, preventing late date responses from overwriting active session time
+- Anchored scrubber `minTime` and `maxTime` in `PlaybackBar.tsx` across seeks, preventing premarket domain loss when seeking forward to 09:34
+- Imported all 6 Codex diagnostic and review test suites into `tests/codex/`
+- 100% test-first verification: Red phase verified (7/7 failed), Green phase passing 70/70 suites (366 tests), backend 11/11 passed, Playwright 4/4 passed
+
+**Stats:**
+- 4 phases, 4 plans, 12 requirements verified (100%)
+- 70/70 Vitest test files passing (366 tests)
+- 11/11 Python pytest backend service tests passing
+- 4/4 Playwright E2E journey tests passing
+- Clean production build (825ms)
+
+**Git range:** `feat(phase-25)` → `feat(phase-28)` (`819fa4a` → `90e2fe9`)
+
+---
+
 ## v4.0 Canonical Single-Database (`streaming.db`) Replay Engine & Defect Elimination (Shipped: 2026-09-29)
 
 **Delivered:** Established a canonical, single-database architecture powered exclusively by `streaming.duckdb` (permanently retiring `historical.duckdb`), and eliminated all 9 playback, lifecycle, volume, and timeline defects from `market-rewind-diagnosis-and-plan.md` via rigorous Test-Driven Development (TDD) across 11 diagnostic replication suites.

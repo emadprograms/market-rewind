@@ -1,33 +1,34 @@
-# Milestone v4.1 Requirements: Replay Convergence, State Machine Synchronization & Transition Integrity
+# Milestone v4.2 Requirements: State Machine Convergence & Temporal Strictness
 
 ## Overview
-Milestone v4.1 resolves all 8 architectural and transition findings documented in `market-rewind-review-2026-09-29.md`. The core goal is achieving strict state-machine convergence: ensuring that playing, seeking, rewinding, switching symbols, and changing dates all produce mathematically identical chart state, volume totals, and temporal boundaries.
+Milestone v4.2 resolves the three remaining P1 transition and look-ahead defects documented in `docs/reviews/2026-09-30-replay-review.md`. The primary goal is mathematical equivalence and state-machine convergence: ensuring that continuous playback, direct seeking, seek followed by play, and rewind-and-replay produce identical chart state, volume totals, and temporal boundaries.
 
-All defect fixes follow strict Test-Driven Development (TDD): unit and Playwright tests replicating all 7 review probes are created first, confirmed failing in the Red phase, and then resolved phase-by-phase until 100% green status is achieved with zero regressions.
+All fixes follow strict Test-Driven Development (TDD): focused unit and Playwright tests replicating all three review probes are added first, confirmed failing in the Red phase, and then resolved phase-by-phase until 100% green status is achieved with zero regressions.
 
 ---
 
 ## Requirements
 
-### Category 1: Test Harness & Review Reproduction (REV-TEST)
-- [x] **REV-TEST-01**: Diagnostic Unit Test Suite `tests/unit/reviewTransitions.test.ts` replicating all 7 transition probes from `market-rewind-review-2026-09-29.md` (Time & Sales hook order crash, post-seek volume doubling, post-rewind trade suppression, multi-minute fallback volume drop, stale tick session overwrite, 1s-past-boundary look-ahead leak, and slider premarket loss after seek).
-- [x] **REV-TEST-02**: Diagnostic Playwright E2E Suite `tests/regression/journey/11-review-e2e-hardening.spec.ts` verifying actual drawer toggling, non-empty row price inspection, symbol switching, and slider bounds with a post-open first-tick fixture.
-- [x] **REV-TEST-03**: Red Phase Execution Verification: all review transition test probes execute and fail predictably against the baseline, confirming genuine defect reproduction before altering application code.
+### Category 1: Test-First Harness & Review Reproduction (CONV-TEST)
+- [ ] **CONV-TEST-01**: Diagnostic Unit Test Suite `tests/unit/rereviewProbes.test.ts` replicating all 3 P1 failure modes from `docs/reviews/2026-09-30-replay-review.md` (seek→play fallback volume loss, switched-symbol unclosed 5m price leak, and daily forming candle intra-minute leak).
+- [ ] **CONV-TEST-02**: Combined Data-to-Renderer Transition Harness (Layer 2) proving that continuous play, direct seek, seek-then-play, and rewind-and-replay produce identical candles without double counting or volume drops.
+- [ ] **CONV-TEST-03**: Playwright E2E Convergence Suite `tests/regression/journey/12-replay-convergence.spec.ts` testing exact seeking, symbol switching without elapsed ticks, and RTH opening minute daily chart boundaries in an offline browser environment.
+- [ ] **CONV-TEST-04**: Red Phase Execution Verification: all three review failure probes execute and fail predictably against the baseline, confirming genuine defect reproduction before altering application code.
 
-### Category 2: UI Hook Order & Cursor State Synchronization (REV-SYNC)
-- [x] **REV-SYNC-01**: React Rules of Hooks Compliance in `TimeAndSales.tsx`: move `usePlaybackStore` and all hook subscriptions unconditionally to top-level, guaranteeing opening and closing the panel never triggers hook count mismatch errors.
-- [x] **REV-SYNC-02**: Consumed-Tick Cursor Coherence on Seek & Snapshot: `lastConsumedTimeRef` and `lastConsumedTickRef` in `useChartLifecycle` are synchronized with seeks, rewinds, and snapshot renders so playing after seeking never re-counts already rendered trades.
-- [x] **REV-SYNC-03**: Consumed-Tick Cursor Coherence on Rewind: backward seeking updates `lastConsumedTimeRef` to the target seek time, enabling replay after rewind to properly aggregate elapsed intermediate trades without suppression.
-- [x] **REV-SYNC-04**: O(log N) Binary-Search Ingestion Cursor: replace linear iteration over all symbol ticks with binary search using `lastConsumedTimeRef` and early loop termination, eliminating redundant timestamp parsing per frame.
+### Category 2: Fallback Volume Hydration & Retention (CONV-VOL)
+- [ ] **CONV-VOL-01**: Snapshot Fallback Volume State Hydration: when hydrating a snapshot in `useChartLifecycle.ts`, preserve or reconstruct constituent minute volume state so that seeking into a multi-minute candle followed by play retains completed minute volumes rather than dropping to only the current minute.
+- [ ] **CONV-VOL-02**: Zero Double Counting on Resume: ensure resuming playback after snapshot hydration accumulates new elapsed trades without re-adding already hydrated volume.
 
-### Category 3: Temporal Isolation & Fallback Volume (REV-FORM)
-- [x] **REV-FORM-01**: Comprehensive Forming Bucket Look-Ahead Protection: forming candle synthesis in `useChartData` bounds the entire forming bucket interval (`bMs <= effectiveCutoff && bMs + durationMs > effectiveCutoff`), ensuring completed candle high/low/volume values are never exposed at any second before bucket close.
-- [x] **REV-FORM-02**: Constituent Volume Accumulation in Multi-Minute Fallbacks: when synthesizing higher timeframe candles from fallback ticks, accumulate earlier constituent minute volumes within the bucket rather than overwriting with only the latest minute's volume; ensure all synthetic ticks carry `isSynthesized: true`.
-- [x] **REV-FORM-03**: Session Tick Loader Generation Guard: apply monotonic session generation tokens and cancellation to the `loadTicksForSession` workflow in `src/App.tsx`, preventing late tick responses from older dates from overwriting the active session time.
+### Category 3: Source Duration & Switched Symbol Protection (CONV-TIME)
+- [ ] **CONV-TIME-01**: Source-Resolution Aware Forming Candle Protection: parameterize forming candle containment in `useChartData.ts` by the actual duration of source bars rather than hardcoding 60 seconds.
+- [ ] **CONV-TIME-02**: Switched Symbol Local History Containment: when switching symbols where global minute history is absent and local timeframe history is used, ensure unfinished source candles (e.g. 5m, 15m) never expose completed high, low, close, or volume before the source bucket closes.
 
-### Category 4: Scrubber Session Anchoring & Systematic Verification (REV-VERIFY)
-- [x] **REV-SCRUB-01**: Fixed Session Scrubber Bounds: anchor scrubber `minTime` and `maxTime` in `PlaybackBar.tsx` to the configured session entry time and session close, remaining completely invariant when seeking forward.
-- [x] **REV-VERIFY-01**: Full Green Phase Regression Verification: all 7 transition probes, all 11 diagnostic suites, all 62 existing test suites (341+ tests), backend pytest suites, and Playwright E2E suites pass with zero errors.
+### Category 4: Daily Candle RTH & Minute Boundary Containment (CONV-DAILY)
+- [ ] **CONV-DAILY-01**: Daily Forming Candle Minute Isolation: build daily candles from completed RTH bars plus eligible elapsed events in the forming minute, preventing unclosed minute highs/lows/volumes from leaking into daily candles.
+- [ ] **CONV-DAILY-02**: Strict RTH Session Filtering for Daily OHLCV: ensure premarket (PRE) and after-hours (POST) trades and bars are strictly excluded from daily candle OHLCV calculations.
+
+### Category 5: Systematic Verification & Zero Regressions (CONV-VERIFY)
+- [ ] **CONV-VERIFY-01**: Full Green Phase Regression Verification: all 3 review probes, all 11 diagnostic suites, all previous 7 review suites, all 70 existing test files (366+ tests), backend pytest suite, and all Playwright journey tests pass 100% cleanly.
 
 ---
 
@@ -35,15 +36,14 @@ All defect fixes follow strict Test-Driven Development (TDD): unit and Playwrigh
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REV-TEST-01 | Phase 25 | Complete |
-| REV-TEST-02 | Phase 25 | Complete |
-| REV-TEST-03 | Phase 25 | Complete |
-| REV-SYNC-01 | Phase 26 | Complete |
-| REV-SYNC-02 | Phase 26 | Complete |
-| REV-SYNC-03 | Phase 26 | Complete |
-| REV-SYNC-04 | Phase 26 | Complete |
-| REV-FORM-01 | Phase 27 | Complete |
-| REV-FORM-02 | Phase 27 | Complete |
-| REV-FORM-03 | Phase 27 | Complete |
-| REV-SCRUB-01 | Phase 28 | Complete |
-| REV-VERIFY-01 | Phase 28 | Complete |
+| CONV-TEST-01 | Phase 29 | Pending |
+| CONV-TEST-02 | Phase 29 | Pending |
+| CONV-TEST-03 | Phase 29 | Pending |
+| CONV-TEST-04 | Phase 29 | Pending |
+| CONV-VOL-01  | Phase 30 | Pending |
+| CONV-VOL-02  | Phase 30 | Pending |
+| CONV-TIME-01 | Phase 31 | Pending |
+| CONV-TIME-02 | Phase 31 | Pending |
+| CONV-DAILY-01| Phase 32 | Pending |
+| CONV-DAILY-02| Phase 32 | Pending |
+| CONV-VERIFY-01| Phase 33 | Pending |
