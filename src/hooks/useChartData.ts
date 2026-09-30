@@ -207,6 +207,16 @@ export function useChartData({
 
     async function load() {
       console.log(`[useChartData ${id}] load() START: ${ticker} (${timeframe}) date=${selectedDate}`);
+
+      // LIVE-CONTEXT-01: Treat symbol, date, and timeframe changes as explicit render-context changes
+      // Clear data immediately so we don't render old history on a new symbol while pending
+      if (loadedTickerRef.current !== ticker || dataTimeframeRef.current !== timeframe) {
+        setLocalMasterData([]);
+        localMasterDataRef.current = [];
+        loadedTickerRef.current = ticker;
+        dataTimeframeRef.current = timeframe;
+      }
+
       setIsLoadingHistory(true);
       lastFetchedEndTimeRef.current = null;
       hasMoreHistoryRef.current = true;
@@ -370,6 +380,9 @@ export function useChartData({
   // Filter data based on playback time first (strict temporal isolation)
   const filteredData = useMemo(() => {
     if (!localMasterData || localMasterData.length === 0) return [];
+    if (localMasterData[0]?.symbol && localMasterData[0].symbol.toUpperCase() !== ticker.toUpperCase()) {
+      return [];
+    }
     
     let filtered: RawBar[];
     if (timeframe === '1D') {
