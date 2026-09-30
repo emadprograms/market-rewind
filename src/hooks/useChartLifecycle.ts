@@ -675,20 +675,86 @@ export function useChartLifecycle({
       // Process newly elapsed ticks in order
       for (const tick of newlyElapsedTicks) {
         const tickTimeMs = getTickMs(tick);
-
         const bucketTime = getBucketTime(tickTimeMs, timeframe);
+        const isSynthetic = Boolean((tick as any).isSynthesized);
+        let tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
+
+        if (timeframe === '1D' && isSynthetic) {
+          // Unified daily chart with synthetic fallback: mirror useChartData policy
+          const masterData = state.masterData || [];
+          let completedVol = 0;
+          let maxHigh = -Infinity;
+          let minLow = Infinity;
+          let lastBarClose = tick.price;
+          let firstBarOpen = undefined;
+          let foundAny = false;
+
+          for (const bar of masterData) {
+            if (bar.symbol && bar.symbol.toUpperCase() !== sym) continue;
+            if (!isRthBar(bar, ticker, timeframe)) continue;
+            const barMs = isoToMs(bar.time);
+            if (getBucketTime(barMs, timeframe) === bucketTime && barMs <= tickTimeMs) {
+              if (firstBarOpen === undefined) {
+                firstBarOpen = bar.open;
+              }
+              foundAny = true;
+              const isForming = barMs + 60000 > tickTimeMs;
+              if (isForming) {
+                maxHigh = Math.max(maxHigh, bar.open);
+                minLow = Math.min(minLow, bar.open);
+                lastBarClose = bar.open;
+              } else {
+                completedVol += (bar.volume || 0);
+                maxHigh = Math.max(maxHigh, bar.high);
+                minLow = Math.min(minLow, bar.low);
+                lastBarClose = bar.close;
+              }
+            }
+          }
+
+          const fallbackOpen = foundAny ? firstBarOpen! : tick.price;
+          const newCandle = {
+            time: bucketTime,
+            open: fallbackOpen,
+            high: foundAny ? Math.max(fallbackOpen, maxHigh) : fallbackOpen,
+            low: foundAny ? Math.min(fallbackOpen, minLow) : fallbackOpen,
+            close: foundAny ? lastBarClose : fallbackOpen,
+            volume: foundAny ? Number(completedVol.toFixed(4)) : 0,
+          };
+
+          if (!lastCandleRef.current || lastCandleRef.current.time !== bucketTime) {
+            lastDataCountRef.current = (lastDataCountRef.current || 0) + 1;
+            const cardEl = chartContainerRef.current?.closest('.chart-card');
+            if (cardEl) {
+              cardEl.setAttribute('data-bars-count', String(lastDataCountRef.current));
+              const isoTime = new Date(bucketTime * 1000).toISOString().replace('T', ' ').slice(0, 19);
+              cardEl.setAttribute('data-last-bar-time', isoTime);
+            }
+          }
+          lastCandleRef.current = newCandle;
+
+          initPriceSeriesRef.current.update({
+            time: bucketTime as any,
+            open: newCandle.open,
+            high: newCandle.high,
+            low: newCandle.low,
+            close: newCandle.close,
+          });
+
+          initVolumeSeriesRef.current.update({
+            time: bucketTime as any,
+            value: newCandle.volume,
+            color: newCandle.close >= newCandle.open
+              ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+              : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+          });
+          continue;
+        }
+
         const lastCandle = lastCandleRef.current;
 
         // INGEST-03: Create first candle if history was empty
         if (!lastCandle) {
-          const isSynthetic = Boolean((tick as any).isSynthesized);
-          let tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
-          if (timeframe === '1D' && isSynthetic) {
-            const minuteStart = Math.floor(tickTimeMs / 60000) * 60000;
-            if (minuteStart + 60000 > tickTimeMs) {
-              tickVol = 0;
-            }
-          }
           if (isSynthetic) {
             syntheticBucketVolumesRef.current = {
               bucketTime,
@@ -723,69 +789,7 @@ export function useChartLifecycle({
 
         if (bucketTime < lastCandle.time) continue;
 
-        const isSynthetic = Boolean((tick as any).isSynthesized);
-        const tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
-
         if (lastCandle.time === bucketTime) {
-          if (timeframe === '1D' && isSynthetic) {
-            // Daily chart with synthetic fallback: mirror useChartData policy
-            const masterData = state.masterData || [];
-            let completedVol = 0;
-            let maxHigh = -Infinity;
-            let minLow = Infinity;
-            let lastBarClose = lastCandle.open;
-            let foundAny = false;
-
-            for (const bar of masterData) {
-              if (bar.symbol && bar.symbol.toUpperCase() !== sym) continue;
-              if (!isRthBar(bar, ticker, timeframe)) continue;
-              const barMs = isoToMs(bar.time);
-              if (getBucketTime(barMs, timeframe) === bucketTime && barMs <= tickTimeMs) {
-                foundAny = true;
-                const isForming = barMs + 60000 > tickTimeMs;
-                if (isForming) {
-                  maxHigh = Math.max(maxHigh, bar.open);
-                  minLow = Math.min(minLow, bar.open);
-                  lastBarClose = bar.open;
-                } else {
-                  completedVol += (bar.volume || 0);
-                  maxHigh = Math.max(maxHigh, bar.high);
-                  minLow = Math.min(minLow, bar.low);
-                  lastBarClose = bar.close;
-                }
-              }
-            }
-
-            if (foundAny) {
-              lastCandle.high = Math.max(lastCandle.open, maxHigh);
-              lastCandle.low = Math.min(lastCandle.open, minLow);
-              lastCandle.close = lastBarClose;
-              lastCandle.volume = Number(completedVol.toFixed(4));
-            } else {
-              lastCandle.high = lastCandle.open;
-              lastCandle.low = lastCandle.open;
-              lastCandle.close = lastCandle.open;
-              lastCandle.volume = 0;
-            }
-
-            initPriceSeriesRef.current.update({
-              time: bucketTime as any,
-              open: lastCandle.open,
-              high: lastCandle.high,
-              low: lastCandle.low,
-              close: lastCandle.close,
-            });
-
-            initVolumeSeriesRef.current.update({
-              time: bucketTime as any,
-              value: lastCandle.volume,
-              color: lastCandle.close >= lastCandle.open
-                ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
-                : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
-            });
-            continue;
-          }
-
           lastCandle.high = Math.max(lastCandle.high, tick.price);
           lastCandle.low = Math.min(lastCandle.low, tick.price);
           lastCandle.close = tick.price;
