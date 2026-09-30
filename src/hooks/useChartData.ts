@@ -449,8 +449,23 @@ export function useChartData({
           : localMasterData;
 
         const todayBars = candidateBars.filter(b => {
+          if (!isRthBar(b, ticker)) return false;
           const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
-          return bMs >= rthOpenMs && bMs <= Math.min(effectiveCutoff, rthCloseMs) && isRthBar(b, ticker);
+          return bMs >= rthOpenMs && bMs <= Math.min(effectiveCutoff, rthCloseMs);
+        }).map(b => {
+          const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
+          // CONV-DAILY-01: Protect forming minute bar across entire interval
+          const isMinuteForming = isReplayMode && bMs <= effectiveCutoff && bMs + 60000 > effectiveCutoff;
+          if (isMinuteForming) {
+            return {
+              ...b,
+              high: b.open,
+              low: b.open,
+              close: b.open,
+              volume: 0,
+            };
+          }
+          return b;
         });
 
         if (todayBars.length > 0) {
@@ -465,8 +480,20 @@ export function useChartData({
             tickCount: todayBars.reduce((s, b) => s + (b.tickCount || 1), 0),
           };
 
-          // Only incorporate latestTick if currently within RTH hours
-          if (latestTick && latestTick.price && effectiveCutoff >= rthOpenMs && effectiveCutoff <= rthCloseMs) {
+          // Incorporate elapsed ticks from the forming minute
+          if (symbolTicks && symbolTicks.length > 0 && effectiveCutoff >= rthOpenMs && effectiveCutoff <= rthCloseMs) {
+            const currentMinuteStartMs = Math.floor(effectiveCutoff / 60000) * 60000;
+            const formingTicks = symbolTicks.filter(t => {
+              const tMs = isoToMs(t.time);
+              return tMs >= currentMinuteStartMs && tMs <= effectiveCutoff && isRthTick(t, ticker);
+            });
+            if (formingTicks.length > 0) {
+              formingDaily.high = Math.max(formingDaily.high, ...formingTicks.map(t => t.price));
+              formingDaily.low = Math.min(formingDaily.low, ...formingTicks.map(t => t.price));
+              formingDaily.close = formingTicks[formingTicks.length - 1].price;
+              formingDaily.volume += formingTicks.reduce((s, t) => s + (t.volume || 0), 0);
+            }
+          } else if (latestTick && latestTick.price && effectiveCutoff >= rthOpenMs && effectiveCutoff <= rthCloseMs) {
             if (isRthTick(latestTick, ticker)) {
               formingDaily.high = Math.max(formingDaily.high, latestTick.price);
               formingDaily.low = Math.min(formingDaily.low, latestTick.price);

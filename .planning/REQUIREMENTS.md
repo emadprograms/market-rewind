@@ -24,8 +24,8 @@ All fixes follow strict Test-Driven Development (TDD): focused unit and Playwrig
 - [x] **CONV-TIME-02**: Switched Symbol Local History Containment: when switching symbols where global minute history is absent and local timeframe history is used, ensure unfinished source candles (e.g. 5m, 15m) never expose completed high, low, close, or volume before the source bucket closes.
 
 ### Category 4: Daily Candle RTH & Minute Boundary Containment (CONV-DAILY)
-- [ ] **CONV-DAILY-01**: Daily Forming Candle Minute Isolation: build daily candles from completed RTH bars plus eligible elapsed events in the forming minute, preventing unclosed minute highs/lows/volumes from leaking into daily candles.
-- [ ] **CONV-DAILY-02**: Strict RTH Session Filtering for Daily OHLCV: ensure premarket (PRE) and after-hours (POST) trades and bars are strictly excluded from daily candle OHLCV calculations.
+- [x] **CONV-DAILY-01**: Daily Forming Candle Minute Isolation: build daily candles from completed RTH bars plus eligible elapsed events in the forming minute, preventing unclosed minute highs/lows/volumes from leaking into daily candles.
+- [x] **CONV-DAILY-02**: Strict RTH Session Filtering for Daily OHLCV: ensure premarket (PRE) and after-hours (POST) trades and bars are strictly excluded from daily candle OHLCV calculations.
 
 ### Category 5: Systematic Verification & Zero Regressions (CONV-VERIFY)
 - [ ] **CONV-VERIFY-01**: Full Green Phase Regression Verification: all 3 review probes, all 11 diagnostic suites, all previous 7 review suites, all 70 existing test files (366+ tests), backend pytest suite, and all Playwright journey tests pass 100% cleanly.
@@ -44,6 +44,6 @@ All fixes follow strict Test-Driven Development (TDD): focused unit and Playwrig
 | CONV-VOL-02  | Phase 30 | Complete |
 | CONV-TIME-01 | Phase 31 | Complete |
 | CONV-TIME-02 | Phase 31 | Complete |
-| CONV-DAILY-01| Phase 32 | Pending |
-| CONV-DAILY-02| Phase 32 | Pending |
+| CONV-DAILY-01| Phase 32 | Complete |
+| CONV-DAILY-02| Phase 32 | Complete |
 | CONV-VERIFY-01| Phase 33 | Pending |
