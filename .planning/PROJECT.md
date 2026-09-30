@@ -6,13 +6,14 @@ Market Rewind is a high-performance local-first market replay and charting analy
 ## Core Value
 High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
 
-## Current Milestone: Milestone v4.2 — State Machine Convergence & Temporal Strictness
+## Current Milestone: Milestone v4.3 — Live Data Stabilization and Testing
 
-**Goal:** Eliminate the three remaining P1 transition and look-ahead defects identified in `docs/reviews/2026-09-30-replay-review.md`. Implement strict Test-Driven Development (TDD) with tests first:
-1. Reconstruct constituent fallback volume upon snapshot hydration in `useChartLifecycle.ts`, guaranteeing that seek followed by play retains completed minute volume.
-2. Incorporate source-resolution duration into `useChartData.ts` candidate bar protection, preventing switched symbols from leaking unclosed higher-timeframe candles.
-3. Align daily candle aggregation in `useChartData.ts` with strict RTH boundary rules and forming-minute isolation, ensuring forming daily candles never expose future intra-minute highs, lows, or volume.
-4. Establish absolute state-machine convergence across continuous playback, direct seeking, seek-then-play, and rewind-and-replay, validated by 100% test pass rates across unit, backend, and Playwright suites.
+**Goal:** Resolve the four critical defects discovered during the final live-browser verification (`FINAL-LIVE-BROWSER-REVIEW-96ca478.md`). Implement strict Test-Driven Development (TDD) for:
+1. Daily volume changes substantially when playback is paused.
+2. AAPL chart retains TSLA historical candles after symbol switch.
+3. Timeframe/rewind sequence supplies unsorted data to the chart.
+4. Pausing changes the daily "Live" price to a different value.
+5. Absolute convergence and no regressions across all tests.
 
 ## Validated Requirements
 - ✓ Basic market replay engine (v1.0)
