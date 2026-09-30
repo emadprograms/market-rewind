@@ -1,0 +1,419 @@
+- complementary:
+  - generic "Market Rewind":
+  - button "Streaming DuckDB Connected (101.4M Ticks • 40 Symbols) Click to configure DuckDB service connection":
+  - generic "Target Date":
+    - textbox: 2026-09-15
+  - button "Reset Session":
+  - generic "Layout 1"
+  - generic "Layout 2V"
+  - generic "Layout 2H"
+  - generic "Layout 3"
+  - generic "Layout 3B"
+  - generic "Layout 3L"
+  - generic "Layout 3R"
+  - generic "Layout 3H"
+  - generic "Layout 3V"
+  - generic "Layout 4"
+  - link "Source Code":
+    - /url: https://github.com/emadprograms/market-rewind
+- main:
+  - generic: AAPL
+  - generic: 5m
+  - button "1s"
+  - button "5s"
+  - button "1m"
+  - button "5m"
+  - generic "Settings & Tools":
+  - generic: Group
+  - button "Maximize":
+  - table:
+    - row:
+      - cell
+      - cell
+      - cell
+    - row:
+      - cell
+      - cell
+      - cell
+  - button "BUY"
+  - spinbutton: "1"
+  - button "SELL"
+  - generic: TSLA
+  - generic: 1D
+  - button "1s"
+  - button "5s"
+  - button "1m"
+  - button "5m"
+  - generic "Settings & Tools":
+  - generic: Group
+  - button "Maximize":
+  - table:
+    - row:
+      - cell
+      - cell
+      - cell
+    - row:
+      - cell
+      - cell
+      - cell
+  - button "BUY"
+  - spinbutton: "1"
+  - button "SELL"
+- generic: TIME & SALES
+- generic: TSLA
+- button "Close Tape":
+- generic: TIME
+- generic: PRICE
+- generic: SIZE
+- generic: B/A
+- generic: 09:33:25.448
+- generic: "356.06"
+- generic: "80"
+- generic: 353.0/365.0
+- generic: 09:33:25.448
+- generic: "356.06"
+- generic: "20"
+- generic: 353.0/365.0
+- generic: 09:33:25.464
+- generic: "356.06"
+- generic: "20"
+- generic: 353.0/365.0
+- generic: 09:33:25.464
+- generic: "356.06"
+- generic: "20"
+- generic: 353.0/365.0
+- generic: 09:33:25.477
+- generic: "355.95"
+- generic: "20"
+- generic: 353.0/365.0
+- generic: 09:33:26.562
+- generic: "355.80"
+- generic: "100"
+- generic: 353.0/365.0
+- generic: 09:33:26.563
+- generic: "355.80"
+- generic: "40"
+- generic: 353.0/365.0
+- generic: 09:33:26.563
+- generic: "355.80"
+- generic: "20"
+- generic: 353.0/365.0
+- generic: 09:33:26.563
+- generic: "355.80"
+- generic: "20"
+- generic: 353.0/365.0
+- generic: 09:33:27.023
+- generic: "355.66"
+- generic: "100"
+- generic: 353.0/365.0
+- generic: 09:33:28.616
+- generic: "355.42"
+- generic: "100"
+- generic: 355.2/365.0
+- generic: 09:33:29.039
+- generic: "355.55"
+- generic: "100"
+- generic: 355.2/365.0
+- generic: 09:33:29.039
+- generic: "355.56"
+- generic: "100"
+- generic: 355.2/365.0
+- generic: 09:33:29.982
+- generic: "355.61"
+- generic: "20"
+- generic: 355.2/365.0
+- generic: 09:33:29.982
+- generic: "355.61"
+- generic: "20"
+- generic: 355.2/365.0
+- generic: 09:33:29.989
+- generic: "355.61"
+- generic: "20"
+- generic: 355.2/365.0
+- generic: 09:33:30.628
+- generic: "355.56"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:30.831
+- generic: "355.56"
+- generic: "5"
+- generic: 355.2/365.0
+- generic: 09:33:33.095
+- generic: "355.45"
+- generic: "100"
+- generic: 355.4/365.0
+- generic: 09:33:33.096
+- generic: "355.45"
+- generic: "20"
+- generic: 355.4/365.0
+- generic: 09:33:33.099
+- generic: "355.45"
+- generic: "80"
+- generic: 355.4/365.0
+- generic: 09:33:33.213
+- generic: "355.68"
+- generic: "100"
+- generic: 353.0/365.0
+- generic: 09:33:33.214
+- generic: "355.68"
+- generic: "20"
+- generic: 353.0/365.0
+- generic: 09:33:36.536
+- generic: "355.52"
+- generic: "120"
+- generic: 353.0/355.8
+- generic: 09:33:36.536
+- generic: "355.52"
+- generic: "30"
+- generic: 353.0/355.8
+- generic: 09:33:37.065
+- generic: "355.53"
+- generic: "100"
+- generic: 353.0/355.8
+- generic: 09:33:37.066
+- generic: "355.53"
+- generic: "40"
+- generic: 353.0/355.8
+- generic: 09:33:37.066
+- generic: "355.52"
+- generic: "60"
+- generic: 353.0/355.8
+- generic: 09:33:37.929
+- generic: "355.65"
+- generic: "40"
+- generic: 353.0/355.8
+- generic: 09:33:38.285
+- generic: "355.65"
+- generic: "40"
+- generic: 353.0/355.8
+- generic: 09:33:38.691
+- generic: "355.80"
+- generic: "50"
+- generic: 353.0/355.8
+- generic: 09:33:39.415
+- generic: "355.70"
+- generic: "1"
+- generic: 353.0/355.8
+- generic: 09:33:40.021
+- generic: "355.70"
+- generic: "39"
+- generic: 353.0/355.8
+- generic: 09:33:40.021
+- generic: "355.70"
+- generic: "40"
+- generic: 353.0/355.8
+- generic: 09:33:40.021
+- generic: "355.70"
+- generic: "21"
+- generic: 353.0/355.8
+- generic: 09:33:40.021
+- generic: "355.70"
+- generic: "139"
+- generic: 353.0/355.8
+- generic: 09:33:40.036
+- generic: "355.71"
+- generic: "80"
+- generic: 353.0/355.8
+- generic: 09:33:40.485
+- generic: "355.70"
+- generic: "40"
+- generic: 353.0/355.8
+- generic: 09:33:40.507
+- generic: "355.70"
+- generic: "40"
+- generic: 353.0/355.8
+- generic: 09:33:40.507
+- generic: "355.70"
+- generic: "40"
+- generic: 353.0/355.8
+- generic: 09:33:40.522
+- generic: "355.70"
+- generic: "40"
+- generic: 353.0/355.8
+- generic: 09:33:41.065
+- generic: "355.71"
+- generic: "100"
+- generic: 353.0/355.8
+- generic: 09:33:41.257
+- generic: "355.81"
+- generic: "50"
+- generic: 353.0/355.8
+- generic: 09:33:43.007
+- generic: "355.62"
+- generic: "46"
+- generic: 353.0/365.0
+- generic: 09:33:43.007
+- generic: "355.62"
+- generic: "29"
+- generic: 353.0/355.7
+- generic: 09:33:44.012
+- generic: "355.48"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:44.012
+- generic: "355.48"
+- generic: "80"
+- generic: 355.2/365.0
+- generic: 09:33:45.789
+- generic: "355.47"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:45.800
+- generic: "355.44"
+- generic: "80"
+- generic: 355.2/365.0
+- generic: 09:33:48.752
+- generic: "355.37"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:49.036
+- generic: "355.42"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:49.036
+- generic: "355.42"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:49.179
+- generic: "355.36"
+- generic: "1"
+- generic: 355.2/365.0
+- generic: 09:33:49.179
+- generic: "355.36"
+- generic: "1"
+- generic: 355.2/365.0
+- generic: 09:33:49.690
+- generic: "355.36"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:49.764
+- generic: "355.36"
+- generic: "80"
+- generic: 355.2/365.0
+- generic: 09:33:49.954
+- generic: "355.57"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:50.088
+- generic: "355.54"
+- generic: "80"
+- generic: 355.2/365.0
+- generic: 09:33:52.310
+- generic: "355.39"
+- generic: "80"
+- generic: 355.2/365.0
+- generic: 09:33:52.517
+- generic: "355.39"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:53.247
+- generic: "355.44"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:53.247
+- generic: "355.44"
+- generic: "60"
+- generic: 355.2/365.0
+- generic: 09:33:53.247
+- generic: "355.44"
+- generic: "20"
+- generic: 355.2/365.0
+- generic: 09:33:54.237
+- generic: "355.44"
+- generic: "100"
+- generic: 355.2/365.0
+- generic: 09:33:54.237
+- generic: "355.44"
+- generic: "100"
+- generic: 355.2/365.0
+- generic: 09:33:54.237
+- generic: "355.44"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:54.337
+- generic: "355.44"
+- generic: "120"
+- generic: 355.2/365.0
+- generic: 09:33:55.004
+- generic: "355.39"
+- generic: "100"
+- generic: 355.2/365.0
+- generic: 09:33:55.004
+- generic: "355.39"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:55.004
+- generic: "355.39"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:55.005
+- generic: "355.39"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:55.803
+- generic: "355.60"
+- generic: "38"
+- generic: 355.2/365.0
+- generic: 09:33:56.506
+- generic: "355.60"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:57.735
+- generic: "355.62"
+- generic: "80"
+- generic: 355.2/356.4
+- generic: 09:33:57.735
+- generic: "355.62"
+- generic: "80"
+- generic: 340.8/376.7
+- generic: 09:33:57.735
+- generic: "355.62"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:58.912
+- generic: "355.43"
+- generic: "120"
+- generic: 355.2/365.0
+- generic: 09:33:58.915
+- generic: "355.40"
+- generic: "40"
+- generic: 355.2/365.0
+- generic: 09:33:59.575
+- generic: "355.41"
+- generic: "100"
+- generic: 355.2/365.0
+- generic: 09:33:59.575
+- generic: "355.41"
+- generic: "20"
+- generic: 355.2/365.0
+- generic: "TICK: 483/14566"
+- generic: $355.41
+- generic: "R:"
+- generic: "+0.00"
+- generic: "U:"
+- generic: "+0.00"
+- generic: 09:34:00.000 ET
+- generic: $329.98
+- generic: (313.68 / 346.97)
+- button "Step 1 Tick Backward":
+- button "PLAY":
+  - text: PLAY
+- button "Step 1 Tick Forward":
+- button "Reset to Start":
+- slider "Time-based playback slider": "1789479240000"
+- 'generic "Current: 09:34:00 | End: 15:59:59"': 09:34:00 / 15:59:59
+- textbox "Jump to time HH:MM:SS":
+  - /placeholder: HH:MM:SS
+- generic "Current tick / total buffered ticks": 1198/40807
+- generic: SPEED
+- combobox:
+  - option "0.5x"
+  - option "1.0x" [selected]
+  - option "2.0x"
+  - option "5.0x"
+  - option "10.0x"
+  - option "25.0x"
+  - option "50.0x"
+  - option "100.0x"
+- button "TAPE":
+  - generic: TAPE

@@ -11,7 +11,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { beginReplay, collectPageErrors, chartCard, readBarData, readPlaybackState } from '../mocks/replayJourney';
+import { beginReplay, collectPageErrors, chartCard, readBarData, pressPlay, pressPause } from '../mocks/replayJourney';
 
 test.describe('JOURNEY 13 — Live Review 96ca478 Regression Probes', () => {
   test('LIVE-E2E-1: Daily volume must remain stable across play and pause transitions', async ({
@@ -31,15 +31,11 @@ test.describe('JOURNEY 13 — Live Review 96ca478 Regression Probes', () => {
     await expect(timeLabel).toContainText('09:34');
 
     // Start playback across minute boundary into 09:35
-    const playButton = page.locator('button[aria-label*="Play"], button[aria-label*="play"]').first();
-    await playButton.click();
+    await pressPlay(page);
     await page.waitForTimeout(2000);
 
     // Pause playback
-    const pauseButton = page.locator('button[aria-label*="Pause"], button[aria-label*="pause"]').first();
-    if (await pauseButton.isVisible()) {
-      await pauseButton.click();
-    }
+    await pressPause(page);
 
     // Verify no unhandled page crashes or ordering errors
     expect(pageErrors.length).toBe(0);

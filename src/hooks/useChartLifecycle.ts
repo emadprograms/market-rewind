@@ -720,9 +720,9 @@ export function useChartLifecycle({
             }
           }
 
-          // Incorporate elapsed trades from forming minute
+          // Incorporate elapsed trades from forming minute for real ticks
           let formingMinuteVol = 0;
-          if (symbolTicks && symbolTicks.length > 0) {
+          if (!isSynthetic && symbolTicks && symbolTicks.length > 0) {
             const currentMinuteStartMs = Math.floor(evalTimeMs / 60000) * 60000;
             for (let i = symbolTicks.length - 1; i >= 0; i--) {
               const t = symbolTicks[i];
@@ -735,7 +735,7 @@ export function useChartLifecycle({
                 lastBarClose = t.price;
               }
             }
-          } else if (tick.price) {
+          } else if (!isSynthetic && tick.price) {
             lastBarClose = tick.price;
             maxHigh = Math.max(maxHigh, tick.price);
             minLow = Math.min(minLow, tick.price);

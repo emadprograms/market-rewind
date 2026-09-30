@@ -40,6 +40,8 @@ High-fidelity, deterministic tick-by-tick market replay with sub-second timefram
 - ✓ **REV-SYNC-01 – REV-SYNC-04**: Hook Order Safety & Cursor Coherence (v4.1)
 - ✓ **REV-FORM-01 – REV-FORM-03**: Bucket Lookahead Protection & Loader Race Guard (v4.1)
 - ✓ **REV-SCRUB-01 & REV-VERIFY-01**: Scrubber Premarket Retention & 70-Suite Verification (v4.1)
+- ✓ **CONV-TEST / CONV-VOL / CONV-DAILY / CONV-VERIFY**: Replay State Machine Convergence (v4.2)
+- ✓ **LIVE-TEST / LIVE-VOL / LIVE-CONTEXT / LIVE-ORDER / LIVE-VERIFY**: Live Data Stabilization & Review Fixes (v4.3)
 
 ## Key Decisions
 

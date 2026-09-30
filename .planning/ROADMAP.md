@@ -2,13 +2,13 @@
 
 **5 phases** | **10 requirements mapped** | All covered ✓
 
-| # | Phase | Goal | Requirements | Success Criteria |
-|---|-------|------|--------------|------------------|
-| 34 | Test-First Harness & Review Reproduction | Replicate all 4 live review failure modes in unit and Playwright tests before altering any code | LIVE-TEST-01, LIVE-TEST-02, LIVE-TEST-03 | 3 |
-| 35 | Unified Daily Volume & Live Price Policy | Align daily volume aggregation and live price calculation across live and paused states | LIVE-VOL-01, LIVE-VOL-02 | 3 |
-| 36 | Render Context Transitions | Prevent old symbol history from remaining on screen during and after a symbol switch | LIVE-CONTEXT-01, LIVE-CONTEXT-02 | 3 |
-| 37 | Merge Boundaries & Data Ordering | Guarantee sorted, unique data when merging history and expose meaningful errors if updates fail | LIVE-ORDER-01, LIVE-ORDER-02 | 3 |
-| 38 | Systematic Verification & Zero Regressions | Ensure all new and existing tests pass cleanly with no regressions | LIVE-VERIFY-01 | 2 |
+| # | Phase | Goal | Requirements | Success Criteria | Status |
+|---|-------|------|--------------|------------------|--------|
+| 34 | Test-First Harness & Review Reproduction | Replicate all 4 live review failure modes in unit and Playwright tests before altering any code | LIVE-TEST-01, LIVE-TEST-02, LIVE-TEST-03 | 3 | COMPLETED |
+| 35 | Unified Daily Volume & Live Price Policy | Align daily volume aggregation and live price calculation across live and paused states | LIVE-VOL-01, LIVE-VOL-02 | 3 | COMPLETED |
+| 36 | Render Context Transitions | Prevent old symbol history from remaining on screen during and after a symbol switch | LIVE-CONTEXT-01, LIVE-CONTEXT-02 | 3 | COMPLETED |
+| 37 | Merge Boundaries & Data Ordering | Guarantee sorted, unique data when merging history and expose meaningful errors if updates fail | LIVE-ORDER-01, LIVE-ORDER-02 | 3 | COMPLETED |
+| 38 | Systematic Verification & Zero Regressions | Ensure all new and existing tests pass cleanly with no regressions | LIVE-VERIFY-01 | 2 | COMPLETED |
 
 ### Phase Details
 
