@@ -16,8 +16,8 @@ All fixes follow strict Test-Driven Development (TDD): focused unit and Playwrig
 - [x] **CONV-TEST-04**: Red Phase Execution Verification: all three review failure probes execute and fail predictably against the baseline, confirming genuine defect reproduction before altering application code.
 
 ### Category 2: Fallback Volume Hydration & Retention (CONV-VOL)
-- [ ] **CONV-VOL-01**: Snapshot Fallback Volume State Hydration: when hydrating a snapshot in `useChartLifecycle.ts`, preserve or reconstruct constituent minute volume state so that seeking into a multi-minute candle followed by play retains completed minute volumes rather than dropping to only the current minute.
-- [ ] **CONV-VOL-02**: Zero Double Counting on Resume: ensure resuming playback after snapshot hydration accumulates new elapsed trades without re-adding already hydrated volume.
+- [x] **CONV-VOL-01**: Snapshot Fallback Volume State Hydration: when hydrating a snapshot in `useChartLifecycle.ts`, preserve or reconstruct constituent minute volume state so that seeking into a multi-minute candle followed by play retains completed minute volumes rather than dropping to only the current minute.
+- [x] **CONV-VOL-02**: Zero Double Counting on Resume: ensure resuming playback after snapshot hydration accumulates new elapsed trades without re-adding already hydrated volume.
 
 ### Category 3: Source Duration & Switched Symbol Protection (CONV-TIME)
 - [ ] **CONV-TIME-01**: Source-Resolution Aware Forming Candle Protection: parameterize forming candle containment in `useChartData.ts` by the actual duration of source bars rather than hardcoding 60 seconds.
@@ -40,8 +40,8 @@ All fixes follow strict Test-Driven Development (TDD): focused unit and Playwrig
 | CONV-TEST-02 | Phase 29 | Complete |
 | CONV-TEST-03 | Phase 29 | Complete |
 | CONV-TEST-04 | Phase 29 | Complete |
-| CONV-VOL-01  | Phase 30 | Pending |
-| CONV-VOL-02  | Phase 30 | Pending |
+| CONV-VOL-01  | Phase 30 | Complete |
+| CONV-VOL-02  | Phase 30 | Complete |
 | CONV-TIME-01 | Phase 31 | Pending |
 | CONV-TIME-02 | Phase 31 | Pending |
 | CONV-DAILY-01| Phase 32 | Pending |

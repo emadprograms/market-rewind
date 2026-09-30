@@ -3,7 +3,7 @@ import { IChartApi, ISeriesApi, Time, TickMarkType, IPriceLine } from 'lightweig
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
 import { TF_SECONDS } from '../types';
 import { getTzForTicker, isRthTick } from '../lib/timezones';
-import { usePlaybackStore } from '../store/usePlaybackStore';
+import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { useChartInit } from './chart/useChartInit';
 import { useChartPlugins } from './chart/useChartPlugins';
 import { useChartDrawings } from './chart/useChartDrawings';
@@ -494,7 +494,36 @@ export function useChartLifecycle({
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
       lastDataCountRef.current = chartData.length;
-      syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
+
+      // CONV-VOL-01: Reconstruct constituent fallback volume state upon snapshot hydration
+      if (lastCandleRef.current) {
+        const bucketTime = lastCandleRef.current.time;
+        const bucketMinutes = new Map<number, number>();
+        const currentCutoffMs = currentPlayback.currentTime || 0;
+        const masterData = currentPlayback.masterData || [];
+
+        for (const bar of masterData) {
+          if (bar.symbol && bar.symbol.toUpperCase() !== symUpper) continue;
+          const barMs = isoToMs(bar.time);
+          if (getBucketTime(barMs, timeframe) === bucketTime) {
+            if (barMs < currentCutoffMs) {
+              bucketMinutes.set(Math.floor(barMs / 60000) * 60000, bar.volume || 0);
+            }
+          }
+        }
+
+        if (bucketMinutes.size === 0 && (lastCandleRef.current.volume || 0) > 0) {
+          const anchorMinute = Math.floor((bucketTime * 1000) / 60000) * 60000;
+          bucketMinutes.set(anchorMinute, lastCandleRef.current.volume);
+        }
+
+        syntheticBucketVolumesRef.current = {
+          bucketTime,
+          minutes: bucketMinutes,
+        };
+      } else {
+        syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
+      }
 
       if (!isHydratedRef.current) {
         requestAnimationFrame(() => {

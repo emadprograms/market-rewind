@@ -7,10 +7,10 @@ last_updated: "2026-09-30T07:17:00.000Z"
 last_activity: 2026-09-30
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 20
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -32,10 +32,10 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** Phase 30: Snapshot Fallback Constituent Volume Hydration (`useChartLifecycle.ts`).
+**Current focus:** Phase 31: Timeframe-Aware Source Duration & Switched Symbol Protection (`useChartData.ts`).
 
 ## Current Position
 
-Phase: Phase 30: Snapshot Fallback Constituent Volume Hydration (1/5 phases complete, 20%)
+Phase: Phase 31: Timeframe-Aware Source Duration & Switched Symbol Protection (2/5 phases complete, 40%)
 Status: In Progress
-Last activity: 2026-09-30 — Completed Phase 29: Red phase confirmed for all 3 review failure probes (PROBE 1, 2, 3 failed as expected). Starting Phase 30.
+Last activity: 2026-09-30 — Completed Phase 30: Snapshot fallback volume state hydration verified (CONV-VOL-01, CONV-VOL-02). PROBE 1 is 100% Green. Starting Phase 31.
