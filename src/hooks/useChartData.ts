@@ -314,29 +314,59 @@ export function useChartData({
         lastFetchedEndTimeRef.current = currentEarliest;
         setIsLoadingHistory(true);
         try {
+          const reqTicker = ticker;
+          const reqTf = timeframe;
           const oldLogicalRange = timeScale ? timeScale.getVisibleLogicalRange() : null;
           const currentChartBars = priceSeriesRef.current ? (priceSeriesRef.current.data() as CandlestickData[]) : [];
           
-          const chunk = await streamingClient.getCandles(ticker, {
-            timeframe,
+          const chunk = await streamingClient.getCandles(reqTicker, {
+            timeframe: reqTf,
             endTime: currentEarliest,
             limit: 5000,
           });
-          
-          // Deduplicate: only take chunk candles strictly before the earliest loaded candle
-          const cleanChunk = (chunk || []).filter(c => c.time < currentEarliest);
 
-          if (cleanChunk.length > 0) {
-            earliestLoadedDateRef.current = cleanChunk[0].time;
-            
-            let newData = [...cleanChunk, ...localMasterDataRef.current];
-            
-            pendingHistoryPrependRef.current = {
+          // LIVE-CONTEXT-02: Discard obsolete response if context changed while in flight
+          if (
+            loadedTickerRef.current !== reqTicker ||
+            dataTimeframeRef.current !== reqTf
+          ) {
+            return;
+          }
+          
+          if (chunk && chunk.length > 0) {
+            // LIVE-ORDER-01: Enforce strict timestamp ordering and deduplication at history merge boundary
+            const toMs = (t: string | number) => {
+              if (typeof t === 'number') return t < 1e11 ? t * 1000 : t;
+              const str = String(t);
+              return new Date(str.replace(' ', 'T') + (str.includes('Z') ? '' : 'Z')).getTime();
+            };
+
+            const map = new Map<number, RawBar>();
+            for (const b of chunk) {
+              const msVal = toMs(b.time);
+              if (!isNaN(msVal)) map.set(msVal, b);
+            }
+            for (const b of localMasterDataRef.current) {
+              const msVal = toMs(b.time);
+              if (!isNaN(msVal)) map.set(msVal, b);
+            }
+
+            const sortedTimes = Array.from(map.keys()).sort((a, b) => a - b);
+            const newData = sortedTimes.map(t => map.get(t)!);
+
+            if (newData.length > localMasterDataRef.current.length) {
+              earliestLoadedDateRef.current = newData[0].time;
+              localMasterDataRef.current = newData;
+              
+              pendingHistoryPrependRef.current = {
                 oldFirstTime: currentChartBars.length > 0 ? (currentChartBars[0].time as number) : null,
                 oldLogicalRange: oldLogicalRange
-            };
-            
-            setLocalMasterData(newData as RawBar[]);
+              };
+              
+              setLocalMasterData(newData);
+            } else {
+              hasMoreHistoryRef.current = false;
+            }
           } else {
             hasMoreHistoryRef.current = false;
           }
