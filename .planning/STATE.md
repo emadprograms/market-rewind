@@ -7,10 +7,10 @@ last_updated: "2026-09-30T07:17:00.000Z"
 last_activity: 2026-09-30
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -32,10 +32,10 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** Phase 29: Test-First Harness & Review Reproduction (TDD Red Phase).
+**Current focus:** Phase 30: Snapshot Fallback Constituent Volume Hydration (`useChartLifecycle.ts`).
 
 ## Current Position
 
-Phase: Phase 29: Test-First Harness & Review Reproduction (0/5 phases complete, 0%)
-Status: Starting Phase 29
-Last activity: 2026-09-30 — Initialized Milestone v4.2 based on `docs/reviews/2026-09-30-replay-review.md`.
+Phase: Phase 30: Snapshot Fallback Constituent Volume Hydration (1/5 phases complete, 20%)
+Status: In Progress
+Last activity: 2026-09-30 — Completed Phase 29: Red phase confirmed for all 3 review failure probes (PROBE 1, 2, 3 failed as expected). Starting Phase 30.

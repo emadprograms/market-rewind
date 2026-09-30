@@ -10,10 +10,10 @@ All fixes follow strict Test-Driven Development (TDD): focused unit and Playwrig
 ## Requirements
 
 ### Category 1: Test-First Harness & Review Reproduction (CONV-TEST)
-- [ ] **CONV-TEST-01**: Diagnostic Unit Test Suite `tests/unit/rereviewProbes.test.ts` replicating all 3 P1 failure modes from `docs/reviews/2026-09-30-replay-review.md` (seek→play fallback volume loss, switched-symbol unclosed 5m price leak, and daily forming candle intra-minute leak).
-- [ ] **CONV-TEST-02**: Combined Data-to-Renderer Transition Harness (Layer 2) proving that continuous play, direct seek, seek-then-play, and rewind-and-replay produce identical candles without double counting or volume drops.
-- [ ] **CONV-TEST-03**: Playwright E2E Convergence Suite `tests/regression/journey/12-replay-convergence.spec.ts` testing exact seeking, symbol switching without elapsed ticks, and RTH opening minute daily chart boundaries in an offline browser environment.
-- [ ] **CONV-TEST-04**: Red Phase Execution Verification: all three review failure probes execute and fail predictably against the baseline, confirming genuine defect reproduction before altering application code.
+- [x] **CONV-TEST-01**: Diagnostic Unit Test Suite `tests/unit/rereviewProbes.test.ts` replicating all 3 P1 failure modes from `docs/reviews/2026-09-30-replay-review.md` (seek→play fallback volume loss, switched-symbol unclosed 5m price leak, and daily forming candle intra-minute leak).
+- [x] **CONV-TEST-02**: Combined Data-to-Renderer Transition Harness (Layer 2) proving that continuous play, direct seek, seek-then-play, and rewind-and-replay produce identical candles without double counting or volume drops.
+- [x] **CONV-TEST-03**: Playwright E2E Convergence Suite `tests/regression/journey/12-replay-convergence.spec.ts` testing exact seeking, symbol switching without elapsed ticks, and RTH opening minute daily chart boundaries in an offline browser environment.
+- [x] **CONV-TEST-04**: Red Phase Execution Verification: all three review failure probes execute and fail predictably against the baseline, confirming genuine defect reproduction before altering application code.
 
 ### Category 2: Fallback Volume Hydration & Retention (CONV-VOL)
 - [ ] **CONV-VOL-01**: Snapshot Fallback Volume State Hydration: when hydrating a snapshot in `useChartLifecycle.ts`, preserve or reconstruct constituent minute volume state so that seeking into a multi-minute candle followed by play retains completed minute volumes rather than dropping to only the current minute.
@@ -36,10 +36,10 @@ All fixes follow strict Test-Driven Development (TDD): focused unit and Playwrig
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONV-TEST-01 | Phase 29 | Pending |
-| CONV-TEST-02 | Phase 29 | Pending |
-| CONV-TEST-03 | Phase 29 | Pending |
-| CONV-TEST-04 | Phase 29 | Pending |
+| CONV-TEST-01 | Phase 29 | Complete |
+| CONV-TEST-02 | Phase 29 | Complete |
+| CONV-TEST-03 | Phase 29 | Complete |
+| CONV-TEST-04 | Phase 29 | Complete |
 | CONV-VOL-01  | Phase 30 | Pending |
 | CONV-VOL-02  | Phase 30 | Pending |
 | CONV-TIME-01 | Phase 31 | Pending |
