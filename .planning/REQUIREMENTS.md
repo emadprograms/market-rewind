@@ -20,8 +20,8 @@ All fixes follow strict Test-Driven Development (TDD): focused unit and Playwrig
 - [x] **CONV-VOL-02**: Zero Double Counting on Resume: ensure resuming playback after snapshot hydration accumulates new elapsed trades without re-adding already hydrated volume.
 
 ### Category 3: Source Duration & Switched Symbol Protection (CONV-TIME)
-- [ ] **CONV-TIME-01**: Source-Resolution Aware Forming Candle Protection: parameterize forming candle containment in `useChartData.ts` by the actual duration of source bars rather than hardcoding 60 seconds.
-- [ ] **CONV-TIME-02**: Switched Symbol Local History Containment: when switching symbols where global minute history is absent and local timeframe history is used, ensure unfinished source candles (e.g. 5m, 15m) never expose completed high, low, close, or volume before the source bucket closes.
+- [x] **CONV-TIME-01**: Source-Resolution Aware Forming Candle Protection: parameterize forming candle containment in `useChartData.ts` by the actual duration of source bars rather than hardcoding 60 seconds.
+- [x] **CONV-TIME-02**: Switched Symbol Local History Containment: when switching symbols where global minute history is absent and local timeframe history is used, ensure unfinished source candles (e.g. 5m, 15m) never expose completed high, low, close, or volume before the source bucket closes.
 
 ### Category 4: Daily Candle RTH & Minute Boundary Containment (CONV-DAILY)
 - [ ] **CONV-DAILY-01**: Daily Forming Candle Minute Isolation: build daily candles from completed RTH bars plus eligible elapsed events in the forming minute, preventing unclosed minute highs/lows/volumes from leaking into daily candles.
@@ -42,8 +42,8 @@ All fixes follow strict Test-Driven Development (TDD): focused unit and Playwrig
 | CONV-TEST-04 | Phase 29 | Complete |
 | CONV-VOL-01  | Phase 30 | Complete |
 | CONV-VOL-02  | Phase 30 | Complete |
-| CONV-TIME-01 | Phase 31 | Pending |
-| CONV-TIME-02 | Phase 31 | Pending |
+| CONV-TIME-01 | Phase 31 | Complete |
+| CONV-TIME-02 | Phase 31 | Complete |
 | CONV-DAILY-01| Phase 32 | Pending |
 | CONV-DAILY-02| Phase 32 | Pending |
 | CONV-VERIFY-01| Phase 33 | Pending |

@@ -623,6 +623,10 @@ export function useChartData({
           ? masterData
           : localMasterData;
 
+        const isLocalCandidate = candidateBars === localMasterData;
+        const candidateDurationSec = isLocalCandidate ? (TF_SECONDS[timeframe] || 60) : 60;
+        const candidateDurationMs = candidateDurationSec * 1000;
+
         if (candidateBars && candidateBars.length > 0) {
           let lastBarTimeMs = -1;
           if (resampled.length > 0) {
@@ -640,8 +644,8 @@ export function useChartData({
             return bMs >= startMs && bMs <= effectiveCutoff;
           }).map(b => {
             const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
-            // REV-FORM-01: Protect forming bucket across entire interval until minute closes
-            const isConstituentForming = isReplayMode && bMs <= effectiveCutoff && bMs + 60000 > effectiveCutoff;
+            // CONV-TIME-01: Protect forming bucket across source duration until bar closes
+            const isConstituentForming = isReplayMode && bMs <= effectiveCutoff && bMs + candidateDurationMs > effectiveCutoff;
             if (isConstituentForming) {
               return {
                 ...b,
