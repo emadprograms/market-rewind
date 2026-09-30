@@ -648,8 +648,15 @@ export function useChartLifecycle({
         }
       }
 
+      const minuteBoundaryCrossed = Boolean(
+        lastConsumedTimeRef.current && state.currentTime &&
+        Math.floor(state.currentTime / 60000) > Math.floor(lastConsumedTimeRef.current / 60000)
+      );
+
       if (newlyElapsedTicks.length === 0) {
         if (latestTick && latestTick !== lastConsumedTickRef.current) {
+          newlyElapsedTicks = [latestTick];
+        } else if (timeframe === '1D' && minuteBoundaryCrossed && latestTick) {
           newlyElapsedTicks = [latestTick];
         }
       }
@@ -679,8 +686,8 @@ export function useChartLifecycle({
         const isSynthetic = Boolean((tick as any).isSynthesized);
         let tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
 
-        if (timeframe === '1D' && isSynthetic) {
-          // Unified daily chart with synthetic fallback: mirror useChartData policy
+        if (timeframe === '1D') {
+          // LIVE-VOL-01: Unified daily chart policy for both real ticks and synthetic fallback
           const masterData = state.masterData || [];
           let completedVol = 0;
           let maxHigh = -Infinity;
@@ -689,16 +696,17 @@ export function useChartLifecycle({
           let firstBarOpen = undefined;
           let foundAny = false;
 
+          const evalTimeMs = state.currentTime && state.currentTime > tickTimeMs ? state.currentTime : tickTimeMs;
           for (const bar of masterData) {
             if (bar.symbol && bar.symbol.toUpperCase() !== sym) continue;
             if (!isRthBar(bar, ticker, timeframe)) continue;
             const barMs = isoToMs(bar.time);
-            if (getBucketTime(barMs, timeframe) === bucketTime && barMs <= tickTimeMs) {
+            if (getBucketTime(barMs, timeframe) === bucketTime && barMs <= evalTimeMs) {
               if (firstBarOpen === undefined) {
                 firstBarOpen = bar.open;
               }
               foundAny = true;
-              const isForming = barMs + 60000 > tickTimeMs;
+              const isForming = barMs + 60000 > evalTimeMs;
               if (isForming) {
                 maxHigh = Math.max(maxHigh, bar.open);
                 minLow = Math.min(minLow, bar.open);
@@ -712,14 +720,42 @@ export function useChartLifecycle({
             }
           }
 
+          // Incorporate elapsed trades from forming minute
+          let formingMinuteVol = 0;
+          if (symbolTicks && symbolTicks.length > 0) {
+            const currentMinuteStartMs = Math.floor(evalTimeMs / 60000) * 60000;
+            for (let i = symbolTicks.length - 1; i >= 0; i--) {
+              const t = symbolTicks[i];
+              const tMs = getTickMs(t);
+              if (tMs < currentMinuteStartMs) break;
+              if (tMs <= evalTimeMs && isRthTick(t, ticker)) {
+                formingMinuteVol += (t.volume !== undefined && t.volume !== null ? t.volume : 1.0);
+                maxHigh = Math.max(maxHigh, t.price);
+                minLow = Math.min(minLow, t.price);
+                lastBarClose = t.price;
+              }
+            }
+          } else if (tick.price) {
+            lastBarClose = tick.price;
+            maxHigh = Math.max(maxHigh, tick.price);
+            minLow = Math.min(minLow, tick.price);
+            formingMinuteVol = tickVol;
+          }
+
           const fallbackOpen = foundAny ? firstBarOpen! : tick.price;
+          const totalVol = foundAny
+            ? Number((completedVol + formingMinuteVol).toFixed(4))
+            : (lastCandleRef.current && lastCandleRef.current.time === bucketTime
+                ? Number((lastCandleRef.current.volume + tickVol).toFixed(4))
+                : tickVol);
+
           const newCandle = {
             time: bucketTime,
             open: fallbackOpen,
-            high: foundAny ? Math.max(fallbackOpen, maxHigh) : fallbackOpen,
-            low: foundAny ? Math.min(fallbackOpen, minLow) : fallbackOpen,
-            close: foundAny ? lastBarClose : fallbackOpen,
-            volume: foundAny ? Number(completedVol.toFixed(4)) : 0,
+            high: foundAny ? Math.max(fallbackOpen, maxHigh) : Math.max(fallbackOpen, tick.price),
+            low: foundAny ? Math.min(fallbackOpen, minLow) : Math.min(fallbackOpen, tick.price),
+            close: foundAny ? lastBarClose : tick.price,
+            volume: totalVol,
           };
 
           if (!lastCandleRef.current || lastCandleRef.current.time !== bucketTime) {
@@ -892,12 +928,18 @@ export function useChartLifecycle({
         return;
       }
 
-      let lastPrice = null;
-      for (let i = localMasterData.length - 1; i >= 0; i--) {
-        const barMs = new Date(localMasterData[i].time.replace(' ', 'T') + 'Z').getTime();
-        if (barMs <= state.currentTime) {
-          lastPrice = localMasterData[i].close;
-          break;
+      const sym = ticker.toUpperCase();
+      const latestTick = state.latestTickBySymbol?.[sym] ||
+        (state.currentTick?.symbol?.toUpperCase() === sym ? state.currentTick : null);
+      let lastPrice = (latestTick && latestTick.price && latestTick.price > 0) ? latestTick.price : null;
+
+      if (lastPrice === null && localMasterData.length > 0) {
+        for (let i = localMasterData.length - 1; i >= 0; i--) {
+          const barMs = new Date(localMasterData[i].time.replace(' ', 'T') + (localMasterData[i].time.includes('Z') ? '' : 'Z')).getTime();
+          if (barMs <= state.currentTime) {
+            lastPrice = localMasterData[i].close;
+            break;
+          }
         }
       }
 

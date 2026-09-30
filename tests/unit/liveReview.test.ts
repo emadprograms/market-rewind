@@ -255,7 +255,7 @@ describe('Live Review 96ca478 Failure Probes Harness', () => {
     });
 
     await act(async () => {
-      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 60));
     });
 
     // Advance simulation time across minute boundary into 09:35:56
@@ -280,7 +280,6 @@ describe('Live Review 96ca478 Failure Probes Harness', () => {
     });
 
     const pausedDailyVolume = hook.result.current.chartData.at(-1)?.volume;
-    console.log('PROBE 1 LOG:', { playingDailyVolume, pausedDailyVolume });
 
     // Both paths must produce strictly equal daily volume! Must not jump from 1.20M to 1.41M!
     expect(pausedDailyVolume).toBeDefined();
