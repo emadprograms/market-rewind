@@ -10,7 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { beginReplay, collectPageErrors } from '../mocks/replayJourney';
+import { beginReplay, collectPageErrors, chartCard } from '../mocks/replayJourney';
 
 test.describe('JOURNEY 12 — Replay Convergence & Temporal Strictness', () => {
   test('CONV E2E 1: Exact timeline seek using time input field navigates accurately without page errors', async ({
@@ -40,17 +40,22 @@ test.describe('JOURNEY 12 — Replay Convergence & Temporal Strictness', () => {
     const pageErrors = collectPageErrors(page);
     await beginReplay(page, { ticker: 'TSLA', date: '2026-09-22' });
 
-    // Switch symbol to AAPL
-    const symbolButton = page.locator('button:has-text("TSLA")').first();
-    if (await symbolButton.isVisible()) {
-      await symbolButton.click();
-      const aaplOption = page.locator('button:has-text("AAPL"), div:has-text("AAPL")').first();
-      if (await aaplOption.isVisible()) {
-        await aaplOption.click();
-      }
-    }
+    const card = chartCard(page, 0);
+    await expect(card).toHaveAttribute('data-ticker', 'TSLA');
 
-    // Verify canvas rendered without React errors
+    // Switch symbol to NVDA via chart selector
+    await card.locator('.chart-controls .custom-select').first().click();
+    await card.locator('.dropdown-items .dropdown-item').filter({ hasText: /^NVDA$/ }).first().click();
+
+    // Verify symbol switch strictly succeeded and data attributes are loaded
+    await expect(card).toHaveAttribute('data-ticker', 'NVDA', { timeout: 20_000 });
+    await expect(card).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 20_000 });
+
+    // Verify temporal containment: last rendered bar never exceeds active session replay boundary
+    const lastBarTime = await card.getAttribute('data-last-bar-time');
+    expect(lastBarTime).toBeTruthy();
+    expect(lastBarTime! <= '2026-09-22 23:59:59').toBe(true);
+
     const canvas = page.locator('canvas').first();
     await expect(canvas).toBeVisible();
     expect(pageErrors.length).toBe(0);

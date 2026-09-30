@@ -12,15 +12,16 @@
 - Parameterized forming candle containment by source bar duration in `useChartData.ts`, eliminating unclosed 5-minute price leakage when switching symbols
 - Rebuilt daily candle aggregation in `useChartData.ts` to strictly observe RTH session hours and isolate unclosed forming minutes at 09:30:01
 - Proved Layer 2 mathematical equivalence across continuous play, direct seek, seek-then-play, and rewind-and-replay (`CONV-TEST-02`)
-- Ingested Codex review probes into `tests/codex/rereview/`
-- Full Green phase verification: 73/73 test files (377 tests) passed, 11/11 backend pytest passed, 65/65 Playwright journey tests passed, 0 build errors
+- Ingested Codex review probes into `tests/codex/rereview/` and `tests/codex/followup/`
+- Resolved post-milestone review findings from `market-rewind-c3a3791-review.md`: isolated daily forming candles from synthetic fallback ticks, filtered pre-market hydration in 1D charts, and hardened Layer 2 convergence assertions
+- Full Green phase verification: 76/76 test files (389 tests) passed, 11/11 backend pytest passed, 65/65 Playwright journey tests passed, 0 build errors
 
 **Stats:**
 - 5 phases, 5 plans, 11 requirements verified (100%)
-- 73/73 Vitest test files passing (377 tests)
+- 76/76 Vitest test files passing (389 tests)
 - 11/11 Python pytest backend service tests passing
 - 65/65 Playwright offline journey tests passing
-- Clean production build (888ms)
+- Clean production build (918ms)
 
 **Git range:** `feat(phase-29)` → `feat(phase-33)`
 

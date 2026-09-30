@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { IChartApi, ISeriesApi, Time, TickMarkType, IPriceLine } from 'lightweight-charts';
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
 import { TF_SECONDS } from '../types';
-import { getTzForTicker, isRthTick } from '../lib/timezones';
+import { getTzForTicker, isRthTick, isRthBar } from '../lib/timezones';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { useChartInit } from './chart/useChartInit';
 import { useChartPlugins } from './chart/useChartPlugins';
@@ -504,6 +504,8 @@ export function useChartLifecycle({
 
         for (const bar of masterData) {
           if (bar.symbol && bar.symbol.toUpperCase() !== symUpper) continue;
+          if (timeframe === '1D' && !isRthBar(bar, ticker, timeframe)) continue;
+          if (!showEth && !isRthBar(bar, ticker, timeframe)) continue;
           const barMs = isoToMs(bar.time);
           if (getBucketTime(barMs, timeframe) === bucketTime) {
             if (barMs < currentCutoffMs) {
@@ -638,7 +640,8 @@ export function useChartLifecycle({
             break; // Stop scanning future ticks!
           }
           if (tMs > lastTime) {
-            if (showEth || isRthTick(t, ticker)) {
+            const isEligible = timeframe === '1D' ? isRthTick(t, ticker) : (showEth || isRthTick(t, ticker));
+            if (isEligible) {
               newlyElapsedTicks.push(t);
             }
           }

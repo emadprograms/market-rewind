@@ -1,13 +1,12 @@
 /**
- * rereviewProbes.test.ts
+ * followupReviewProbes.test.ts
  *
- * Test-Driven Development (TDD) harness replicating the 3 P1 failure modes
- * and Layer 1 verification criteria documented in docs/reviews/2026-09-30-replay-review.md:
+ * Test-Driven Development (TDD) harness replicating the P1 and P2 findings
+ * from market-rewind-c3a3791-review.md:
  *
- * 1. PROBE 1 (P1): Seek -> play discards accumulated fallback volume (useChartLifecycle.ts)
- * 2. PROBE 2 (P1): Switched symbol can expose unfinished 5-minute prices (useChartData.ts)
- * 3. PROBE 3 (P1): Daily candles include unfinished-minute results (useChartData.ts)
- * 4. Daily RTH Session Filtering: PRE and POST trades strictly excluded from daily OHLCV
+ * 1. P1: Synthetic ticks bypass daily forming-minute protection on real seek (useChartData.ts)
+ * 2. P1: Snapshot volume reconstruction imports premarket into RTH-only daily candle (useChartLifecycle.ts)
+ * 3. P2: Layer 2 state-machine convergence verified via real series data and unmounted lifecycles
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -145,7 +144,7 @@ async function mountLifecycle(bars: RawBar[] = [initialBar], extra = {}) {
   return hook;
 }
 
-describe('Replay Review 2026-09-30 Regression Probes', () => {
+describe('Follow-up Review Probes (market-rewind-c3a3791-review.md)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     usePlaybackStore.getState().reset();
@@ -160,79 +159,20 @@ describe('Replay Review 2026-09-30 Regression Probes', () => {
   });
 
   // --------------------------------------------------------------------------
-  // PROBE 1: Seek -> play discards accumulated fallback volume
+  // Finding 1 (P1): Real seek into daily opening minute must preserve zero unfinished volume
   // --------------------------------------------------------------------------
-  it('PROBE 1: seek snapshot retains completed constituent minute volume when playback resumes', async () => {
-    // 5-minute TSLA chart with no raw ticks:
-    // 09:20 minute = 1,000 shares
-    // 09:21 minute = 200 shares
-    usePlaybackStore.setState({
-      masterData: [
-        { ...initialBar, volume: 1000, symbol: 'TSLA' },
-        { ...initialBar, time: '2026-09-22 13:21:00', volume: 200, symbol: 'TSLA' },
-      ],
-      bufferedTicks: [],
-      isPaused: true,
-    });
-
-    // Seek to 09:21:00 and hydrate a snapshot containing the completed 09:20 minute (1000 shares)
-    act(() => usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:21:00')));
-    await mountLifecycle([{ ...initialBar, volume: 1000 }]);
-
-    // Resume playback and advance one second into the 09:21 minute
-    act(() => usePlaybackStore.getState().setPaused(false));
-    act(() => usePlaybackStore.getState().advanceSimulationTime(ms('2026-09-22 13:21:01')));
-
-    const actual = mockVolumeSeries.update.mock.calls.at(-1)?.[0].value;
-    // Must NOT drop to 200 by wiping previously accumulated snapshot volume!
-    // Expected: 1,000 (from 09:20) + 200 (from 09:21) = 1,200 (or at least >= 1,000)
-    expect(actual).toBeGreaterThanOrEqual(1000);
-  });
-
-  // --------------------------------------------------------------------------
-  // PROBE 2: Switched symbol can expose unfinished 5-minute prices
-  // --------------------------------------------------------------------------
-  it('PROBE 2: switched symbol fallback must not expose unclosed five-minute bar future high', async () => {
-    const raw5mBars: RawBar[] = [
-      { time: '2026-09-22 13:15:00', open: 100, high: 110, low: 90, close: 101, volume: 1000, session: 'PRE' },
-      { time: '2026-09-22 13:20:00', open: 101, high: 150, low: 80, close: 105, volume: 2000, session: 'PRE' },
-    ];
-    vi.mocked(streamingClient.getCandles).mockResolvedValue(raw5mBars);
-
-    // Global minute history is for AAPL (different symbol), TSLA has no elapsed ticks
-    usePlaybackStore.setState({
-      masterData: [
-        { time: '2026-09-22 13:20:00', open: 200, high: 205, low: 199, close: 202, volume: 100, symbol: 'AAPL', session: 'PRE' },
-      ],
-      currentTime: ms('2026-09-22 13:21:00'),
-    });
-
-    const hook = renderHook(() => useChartData({ ...chartDataParams, isReplayMode: true }));
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    const last = hook.result.current.chartData.at(-1);
-    // At 09:21 (13:21 UTC), the 09:20–09:25 5m bar is UNFINISHED.
-    // It must NOT reveal its completed high 150! It should be protected (e.g. high: 101).
-    expect(last?.high).toBe(101);
-  });
-
-  // --------------------------------------------------------------------------
-  // PROBE 3: Daily candles include unfinished-minute results
-  // --------------------------------------------------------------------------
-  it('PROBE 3: daily forming candle must not expose future one-minute high at 09:30:01', async () => {
+  it('P1: real seek into daily opening minute must preserve zero unfinished volume and open price', async () => {
     vi.mocked(streamingClient.getCandles).mockResolvedValue([
       { time: '2026-09-21 12:00:00', open: 100, high: 110, low: 90, close: 101, volume: 1000, session: 'REG' },
     ]);
-
-    // TSLA 09:30 minute bar has full completed high 150, low 80, close 120, volume 10000
     usePlaybackStore.setState({
       masterData: [
         { time: '2026-09-22 13:30:00', open: 101, high: 150, low: 80, close: 120, volume: 10000, symbol: 'TSLA', session: 'REG' },
       ],
-      currentTime: ms('2026-09-22 13:30:01'),
     });
+
+    // Call real seek action for 09:30:01 (creates synthesized tick)
+    usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:30:01'));
     useWorkspaceStore.setState({ timeframes: { '0': '1D' } });
 
     const hook = renderHook(() => useChartData({ ...chartDataParams, initialTf: '1D', isReplayMode: true }));
@@ -241,15 +181,46 @@ describe('Replay Review 2026-09-30 Regression Probes', () => {
     });
 
     const last = hook.result.current.chartData.at(-1);
-    // At 09:30:01, the 09:30 minute is still forming and has 59 seconds left.
-    // The forming daily candle must NOT expose the future high 150 of the unclosed minute!
+    // At 09:30:01, the 09:30 minute is still unclosed and TSLA has no raw ticks.
+    // The forming daily candle must NOT expose the unclosed 10,000 volume or unclosed 150 high / 99.6 close!
+    expect(last?.volume).toBe(0);
     expect(last?.high).toBe(101);
+    expect(last?.low).toBe(101);
+    expect(last?.close).toBe(101);
   });
 
   // --------------------------------------------------------------------------
-  // CONV-TEST-02: Multi-transition state machine convergence (Layer 2)
+  // Finding 2 (P1): Volume reconstruction on 1D must strictly exclude premarket bars after hydration
   // --------------------------------------------------------------------------
-  it('CONV-TEST-02: continuous play, direct seek, seek-then-play, and rewind-and-replay produce identical candles', async () => {
+  it('P1: daily fallback volume reconstruction strictly excludes premarket bars', async () => {
+    usePlaybackStore.setState({
+      masterData: [
+        { ...initialBar, volume: 1000, symbol: 'TSLA', session: 'PRE' },
+        { ...initialBar, time: '2026-09-22 13:30:00', volume: 200, symbol: 'TSLA', session: 'REG' },
+      ],
+      bufferedTicks: [],
+      isPaused: true,
+    });
+
+    act(() => usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:30:00')));
+    const hook = await mountLifecycle(
+      [{ ...initialBar, time: '2026-09-22 12:00:00', volume: 0, session: 'REG' }],
+      { timeframe: '1D', showEth: false }
+    );
+
+    act(() => usePlaybackStore.getState().setPaused(false));
+    act(() => usePlaybackStore.getState().advanceSimulationTime(ms('2026-09-22 13:30:01')));
+
+    const actual = mockVolumeSeries.update.mock.calls.at(-1)?.[0].value;
+    // Must NOT be 1,200 (which contaminates RTH daily candle with 1,000 PRE shares)
+    expect(actual).toBeLessThanOrEqual(200);
+    hook.unmount();
+  });
+
+  // --------------------------------------------------------------------------
+  // Finding 3 (P2): Rigorous Layer 2 State Machine Convergence Test
+  // --------------------------------------------------------------------------
+  it('P2: rigorous Layer 2 state machine convergence across all 4 playback pathways', async () => {
     const rawTicks: MarketTick[] = [
       { time: '2026-09-22 13:20:10.000', price: 100, volume: 10, symbol: 'TSLA' },
       { time: '2026-09-22 13:20:30.000', price: 105, volume: 20, symbol: 'TSLA' },
@@ -281,6 +252,7 @@ describe('Replay Review 2026-09-30 Regression Probes', () => {
     const hook2 = await mountLifecycle([
       { ...initialBar, high: 110, low: 95, close: 108, volume: 210 },
     ]);
+    // Inspect actual setData calls received by the price and volume series
     const p2PriceBar = mockPriceSeries.setData.mock.calls.at(-1)?.[0]?.at(-1);
     const p2VolBar = mockVolumeSeries.setData.mock.calls.at(-1)?.[0]?.at(-1);
     const res2 = { high: p2PriceBar?.high, low: p2PriceBar?.low, close: p2PriceBar?.close, volume: p2VolBar?.value };
@@ -291,7 +263,6 @@ describe('Replay Review 2026-09-30 Regression Probes', () => {
     vi.clearAllMocks();
     usePlaybackStore.getState().setBufferedTicks(rawTicks);
     act(() => usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:21:00')));
-    // Hydrate snapshot at 13:21:00 (first 2 ticks: open 100, high 105, low 100, close 105, vol 30)
     const hook3 = await mountLifecycle([
       { ...initialBar, high: 105, low: 100, close: 105, volume: 30 },
     ]);
@@ -308,10 +279,8 @@ describe('Replay Review 2026-09-30 Regression Probes', () => {
     usePlaybackStore.getState().setBufferedTicks(rawTicks);
     act(() => usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:23:00')));
     const hook4 = await mountLifecycle([{ ...initialBar, volume: 210 }]);
-    // Rewind back to 13:20:00
     act(() => usePlaybackStore.getState().seekTickTime(ms('2026-09-22 13:20:00')));
     hook4.rerender({ chartData: [{ ...initialBar, volume: 0 }], isLoadingHistory: false });
-    // Play forward to target
     act(() => usePlaybackStore.getState().setPaused(false));
     act(() => usePlaybackStore.getState().advanceSimulationTime(targetTimeMs));
     const p4Price = mockPriceSeries.update.mock.calls.at(-1)?.[0];
@@ -321,4 +290,3 @@ describe('Replay Review 2026-09-30 Regression Probes', () => {
     hook4.unmount();
   });
 });
-

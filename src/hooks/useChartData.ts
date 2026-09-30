@@ -493,7 +493,7 @@ export function useChartData({
               formingDaily.close = formingTicks[formingTicks.length - 1].price;
               formingDaily.volume += formingTicks.reduce((s, t) => s + (t.volume || 0), 0);
             }
-          } else if (latestTick && latestTick.price && effectiveCutoff >= rthOpenMs && effectiveCutoff <= rthCloseMs) {
+          } else if (latestTick && latestTick.price && !(latestTick as any).isSynthesized && effectiveCutoff >= rthOpenMs && effectiveCutoff <= rthCloseMs) {
             if (isRthTick(latestTick, ticker)) {
               formingDaily.high = Math.max(formingDaily.high, latestTick.price);
               formingDaily.low = Math.min(formingDaily.low, latestTick.price);
