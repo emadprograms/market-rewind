@@ -413,6 +413,40 @@ def test_explicit_end_timestamp_keeps_inclusive_leq_semantics(tmp_path: Path) ->
     assert [c["open"] for c in candles] == [100.0]
 
 
+def test_ticks_exclude_rows_beyond_a_date_only_end_bound(tmp_path: Path) -> None:
+    """Shared end-bound predicate: rows timestamped after a date-only end are excluded."""
+    lake = fresh_lake(tmp_path)
+    rows = rows_v1("AAPL", [
+        {"timestamp": ts("13:30:00"), "price": 100.0, "volume": 1.0, "ingest_id": "in_day"},
+        {"timestamp": datetime.fromisoformat("2026-10-05T00:00:30"), "price": 999.0, "volume": 1.0,
+         "ingest_id": "after_day"},
+    ])
+    write_rows_as(lake, "AAPL", DAY, rows, filename="late_ticks_000001.parquet")
+
+    bounded = reader_for(lake).query_ticks("AAPL", limit=10, end_time=DAY)
+    assert [t["price"] for t in bounded] == [100.0]
+
+    unbounded = reader_for(lake).query_ticks("AAPL", limit=10)
+    assert [t["price"] for t in unbounded] == [100.0, 999.0]
+
+
+def test_candles_exclude_rows_beyond_a_date_only_end_bound(tmp_path: Path) -> None:
+    """Shared end-bound predicate (candles variant): late rows in an included partition drop."""
+    lake = fresh_lake(tmp_path)
+    rows = rows_v1("AAPL", [
+        {"timestamp": ts("13:30:00"), "price": 100.0, "volume": 1.0, "ingest_id": "c_in_day"},
+        {"timestamp": datetime.fromisoformat("2026-10-05T00:00:30"), "price": 999.0, "volume": 1.0,
+         "ingest_id": "c_after_day"},
+    ])
+    write_rows_as(lake, "AAPL", DAY, rows, filename="late_candles_000001.parquet")
+
+    bounded = reader_for(lake).query_candles("AAPL", timeframe="1m", limit=50, end_time=DAY)
+    assert [c["high"] for c in bounded] == [100.0]
+
+    unbounded = reader_for(lake).query_candles("AAPL", timeframe="1m", limit=50)
+    assert max(c["high"] for c in unbounded) == 999.0
+
+
 def test_desc_direction_returns_latest_n_in_ascending_order(tmp_path: Path) -> None:
     lake = fresh_lake(tmp_path)
     rows = rows_v1("AAPL", [

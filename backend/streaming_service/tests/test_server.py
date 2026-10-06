@@ -113,6 +113,37 @@ class TestStreamingServer(_ServerTest):
         assert times == sorted(times, reverse=True)
         assert all("spread" in row for row in data)
 
+    async def test_get_ticks_desc_respects_time_bounds(self) -> None:
+        """Re-verification defect A at the HTTP layer: bounds must narrow a desc tape."""
+        full = await (await self.client.request("GET", "/api/ticks?symbol=NVDA&limit=200&direction=desc")).json()
+        assert full
+        newest = full[0]["timestamp"]
+        bounded = await (
+            await self.client.request(
+                "GET",
+                f"/api/ticks?symbol=NVDA&limit=200&direction=desc&start_time={newest}&end_time={newest}",
+            )
+        ).json()
+        assert bounded, "a bound at the newest tick must still return that tick"
+        assert all(row["timestamp"] == newest for row in bounded)
+        assert len(bounded) < len(full)
+
+    async def test_streaming_candles_alias_endpoint(self) -> None:
+        """The React client's primary endpoint is /api/streaming/candles."""
+        resp = await self.client.request(
+            "GET", "/api/streaming/candles?symbol=NVDA&tf=1m&limit=3&start=2026-10-02&end=2026-10-03&session=REG"
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        assert isinstance(data, list) and len(data) == 3
+        assert {"time", "open", "high", "low", "close", "volume"} <= set(data[0])
+
+    async def test_encoded_slash_symbol_endpoint(self) -> None:
+        """`EUR/USD` is reachable via its percent-encoded form (what the client sends)."""
+        resp = await self.client.request("GET", "/api/symbols/EUR%2FUSD")
+        assert resp.status == 200
+        assert (await resp.json())["symbol"] == "EUR/USD"
+
     async def test_get_ticks_missing_symbol_returns_400(self) -> None:
         resp = await self.client.request("GET", "/api/ticks")
         assert resp.status == 400

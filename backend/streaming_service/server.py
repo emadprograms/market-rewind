@@ -236,8 +236,11 @@ class StreamingApp:
         try:
             if direction == "desc":
                 # Time & Sales: reverse-chronological tape with computed spread (§4.2).
+                # Time bounds are forwarded so a bounded desc query narrows the tape.
                 window = offset + limit if limit else 0
-                tape = self.db.query_tape(symbol, limit=window)
+                tape = self.db.query_tape(
+                    symbol, limit=window, start_time=start_time, end_time=end_time
+                )
                 ticks = tape[offset:] if limit else []
             else:
                 ticks = self.db.query_ticks(

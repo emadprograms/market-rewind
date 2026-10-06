@@ -73,3 +73,21 @@ Test counts: `test_order_flow_tape.py` 15 · `test_duckdb_service.py` 26 · `tes
   status probe fast on a large production lake; the sandbox lake reports exact counts.
 - `docs/contracts/repo_b_tick_lake_contract.md` (vendored in Phase 39) remains the reference;
   this phase added no new contract surface.
+
+## Re-Verification Round 2 (post-audit hardening)
+
+Independent audit of the pushed commit found and fixed two defects, plus three test gaps:
+
+* **Defect A (high):** `query_tape` and `/api/ticks?direction=desc` ignored
+  `start_time`/`end_time`, so a bounded Time & Sales request silently returned an unbounded
+  tape. Bounds are now normalized, applied in SQL, and used to prune partitions; the server
+  forwards them.
+* **Defect B (low):** a lake with zero files reported `tick_count: null` in `/api/status`;
+  it now reports `0`.
+* **Test gaps closed:** the date-only end-bound predicate was uncovered for *tape*, *ticks*
+  and *candles* (three separate survivors across two mutation rounds), and partition-range
+  pruning had no assertion. Regression guards were added for `/api/streaming/candles`
+  (the React client's primary endpoint) and encoded-slash symbol routes.
+
+Final backend state: **197 passed, 1 skipped, 0 failed.** Mutation round 2: 6/6 killed after
+gap closing (plus 2 shared-predicate survivors found by auditing sibling code paths).

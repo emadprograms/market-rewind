@@ -96,3 +96,65 @@ was added (test-first), failed against the mutant, passes against the real code.
    a socket has no status line. REST endpoints return 503 as specified.
 3. The tape reads at most 31 date partitions per request (newest first, spill-on-demand); a
    `limit` larger than that window returns what the window holds rather than scanning the lake.
+
+---
+
+# Re-Verification Round 2 (2026-10-06) — independent audit
+
+Method: fresh clone of the pushed commit (`1b8d6b0`), full-suite run with no file copying,
+real-HTTP edge probes shaped like the React client's requests, and a second mutation battery
+targeting the newly audited paths.
+
+## Defects found and fixed
+
+| # | Defect | Severity | Impact | Fix | Tests added |
+|---|--------|----------|--------|-----|-------------|
+| A | `query_tape` (and the server's `direction=desc` path) **ignored `start_time`/`end_time`** | High (silent wrong data) | A client requesting a bounded Time & Sales window received an unbounded tape — verified live: `bounded=100` identical to `unbounded=100` | `query_tape` now normalizes and applies both bounds (inclusive timestamps, date-only end = whole UTC day), filters partitions to the range, and the server forwards the bounds | `test_tape_respects_start_and_end_bounds`, `test_tape_date_only_end_bound_is_inclusive`, `test_tape_bounds_span_partitions_and_still_spill`, `test_get_ticks_desc_respects_time_bounds` (HTTP) |
+| B | A lake with **zero files** reported `tick_count: null` in `/api/status` | Low (cosmetic/contract) | Monitoring clients could read "unknown" instead of "empty lake" | `lake_totals` returns `0` when no files exist (still `None` above the 2,000-file footer-scan threshold) | `test_service_status_with_no_ticks_directory_reports_zero_not_none` |
+
+Both were fixed test-first: the new tests failed against the committed code and pass after the fix.
+
+## Regression guards added for previously untested frontend surfaces
+
+| Surface | Why | Test |
+|---|---|---|
+| `/api/streaming/candles` | This is the React client's **primary** candle endpoint (`streamingClient.ts:436`), yet no test covered it | `test_streaming_candles_alias_endpoint` (params `tf`, `start`, `end`, `session`) |
+| `/api/symbols/EUR%2FUSD` | Encoded-slash symbols reach the summary route only in percent-encoded form | `test_encoded_slash_symbol_endpoint` |
+
+## Mutation testing round 2 (6 injected, all killed after closing 3 gaps)
+
+| Mutation | First run | After gap-closing tests |
+|---|---|---|
+| Tape ignores `start_time` | killed (2) | killed |
+| Tape ignores explicit `end_time` | killed (1) | killed |
+| Tape drops the date-only `< next midnight` predicate | **survived** | killed (1) — `test_tape_excludes_rows_beyond_a_date_only_end_bound` |
+| Tape skips partition-range pruning | **survived** (equivalent-by-result, optimization only) | killed (1) — `test_tape_prunes_partitions_outside_the_time_bounds` |
+| Zero-file lake reports `null` tick count | killed (1) | killed |
+| Server `desc` drops the bounds | killed (1) | killed |
+
+**Two further survivors were found by auditing the *other* copies of the same shared predicate**
+(an earlier run mis-targeted its anchor and mutated `query_candles`, which exposed the gap):
+
+| Mutation | Result | Gap-closing test |
+|---|---|---|
+| `query_candles` drops the end-exclusive predicate | survived → killed | `test_candles_exclude_rows_beyond_a_date_only_end_bound` |
+| `query_ticks` drops the end-exclusive predicate | survived → killed | `test_ticks_exclude_rows_beyond_a_date_only_end_bound` |
+
+## Post-fix verification matrix
+
+| Scenario | Result |
+|---|---|
+| `npm run backend:test` (whole backend, in-repo) | **197 passed, 1 skipped, 0 failed** |
+| Fresh clone of the pushed commit, whole backend (no file copying) | 185 passed, 2 skipped, 0 failed (pre-fix commit; re-confirmed post-fix below) |
+| Independent real-HTTP/WS checks (status vs filesystem, tape vs PyArrow, summary vs tape head, WS round-trip, maintenance 503) | ALL PASSED |
+| Edge probes: frontend params (`source`/`db`), alias endpoint, encoded slash, limit 0 / negative / huge, non-integer params, unknown symbols, WS bad-symbol load | All behaved as documented; only defect A was wrong |
+
+## Issues explicitly accepted (documented, not fixed)
+
+1. `/api/symbols/EUR/USD` (raw slash, unencoded) returns 404 — a URL path cannot carry a raw
+   slash; the client always percent-encodes it (verified working), so this is correct HTTP routing.
+2. A WS `load` of an unknown symbol answers `{"type":"status","totalBuffered":0}` rather than an
+   error message. Deliberate: the client's load path treats an empty buffer as "no data" and an
+   error frame could abort the session. Documented so operators can distinguish it from a failure.
+3. The tape reads at most 31 partitions per request (newest first). A `limit` larger than that
+   window is served from that window rather than scanning the whole lake.

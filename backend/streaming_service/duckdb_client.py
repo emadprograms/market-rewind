@@ -177,9 +177,17 @@ class DuckDBService:
             direction=direction,
         )
 
-    def query_tape(self, symbol: str, limit: int = 50) -> List[Dict[str, Any]]:
+    def query_tape(
+        self,
+        symbol: str,
+        limit: int = 50,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """Reverse-chronological tape rows with computed spread (§4.2)."""
-        return self.reader.query_tape(symbol, limit=limit)
+        return self.reader.query_tape(
+            symbol, limit=limit, start_time=start_time, end_time=end_time
+        )
 
     def query_candles(
         self,

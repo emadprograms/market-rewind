@@ -922,6 +922,8 @@ class TickLakeReader:
         self,
         symbol: str,
         limit: int = 50,
+        start_time: Optional[Union[DateLike, datetime]] = None,
+        end_time: Optional[Union[DateLike, datetime]] = None,
         *,
         max_partitions: int = 31,
     ) -> List[Dict[str, Any]]:
@@ -931,13 +933,26 @@ class TickLakeReader:
         they cannot satisfy ``limit``, so a thin latest partition cannot silently truncate
         a Time & Sales panel. Rows are ordered ``timestamp DESC, ingest_id DESC``; spread is
         ``round(ask - bid, 4)`` and is ``NULL`` whenever either quote side is missing.
+
+        ``start_time``/``end_time`` bound the tape exactly as they bound
+        :meth:`query_ticks` (explicit timestamps inclusive; a date-only ``end_time`` is
+        inclusive of that whole UTC day).
         """
         self.ensure_ready()
         clamped_limit = min(max(int(limit), 0), MAX_TAPE_LIMIT)
         if clamped_limit == 0:
             return []
 
+        start_dt = _to_utc_datetime(start_time)
+        end_dt, end_exclusive = _end_boundary(end_time)
         partition_dates = self.list_partition_dates(symbol)
+        if start_dt is not None:
+            partition_dates = [day for day in partition_dates if day >= start_dt.date()]
+        if end_dt is not None:
+            partition_dates = [day for day in partition_dates if day <= end_dt.date()]
+        if end_exclusive is not None:
+            last_day = (end_exclusive - timedelta(days=1)).date()
+            partition_dates = [day for day in partition_dates if day <= last_day]
         if not partition_dates:
             return []
 
@@ -953,11 +968,21 @@ class TickLakeReader:
                 f"CASE WHEN {projection.bid_expr} IS NOT NULL AND {projection.ask_expr} IS NOT NULL "
                 f"THEN round({projection.ask_expr} - {projection.bid_expr}, 4) ELSE NULL END"
             )
-            where = ""
+            where_parts: List[str] = []
             params: List[Any] = []
             if projection.has_symbol_column:
-                where = "WHERE upper(symbol) = ?"
+                where_parts.append("upper(symbol) = ?")
                 params.append(symbol.upper())
+            if start_dt is not None:
+                where_parts.append("timestamp >= ?")
+                params.append(start_dt)
+            if end_dt is not None:
+                where_parts.append("timestamp <= ?")
+                params.append(end_dt)
+            if end_exclusive is not None:
+                where_parts.append("timestamp < ?")
+                params.append(end_exclusive)
+            where = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
             sql = f"""
                 SELECT
                     timestamp,
@@ -1080,7 +1105,7 @@ class TickLakeReader:
                         partitions += 1
                         files.extend(sorted(entry.glob(PARQUET_GLOB)))
 
-        tick_count: Optional[int] = None
+        tick_count: Optional[int] = 0 if not files else None
         size_bytes = 0
         if files:
             for path in files:

@@ -211,7 +211,102 @@ def test_tape_isolates_symbol_and_ignores_foreign_rows(tmp_path: Path) -> None:
     assert [t["price"] for t in tape] == [100.0]
 
 
-def test_tape_unknown_symbol_returns_empty(tmp_path: Path) -> None:
+def test_tape_respects_start_and_end_bounds(tmp_path: Path) -> None:
+    """Re-verification defect A: the tape ignored `start_time`/`end_time`."""
+    lake = fresh_lake(tmp_path)
+    write_rows_as(
+        lake, "AAPL", DAY,
+        tape_rows([
+            {"timestamp": ts("13:30:00"), "price": 100.0, "volume": 1.0, "ingest_id": "b1"},
+            {"timestamp": ts("13:31:00"), "price": 101.0, "volume": 1.0, "ingest_id": "b2"},
+            {"timestamp": ts("13:32:00"), "price": 102.0, "volume": 1.0, "ingest_id": "b3"},
+        ]),
+        filename="tape_bounds_000001.parquet",
+    )
+    reader = TickLakeReader(lake)
+    bounded = reader.query_tape("AAPL", limit=10, start_time=f"{DAY}T13:30:30", end_time=f"{DAY}T13:31:30")
+    assert [t["price"] for t in bounded] == [101.0]
+
+    upper = reader.query_tape("AAPL", limit=10, end_time=f"{DAY}T13:31:00")
+    assert [t["price"] for t in upper] == [101.0, 100.0]  # explicit end is inclusive
+
+    lower = reader.query_tape("AAPL", limit=10, start_time=f"{DAY}T13:31:00")
+    assert [t["price"] for t in lower] == [102.0, 101.0]
+
+
+def test_tape_date_only_end_bound_is_inclusive(tmp_path: Path) -> None:
+    lake = fresh_lake(tmp_path)
+    write_rows_as(
+        lake, "AAPL", DAY, tape_rows([
+            {"timestamp": ts("00:00:01"), "price": 100.0, "volume": 1.0, "ingest_id": "d1"},
+            {"timestamp": ts("23:59:59"), "price": 101.0, "volume": 1.0, "ingest_id": "d2"},
+        ]), filename="tape_dayend_000001.parquet",
+    )
+    tape = TickLakeReader(lake).query_tape("AAPL", limit=10, end_time=DAY)
+    assert [t["price"] for t in tape] == [101.0, 100.0]
+
+
+def test_tape_bounds_span_partitions_and_still_spill(tmp_path: Path) -> None:
+    lake = fresh_lake(tmp_path)
+    write_rows_as(lake, "AAPL", DAY, tape_rows([
+        {"timestamp": ts("13:30:00"), "price": 100.0, "volume": 1.0, "ingest_id": "sp_old"},
+    ]), filename="tape_sp_old_000001.parquet")
+    write_rows_as(lake, "AAPL", DAY2, tape_rows([
+        {"timestamp": ts("13:30:00", DAY2), "price": 200.0, "volume": 1.0, "ingest_id": "sp_new"},
+    ]), filename="tape_sp_new_000001.parquet")
+
+    tape = TickLakeReader(lake).query_tape("AAPL", limit=2, start_time=DAY, end_time=DAY2)
+    assert [t["price"] for t in tape] == [200.0, 100.0]
+
+    only_old = TickLakeReader(lake).query_tape("AAPL", limit=5, end_time=DAY)
+    assert [t["price"] for t in only_old] == [100.0]
+
+
+def test_tape_excludes_rows_beyond_a_date_only_end_bound(tmp_path: Path) -> None:
+    """The exclusive `< next midnight` predicate must bound rows inside an included partition.
+
+    Guards the date-only end semantics against rows whose event timestamp falls after the
+    folder's date (late-arriving/mis-partitioned data).
+    """
+    lake = fresh_lake(tmp_path)
+    write_rows_as(
+        lake, "AAPL", DAY, tape_rows([
+            {"timestamp": ts("13:30:00"), "price": 100.0, "volume": 1.0, "ingest_id": "in_day"},
+            {"timestamp": ts("00:00:30", DAY2), "price": 999.0, "volume": 1.0, "ingest_id": "after_day"},
+        ]), filename="tape_late_000001.parquet",
+    )
+    tape = TickLakeReader(lake).query_tape("AAPL", limit=10, end_time=DAY)
+    assert [t["price"] for t in tape] == [100.0]
+
+    unbounded = TickLakeReader(lake).query_tape("AAPL", limit=10)
+    assert [t["price"] for t in unbounded] == [999.0, 100.0]
+
+
+def test_tape_prunes_partitions_outside_the_time_bounds(tmp_path: Path, monkeypatch) -> None:
+    """Bounded tapes must resolve only the partitions inside the range (pruning)."""
+    lake = fresh_lake(tmp_path)
+    write_rows_as(lake, "AAPL", DAY, tape_rows([
+        {"timestamp": ts("13:30:00"), "price": 100.0, "volume": 1.0, "ingest_id": "p_old"},
+    ]), filename="tape_p_old_000001.parquet")
+    write_rows_as(lake, "AAPL", DAY2, tape_rows([
+        {"timestamp": ts("13:30:00", DAY2), "price": 200.0, "volume": 1.0, "ingest_id": "p_new"},
+    ]), filename="tape_p_new_000001.parquet")
+
+    reader = TickLakeReader(lake)
+    resolved_days: List[str] = []
+    original = reader.resolve_files
+
+    def spy(symbol, start=None, end=None, **kwargs):
+        resolved_days.append(str(start))
+        return original(symbol, start, end, **kwargs)
+
+    monkeypatch.setattr(reader, "resolve_files", spy)
+    tape = reader.query_tape("AAPL", limit=5, start_time=DAY2, end_time=DAY2)
+    assert [t["price"] for t in tape] == [200.0]
+    assert resolved_days == [DAY2], f"only the in-range partition may be resolved, got {resolved_days}"
+
+
+def test_unknown_symbol_returns_empty(tmp_path: Path) -> None:
     lake = fresh_lake(tmp_path)
     assert TickLakeReader(lake).query_tape("ZZZZ", limit=5) == []
 

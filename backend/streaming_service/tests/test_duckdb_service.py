@@ -116,6 +116,23 @@ def test_service_status_when_lake_missing(tmp_path: Path) -> None:
     assert "error" in status
 
 
+def test_service_status_with_no_ticks_directory_reports_zero_not_none(tmp_path: Path) -> None:
+    """Re-verification defect B: a lake with zero files reported `tick_count: None`."""
+    import json as _json
+
+    lake = tmp_path / "lake"
+    lake.mkdir()
+    (lake / "lake.json").write_text(
+        _json.dumps({"format": "tick_lake", "schema_version": 1, "compatible_versions": [1]}),
+        encoding="utf-8",
+    )
+    status = DuckDBService(lake_root=lake).get_status()
+    assert status["status"] == "ok"
+    assert status["tick_lake"]["file_count"] == 0
+    assert status["tick_lake"]["tick_count"] == 0
+    assert status["streaming_db"]["tick_count"] == 0
+
+
 def test_service_status_when_metadata_corrupt(tmp_path: Path) -> None:
     from tick_lake_factory import build_mini_lake, corrupt_lake_json
 
