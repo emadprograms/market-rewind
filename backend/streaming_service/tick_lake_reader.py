@@ -802,7 +802,13 @@ class TickLakeReader:
                     max({projection.price_expr}) AS high,
                     min({projection.price_expr}) AS low,
                     arg_max({projection.price_expr}, (timestamp, {projection.ingest_id_expr})) AS close,
-                    sum({projection.volume_expr}) AS volume,
+                    -- Floating-point addition is not associative and DuckDB sums in
+                    -- parallel, so an unrounded sum() returns whichever ULP the thread
+                    -- schedule lands on (e.g. 10015.119999999997) and the same query can
+                    -- answer differently between runs. Rounding to the 6-decimal grid the
+                    -- lake promises makes the reported volume deterministic while keeping
+                    -- the exact total for every representable input.
+                    round(sum({projection.volume_expr}), 6) AS volume,
                     count(*) AS tick_count
                 FROM {self._read_parquet_source(projection)}
                 {where_sql}

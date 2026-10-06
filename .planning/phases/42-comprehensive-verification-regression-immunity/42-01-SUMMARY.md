@@ -73,3 +73,27 @@ requirements:
 | `npm install` | crashes (arborist `edgesOut`) | succeeds (229 packages, plain command) |
 | `npm run build` | not measured | clean, 459.67 kB JS / 141.62 kB gzip |
 | Playwright journey | not runnable | harness runnable, browser unavailable in sandbox (documented) |
+
+## Re-Verification Round 3 (2026-10-06)
+
+Triggered by the user ("reverify everything again"). Coverage measurement plus repetition found one
+real defect and three gaps; all were closed test-first:
+
+1. **Defect C — candle volume was nondeterministic.** DuckDB's parallel float64 `sum()` returned
+   schedule-dependent values (13 distinct sums in 300 identical probe queries; the suite flaked 4/25
+   runs). Fixed with `round(sum(volume), 6)`; three tests written first (one fails deterministically
+   on any off-grid value), 0/40 targeted and 0/10 full-suite failures afterwards.
+2. **WebSocket replay transport had zero coverage** (`play`/`pause`/`seek`/`set_speed`/backward
+   `step`/error frame/CORS). Twelve tests added against a purpose-built 5s-spaced tape; frames are
+   asserted by type, matching how the frontend dispatches them. `server.py` coverage 66% → 91%.
+3. **Reader edge cases** (symbol-less hive files, SQL-literal escaping, `DATA_DIR` discovery, bound
+   normalization, runner guards, corrupt-lake HTTP surface, empty-buffer actions): 9 more tests;
+   reader coverage 93% → 94%.
+4. **Pause cancellation** was unobservable over the wire (mutation survived) → lifecycle unit test
+   added, mutation now killed.
+5. **Documentation rot** fixed: README (retired databases, stale counts) and code comments. The
+   UI badge wording is intentionally untouched because journey tests pin it (see 42-VERIFICATION §6.6).
+
+Mutation round 3: 5 injected, 4 killed immediately, 1 survived → gap closed → killed.
+Final totals: backend **221 passed / 1 skipped**, overall coverage **97%**, Vitest 81 files /
+422 passed, build clean, fresh-clone verification re-run.

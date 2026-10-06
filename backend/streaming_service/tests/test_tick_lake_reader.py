@@ -526,6 +526,147 @@ def test_non_integer_compatible_versions_raises_corrupted_metadata(tmp_path: Pat
         TickLakeReader(root)
 
 
+
+# --------------------------------------------------------------------------- #
+# Root discovery — DATA_DIR candidate (LAKE-READ-01)
+# --------------------------------------------------------------------------- #
+
+def test_data_dir_env_contributes_the_first_candidate(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """`DATA_DIR` is the operator's explicit data root and must lead the list."""
+    data_dir = tmp_path / "custom_data"
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+    candidates = default_lake_root_candidates()
+    assert candidates[0] == (data_dir / "tick_lake").expanduser()
+    assert candidates[0].is_absolute()
+
+
+def test_data_dir_env_candidate_is_discovered(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A lake placed under $DATA_DIR/tick_lake must be found with no arguments."""
+    data_dir = tmp_path / "custom_data"
+    build_mini_lake(data_dir / "tick_lake")
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+    monkeypatch.delenv("TICK_LAKE_ROOT", raising=False)
+    reader = TickLakeReader()
+    assert reader.lake_root == (data_dir / "tick_lake").resolve()
+    assert reader.list_symbols()
+
+
+# --------------------------------------------------------------------------- #
+# Caller-facing input normalization (contract §7.1)
+# --------------------------------------------------------------------------- #
+
+def test_query_bounds_accept_dates_datetimes_and_strings(tmp_path: Path) -> None:
+    """Instant-valued bounds must agree regardless of how they are expressed.
+
+    The mini lake spans two days, so the comparison pins the same instant from a
+    string, a naive datetime and a timezone-aware datetime (09:00+03:00 == 06:00Z,
+    contract §7.1), then checks a date-only start is the whole UTC day.
+    """
+    reader = TickLakeReader(build_mini_lake(tmp_path / "lake"))
+
+    iso = reader.query_candles("AAPL", timeframe="1m", start_time="2026-10-02T06:00:00")
+    naive = reader.query_candles("AAPL", timeframe="1m", start_time=datetime(2026, 10, 2, 6, 0))
+    aware = reader.query_candles(
+        "AAPL", timeframe="1m", start_time=datetime(2026, 10, 2, 9, 0, tzinfo=timezone(timedelta(hours=3)))
+    )
+    assert iso
+    assert iso == naive == aware
+
+    whole_day = reader.query_candles("AAPL", timeframe="1m", start_time=date(2026, 10, 2))
+    assert len(whole_day) >= len(iso)
+
+
+def test_unsupported_bound_types_raise_type_error(tmp_path: Path) -> None:
+    reader = TickLakeReader(build_mini_lake(tmp_path / "lake"))
+    with pytest.raises(TypeError):
+        reader.query_ticks("AAPL", start_time=20261002)
+    with pytest.raises(TypeError):
+        reader.query_candles("AAPL", timeframe="1m", end_time=3.14)
+
+
+def test_reader_rejects_invalid_thread_and_memory_settings(tmp_path: Path) -> None:
+    lake = build_mini_lake(tmp_path / "lake")
+    with pytest.raises(ValueError):
+        TickLakeReader(lake, threads=0)
+    with pytest.raises(ValueError):
+        TickLakeReader(lake, max_memory="plenty")
+
+
+# --------------------------------------------------------------------------- #
+# Files without a symbol column — the SQL-literal path (contract §3, §7.3)
+# --------------------------------------------------------------------------- #
+
+def _write_symbol_less_partition(root: Path, symbol: str, day: str, entries: List[dict]) -> Path:
+    """Contract hive layout: partition supplies the symbol, the file has no column."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    target = partition_dir(root, symbol, day)
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / "hive_000001.parquet"
+    pq.write_table(
+        pa.table(
+            {
+                "timestamp": pa.array([e["timestamp"] for e in entries], type=pa.timestamp("us")),
+                "price": pa.array([e["price"] for e in entries], type=pa.float64()),
+                "volume": pa.array([e["volume"] for e in entries], type=pa.float64()),
+                "bid": pa.array([e["bid"] for e in entries], type=pa.float64()),
+                "ask": pa.array([e["ask"] for e in entries], type=pa.float64()),
+                "source": pa.array(["CAPITAL"] * len(entries), type=pa.string()),
+                "session": pa.array(["REG"] * len(entries), type=pa.string()),
+                "ingest_id": pa.array([e["ingest_id"] for e in entries], type=pa.string()),
+            }
+        ),
+        path,
+    )
+    return path
+
+
+def _symbol_less_entries(count: int = 3) -> List[dict]:
+    base = datetime.fromisoformat("2026-10-02T13:30:00")
+    return [
+        {
+            "timestamp": base + timedelta(seconds=30 * i),
+            "price": 100.0 + i,
+            "volume": 2.0,
+            "bid": 100.0 + i - 0.1,
+            "ask": 100.0 + i + 0.1,
+            "ingest_id": f"hive_{i:04d}",
+        }
+        for i in range(count)
+    ]
+
+
+def test_files_without_a_symbol_column_report_the_partition_symbol(tmp_path: Path) -> None:
+    lake = build_mini_lake(tmp_path / "lake", symbols={})
+    _write_symbol_less_partition(lake, "AAPL", "2026-10-02", _symbol_less_entries())
+    reader = TickLakeReader(lake)
+
+    ticks = reader.query_ticks("AAPL", start_time="2026-10-02", end_time="2026-10-03")
+    assert [t["symbol"] for t in ticks] == ["AAPL"] * 3
+
+    candles = reader.query_candles("AAPL", timeframe="1m", start_time="2026-10-02", end_time="2026-10-03")
+    # 13:30:00 + 13:30:30 fall in one bucket, 13:31:00 in the next.
+    assert [c["symbol"] for c in candles] == ["AAPL", "AAPL"]
+    assert [c["tick_count"] for c in candles] == [2, 1]
+    assert [c["volume"] for c in candles] == [4.0, 2.0]
+
+
+def test_symbol_with_a_quote_is_escaped_in_generated_sql(tmp_path: Path) -> None:
+    """The symbol is injected into SQL as a literal — quotes must not break it.
+
+    Without escaping, DuckDB raises a parser error and the query silently returns
+    nothing (or worse). It must instead return exactly the partition's rows.
+    """
+    lake = build_mini_lake(tmp_path / "lake", symbols={})
+    _write_symbol_less_partition(lake, "O'BRIEN", "2026-10-02", _symbol_less_entries())
+
+    reader = TickLakeReader(lake)
+    assert reader.resolve_files("O'BRIEN", date(2026, 10, 2), date(2026, 10, 2))
+    ticks = reader.query_ticks("O'BRIEN", start_time="2026-10-02", end_time="2026-10-03")
+    assert [t["symbol"] for t in ticks] == ["O'BRIEN"] * 3
+
+
 # --------------------------------------------------------------------------- #
 # Integration — sandbox-resident and operator-provided lakes
 # --------------------------------------------------------------------------- #

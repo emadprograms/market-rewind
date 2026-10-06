@@ -39,3 +39,6 @@ code
 playwright-report/
 test-results/
 tests/regression/fixtures/*.db
+.coverage
+coverage.xml
+htmlcov/

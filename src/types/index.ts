@@ -8,7 +8,7 @@ export interface HistoryPrependState {
   oldLogicalRange: LogicalRange | null;
 }
 
-/** Raw tick print from streaming database */
+/** Raw tick print from the partitioned Parquet tick lake */
 export interface MarketTick {
   time: string;          // ISO string or "YYYY-MM-DD HH:MM:SS.mmm"
   symbol: string;

@@ -2,6 +2,7 @@
 phase: 42-comprehensive-verification-regression-immunity
 status: passed_with_documented_environment_block
 verified_at: 2026-10-06
+reverified: 2026-10-06 (round 3 — found and fixed one real defect + three coverage gaps)
 must_haves:
   - id: LAKE-VERIFY-01
     status: passed
@@ -102,3 +103,124 @@ npm run test:journey        # expects 73 passed
 | `npm run test:journey` not executed here | Environment limitation (no browser obtainable); recorded with evidence and exact remediation command. Frontend regression immunity is demonstrated by 422 green Vitest tests + fresh-clone reproducibility instead. |
 | `legacy-peer-deps=true` committed in `.npmrc` | Keeps the install working despite npm 10.9.8's arborist crash. Safe because the genuinely required peer (`@testing-library/dom`) is now declared explicitly and guarded by a test. |
 | 1 backend skip, 2 Vitest skips | Pre-existing and intentional (real-lake gate; `skip` markers unrelated to v5.0). |
+
+---
+
+## 6. Re-Verification Round 3 (2026-10-06)
+
+A third independent pass, this time driven by **line-coverage measurement** plus repeated execution
+rather than by reading the code. It found one real defect and three test gaps.
+
+### 6.1 Defect C (high) — candle volume was not actually deterministic
+
+`sum()` over float64 in DuckDB runs in parallel, and floating-point addition is not associative, so
+the reported volume depended on the thread schedule.
+
+*Evidence.* An isolated probe (identical query, 14 float64 parquet files, `SET threads=4`) produced
+**13 distinct sums over 300 runs** (`42364.49215303713` ×209, `…718` ×17, `…716` ×15, `…194` ×10).
+In the suite, `test_timeframe_normalization_case_insensitive` (which compares two identical queries)
+failed **4 of 25 runs**; the two queries answered `839.2199999999998` vs `839.2199999999999`.
+
+*Fix.* `round(sum(volume), 6) AS volume` in the candle aggregation SQL
+(`tick_lake_reader.py`), with a comment explaining why. Rounding to the 6-decimal grid the lake
+promises removes the schedule dependence while keeping the exact total for representable inputs.
+
+*Tests (written first, deterministically red).* The grid assertion fails on any off-grid value
+(pre-fix: `10015.119999999997 != 10015.12`), so it does not depend on winning a race:
+
+| Test | Kills |
+|---|---|
+| `test_candle_volume_is_reported_on_a_stable_decimal_grid` | every unrounded sum, deterministically |
+| `test_candle_volume_equals_the_exact_tick_sum_on_the_grid` | lost precision (`math.fsum` reference) |
+| `test_candle_volume_is_identical_across_repeated_queries_and_readers` | answer drift between queries/readers |
+
+*Verification.* 0 failures in 40 targeted repeats (was 4/25) and **0 failures in 10 consecutive full
+suite runs**.
+
+### 6.2 Gap D — the WebSocket replay transport had zero coverage
+
+`server.py` measured **66%**; `play`, `pause`, `seek`, `set_speed`, `step backward`, the error frame
+and the CORS preflight were never executed. Twelve tests were added:
+
+* play streams ticks in index order and reports completion; pause halts it (nothing arrives within
+  1s); seek jumps to the requested timestamp and resyncs status; `set_speed` clamps to the 0.1×
+  floor and is reported back; `step` walks backwards; a malformed action yields an `error` frame and
+  the socket survives; `OPTIONS` preflight returns CORS headers; negative/non-integer limits 400.
+* Testing the transport needed a **paced tape** (5s between ticks) because the shared mini-lake
+  ticks are sub-second spaced, which makes `play_loop` skip every sleep (`delay > 0.001` gate) and
+  turns any pause assertion into a race. At the 0.1× floor the paced tape sleeps 30s per tick, so
+  the tests are deterministic.
+* Frames are asserted **by type, never by position**: `step` answers `tick` *and* `status`, and
+  `play` interleaves the two — the frontend itself dispatches by type
+  (`src/lib/streamingClient.ts`). Assuming an order was the second flake source found this round.
+
+Coverage: `server.py` **66% → 91%**.
+
+### 6.3 Gap E — reader edges that no test touched
+
+| Area | Test added | Why it matters |
+|---|---|---|
+| Hive layout without a `symbol` column | `test_files_without_a_symbol_column_report_the_partition_symbol` | the symbol then comes from the partition path — this is the code path that quotes the symbol into SQL |
+| SQL-literal escaping | `test_symbol_with_a_quote_is_escaped_in_generated_sql` | symbol `O'BRIEN` must not produce broken/injectable SQL |
+| `DATA_DIR` discovery candidate | `test_data_dir_env_candidate_is_discovered`, `test_data_dir_env_contributes_the_first_candidate` | operator-facing precedence documented in 39-RESEARCH |
+| Bound normalization | `test_query_bounds_accept_dates_datetimes_and_strings`, `test_unsupported_bound_types_raise_type_error` | `date`, naive/aware `datetime` and ISO strings must agree (`09:00+03:00 == 06:00Z`) |
+| Runner guards | `test_reader_rejects_invalid_thread_and_memory_settings` | `threads >= 1`, `max_memory` format |
+| Corrupt lake over HTTP | `TestCorruptLakeSurface` (2 tests) | every endpoint (incl. `/api/status`) fails fast with a 503 metadata payload |
+| Empty-buffer WS actions | `test_actions_before_load_are_noops_and_session_stays_usable` | seek/step before load answer nothing and must not wedge the session |
+
+Coverage: `tick_lake_reader.py` **93% → 94%**, whole backend **94% → 97%**.
+
+### 6.4 Gap F — pause cancellation was invisible to the wire protocol
+
+Mutation M5 (removing the `play_task.cancel()` on pause) **survived** the frame-level pause test:
+setting `is_playing = False` already stops the ticks, so the leaked task is not observable from the
+client. Added `TestReplaySessionLifecycle::test_pause_cancels_the_play_task`, which inspects the
+session's task directly (and documents that `play_loop` swallows `CancelledError`, so the guarantee
+is *finished*, not *cancelled*). Re-running M5 → **KILLED**.
+
+### 6.5 Mutation round 3
+
+| # | Mutation | Result |
+|---|---|---|
+| M1 | un-rounded candle volume | **KILLED** (grid + fsum tests) |
+| M2 | `_sql_literal` without quote escaping | **KILLED** |
+| M3 | `threads >= 1` guard disabled | **KILLED** |
+| M4 | `DATA_DIR` discovery candidate removed | **KILLED** |
+| M5 | pause no longer cancels the play task | survived → lifecycle test added → **KILLED (M5b)** |
+| — | all mutations reverted, tree diff verified clean | — |
+
+### 6.6 Documentation rot found and fixed
+
+* `README.md` still described the **retired** architecture (`streaming.duckdb`, `historical.duckdb`,
+  SQLite/OPFS fallbacks) and stale test counts (95 tests / 10 backend tests). Rewritten for the tick
+  lake, the real discovery precedence, and the current suites (81 Vitest files, 221 backend tests,
+  journey command included).
+* `src/lib/streamingClient.ts`, `src/types/index.ts` and one Vitest title/comment still named the
+  retired database. Fixed (comments only — no runtime behaviour changed; the production bundle hash
+  is byte-identical).
+* `.gitignore` now ignores `.coverage`/`coverage.xml`/`htmlcov/`.
+
+**Accepted follow-up (not changed on purpose).** The user-facing badge copy still says
+“Streaming DuckDB Connected” / “DuckDB streaming service (is running|offline)”, and the Playwright
+journey suite *asserts* those exact strings (`tests/regression/journey/01-boot.spec.ts:51,60`).
+Renaming them is cosmetic and must be done together with those journey assertions, which cannot be
+executed in this sandbox — so it is recorded here instead of changed blind.
+
+### 6.7 Environment note
+
+The sandbox was reset between rounds (the shim venv, mini-lake and `/tmp` clones were gone). The
+repository was recovered safely: the working tree was proven byte-identical to the pushed commit
+(empty `git diff --cached` against `origin/arena/10770ea5-market-rewind`) before moving the branch
+pointer. The venv was rebuilt (`pytest`, `aiohttp`, `orjson`, `duckdb`, `pyarrow`, `httpx`,
+`pytest-cov`) and the lake regenerates itself through the `sandbox_lake` fixture, so the suite is
+self-healing in a fresh environment.
+
+### 6.8 Round-3 totals
+
+| Metric | Before round 3 | After round 3 |
+|---|---|---|
+| Backend tests | 197 passed / 1 skipped | **221 passed / 1 skipped** (+24) |
+| Backend line coverage | 94% (server 66%) | **97%** (server 91%, reader 94%) |
+| Full-suite repeat runs | 1 flake per ~6 runs | **0 failures in 10 runs** |
+| Vitest | 81 files / 422 passed | 81 files / 422 passed (reproduced) |
+| `npm run build` | clean | clean (identical bundle hash) |

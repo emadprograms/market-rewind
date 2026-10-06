@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from aiohttp.test_utils import TestClient, TestServer
@@ -205,6 +206,361 @@ class TestStreamingServer(_ServerTest):
             assert status["type"] == "status" and status["totalBuffered"] > 0
         finally:
             await ws.close()
+
+
+class TestReplaySessionLifecycle(unittest.IsolatedAsyncioTestCase):
+    """Internal lifecycle guarantees the wire protocol cannot expose.
+
+    Pausing flips ``is_playing`` (observable as frames) *and* must cancel the
+    sleeping playback task. The frame-level test cannot see the difference, so
+    the task is inspected directly: otherwise every pause leaks a task that
+    stays parked in its inter-tick sleep.
+    """
+
+    class _FakeWs:
+        def __init__(self) -> None:
+            self.frames = []
+
+        async def send_str(self, payload: str) -> None:
+            self.frames.append(json.loads(payload))
+
+    class _StubDb:
+        """Five ticks five seconds apart → the loop sleeps ~3s between them."""
+
+        def query_ticks(self, *, symbol, start_time, limit, direction):  # noqa: ARG002
+            base = datetime.fromisoformat("2026-10-02T13:30:00")
+            return [
+                {
+                    "time": (base + timedelta(seconds=5 * i)).isoformat(),
+                    "symbol": symbol,
+                    "price": 100.0 + i,
+                    "volume": 1.0,
+                    "session": "REG",
+                    "source": "CAPITAL",
+                    "ingest_id": f"stub_{i}",
+                }
+                for i in range(5)
+            ]
+
+    async def test_pause_cancels_the_play_task(self) -> None:
+        import asyncio
+
+        from backend.streaming_service.server import ReplaySession
+
+        session = ReplaySession(self._FakeWs(), self._StubDb())
+        await session.load_ticks("NVDA", None, 5)
+
+        await session.set_playing(True)
+        task = session.play_task
+        assert task is not None
+        await asyncio.sleep(0)          # let the loop start and begin its sleep
+        assert not task.done(), "playback should still be running"
+
+        await session.set_playing(False)
+        for _ in range(100):            # cancellation settles within a few ticks
+            await asyncio.sleep(0.01)
+            if task.done():
+                break
+        # play_loop swallows CancelledError by design, so the observable guarantee
+        # is that the task is finished — not that asyncio reports it as cancelled.
+        assert task.done(), "pause leaked a live playback task"
+
+    async def test_play_then_completion_marks_not_playing(self) -> None:
+        import asyncio
+
+        from backend.streaming_service.server import ReplaySession
+
+        session = ReplaySession(self._FakeWs(), self._StubDb())
+        await session.load_ticks("NVDA", None, 3)
+        session.speed = 100000  # no per-tick sleep
+        await session.set_playing(True)
+        task = session.play_task
+        for _ in range(200):
+            await asyncio.sleep(0.01)
+            if task.done():
+                break
+        assert task.done()
+        assert session.is_playing is False
+        assert session.current_index == len(session.ticks_buffer) - 1  # last tick
+
+
+class TestCorruptLakeSurface(unittest.IsolatedAsyncioTestCase):
+    """A corrupt lake.json must surface as a 503 with the metadata payload.
+
+    The reader raises a structured error; the HTTP layer must translate it rather
+    than 500 or silently returning empty data (contract §6.1).
+    """
+
+    async def asyncSetUp(self) -> None:
+        import tempfile
+
+        from tick_lake_factory import corrupt_lake_json
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.lake = Path(self._tmp.name) / "lake"
+        corrupt_lake_json(self.lake)
+        self.client = TestClient(TestServer(create_app(lake_root=str(self.lake))))
+        await self.client.start_server()
+
+    async def asyncTearDown(self) -> None:
+        await self.client.close()
+        self._tmp.cleanup()
+
+    async def test_every_data_endpoint_fails_fast_with_503(self) -> None:
+        """A corrupt lake must never look healthy.
+
+        `ensure_ready()` fails fast, so even /api/status answers 503 (not 200 with an
+        empty payload) and every endpoint carries the same retry-hint payload shape.
+        """
+        for url in ("/api/status", "/api/symbols", "/api/ticks?symbol=AAPL", "/api/candles?symbol=AAPL"):
+            resp = await self.client.request("GET", url)
+            assert resp.status == 503, url
+            payload = await resp.json()
+            assert "error" in payload, url
+            assert payload.get("retry_after") in {5, 10, 30}, url
+            assert resp.headers["Content-Type"].startswith("application/json")
+
+    async def test_metadata_payload_names_the_condition(self) -> None:
+        resp = await self.client.request("GET", "/api/symbols")
+        payload = await resp.json()
+        assert "metadata" in payload["error"].lower()
+
+
+class TestReplayTransport(unittest.IsolatedAsyncioTestCase):
+    """The WebSocket replay transport the frontend drives (LAKE-API-03).
+
+    The app's play/pause/seek/speed controls are the reason the lake is streamed
+    over WebSocket at all, so every action is exercised against real lake ticks:
+
+    * ``play`` streams tick frames in index order and reports completion
+    * ``pause`` stops an in-flight playback (nothing arrives afterwards)
+    * ``seek`` jumps the cursor to the requested timestamp
+    * ``set_speed`` clamps and is reported back in the status frame
+    * ``step`` moves backwards as well as forwards
+    * malformed actions surface an ``error`` frame instead of killing the socket
+    """
+
+    #: Paced tape (5s between ticks) so the transport's real-time pacing is
+    #: observable: at the 0.1× clamp floor the play loop sleeps 30s per tick,
+    #: which makes "pause really stops playback" deterministic instead of a race
+    #: against a sub-second tape that streams with zero delay.
+    TICK_COUNT = 60
+    TICK_SPACING = timedelta(seconds=5)
+
+    async def asyncSetUp(self) -> None:
+        import tempfile
+
+        from tick_lake_factory import rows_v1, write_rows_as
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.lake = build_mini_lake(Path(self._tmp.name) / "lake", symbols={})
+        base = datetime.fromisoformat("2026-10-02T13:30:00")
+        entries = [
+            {
+                "timestamp": base + i * self.TICK_SPACING,
+                "price": round(100.0 + (i % 7) * 0.25, 4),
+                "volume": 1.0 + (i % 5),
+                "session": "REG",
+                "ingest_id": f"paced_{i:04d}",
+            }
+            for i in range(self.TICK_COUNT)
+        ]
+        write_rows_as(self.lake, "NVDA", "2026-10-02", rows_v1("NVDA", entries), filename="paced_000001.parquet")
+        self.client = TestClient(TestServer(create_app(lake_root=str(self.lake))))
+        await self.client.start_server()
+
+    async def asyncTearDown(self) -> None:
+        await self.client.close()
+        self._tmp.cleanup()
+
+    async def _load(self, ws, *, symbol: str = "NVDA", limit: int = 200) -> dict:
+        await ws.send_json({"action": "load", "symbol": symbol, "limit": limit})
+        status = await ws.receive_json()
+        assert status["type"] == "status"
+        assert status["totalBuffered"] > 0
+        return status
+
+    async def _receive_until(self, ws, predicate, *, label: str, timeout: float = 5.0):
+        """Read frames until `predicate(frame)` holds.
+
+        Frames are dispatched by type (like the frontend does), never by position:
+        ``play``/``step`` legitimately interleave ``tick`` and ``status`` frames.
+        """
+        import asyncio
+
+        seen = []
+        async with asyncio.timeout(timeout):
+            while True:
+                frame = await ws.receive_json()
+                seen.append(frame)
+                if predicate(frame):
+                    return frame, seen
+
+    async def test_play_streams_ticks_in_order_then_reports_completion(self) -> None:
+        ws = await self.client.ws_connect("/ws/replay")
+        try:
+            await self._load(ws, limit=12)
+            await ws.send_json({"action": "set_speed", "speed": 100000})  # → no per-tick sleep
+            await self._receive_until(ws, lambda f: f["type"] == "status" and f["speed"] == 100000, label="speed")
+
+            await ws.send_json({"action": "play"})
+            final, seen = await self._receive_until(
+                ws, lambda f: f["type"] == "status" and f["playing"] is False, label="completion"
+            )
+
+            playing_status = next(f for f in seen if f["type"] == "status" and f["playing"] is True)
+            assert playing_status["totalBuffered"] == 12
+
+            ticks = [f for f in seen if f["type"] == "tick"]
+            assert [t["index"] for t in ticks] == list(range(1, 12))
+            times = [t["tick"]["time"] for t in ticks]
+            assert times == sorted(times)  # strictly forward in market time
+            assert [t["tick"]["symbol"] for t in ticks] == ["NVDA"] * 11
+            assert final["currentIndex"] == 11
+        finally:
+            await ws.close()
+
+    async def test_pause_stops_playback(self) -> None:
+        import asyncio
+
+        ws = await self.client.ws_connect("/ws/replay")
+        try:
+            await self._load(ws, limit=20)
+            # 0.1× is the clamp floor: the loop then sleeps ~30s between ticks on
+            # this lake, so anything arriving after pause is a real regression.
+            await ws.send_json({"action": "set_speed", "speed": 0.1})
+            await self._receive_until(ws, lambda f: f["type"] == "status" and f["speed"] == 0.1, label="speed")
+
+            await ws.send_json({"action": "play"})
+            started, _ = await self._receive_until(
+                ws, lambda f: f["type"] == "status" and f["playing"] is True, label="started"
+            )
+            assert started["speed"] == 0.1
+            first_tick, _ = await self._receive_until(ws, lambda f: f["type"] == "tick", label="first tick")
+            assert first_tick["index"] == 1  # one tick, then a 30s sleep
+
+            await ws.send_json({"action": "pause"})
+            paused, _ = await self._receive_until(
+                ws, lambda f: f["type"] == "status" and f["playing"] is False, label="paused"
+            )
+            assert paused["currentIndex"] == 1  # 30s sleep per tick → exactly one
+
+            # Nothing may arrive after the paused status frame.
+            with self.assertRaises(asyncio.TimeoutError):
+                await asyncio.wait_for(ws.receive_json(), timeout=1.0)
+        finally:
+            await ws.close()
+
+    async def test_seek_moves_the_cursor_to_the_requested_time(self) -> None:
+        ws = await self.client.ws_connect("/ws/replay")
+        try:
+            await self._load(ws, limit=200)
+
+            resp = await self.client.request("GET", "/api/ticks?symbol=NVDA&limit=200")
+            ticks = await resp.json()
+            target = ticks[30]["time"]
+
+            await ws.send_json({"action": "seek", "timestamp": target})
+            frame, seen = await self._receive_until(ws, lambda f: f["type"] == "tick", label="seek tick")
+            assert frame["seek"] is True
+            assert frame["index"] == 30
+            assert frame["tick"]["time"] == target
+
+            status, _ = await self._receive_until(ws, lambda f: f["type"] == "status", label="seek status")
+            assert status["currentIndex"] == 30
+            assert status["currentTime"] == target
+        finally:
+            await ws.close()
+
+    async def test_set_speed_clamps_and_is_reported(self) -> None:
+        ws = await self.client.ws_connect("/ws/replay")
+        try:
+            await self._load(ws, limit=10)
+
+            await ws.send_json({"action": "set_speed", "speed": -5})
+            assert (await ws.receive_json())["speed"] == 0.1  # clamped floor
+
+            await ws.send_json({"action": "set_speed", "speed": 2.5})
+            assert (await ws.receive_json())["speed"] == 2.5
+        finally:
+            await ws.close()
+
+    async def test_step_backward_after_forward(self) -> None:
+        ws = await self.client.ws_connect("/ws/replay")
+        try:
+            await self._load(ws, limit=50)
+
+            await ws.send_json({"action": "step"})
+            forward, _ = await self._receive_until(ws, lambda f: f["type"] == "tick", label="forward")
+            assert forward["index"] == 1
+            # step always follows the tick with a status frame (the frontend relies
+            # on it to resync the scrubber).
+            synced, _ = await self._receive_until(ws, lambda f: f["type"] == "status", label="status")
+            assert synced["currentIndex"] == 1
+
+            await ws.send_json({"action": "step", "direction": "backward"})
+            backward, _ = await self._receive_until(ws, lambda f: f["type"] == "tick", label="backward")
+            assert backward["index"] == 0
+            assert backward["backward"] is True
+
+            resynced, _ = await self._receive_until(ws, lambda f: f["type"] == "status", label="status")
+            assert resynced["currentIndex"] == 0
+        finally:
+            await ws.close()
+
+    async def test_malformed_action_yields_error_frame_and_keeps_socket_alive(self) -> None:
+        ws = await self.client.ws_connect("/ws/replay")
+        try:
+            await self._load(ws, limit=10)
+
+            await ws.send_json({"action": "set_speed", "speed": "not-a-number"})
+            error = await ws.receive_json()
+            assert error["type"] == "error"
+            assert "could not convert" in error["message"]
+
+            # The socket must survive: the next valid action still works.
+            await ws.send_json({"action": "step"})
+            assert (await ws.receive_json())["type"] == "tick"
+        finally:
+            await ws.close()
+
+    async def test_actions_before_load_are_noops_and_session_stays_usable(self) -> None:
+        """seek/step on an empty buffer answer nothing (and must not crash).
+
+        The reader is fail-fast: with no tape buffered there is nothing to seek or
+        step to, so the server stays silent and the next load must work normally.
+        """
+        import asyncio
+
+        ws = await self.client.ws_connect("/ws/replay")
+        try:
+            await ws.send_json({"action": "seek", "timestamp": "2026-10-02T13:31:00"})
+            await ws.send_json({"action": "step"})
+            with self.assertRaises(asyncio.TimeoutError):
+                await asyncio.wait_for(ws.receive_json(), timeout=0.3)
+
+            status = await self._load(ws, limit=10)  # session still healthy
+            assert status["totalBuffered"] == 10
+        finally:
+            await ws.close()
+
+    async def test_options_preflight_returns_cors_headers(self) -> None:
+        resp = await self.client.request("OPTIONS", "/api/status")
+        assert resp.status == 204
+        assert resp.headers["Access-Control-Allow-Origin"] == "*"
+        assert "GET" in resp.headers["Access-Control-Allow-Methods"]
+
+    async def test_non_integer_candle_limit_is_rejected(self) -> None:
+        resp = await self.client.request("GET", "/api/candles?symbol=NVDA&limit=abc")
+        assert resp.status == 400
+        assert "integer" in (await resp.json())["error"]
+
+    async def test_negative_offset_and_candle_limit_are_rejected(self) -> None:
+        resp = await self.client.request("GET", "/api/ticks?symbol=NVDA&offset=-1")
+        assert resp.status == 400
+
+        resp = await self.client.request("GET", "/api/candles?symbol=NVDA&limit=-5")
+        assert resp.status == 400
 
 
 class TestMaintenanceAndFailureModes(unittest.IsolatedAsyncioTestCase):

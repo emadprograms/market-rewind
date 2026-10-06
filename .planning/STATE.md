@@ -3,7 +3,7 @@ gsd_state_version: "1.0"
 milestone: v5.0
 milestone_name: Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
 status: completed
-last_updated: "2026-10-06T17:30:00.000Z"
+last_updated: "2026-10-06T18:05:00.000Z"
 last_activity: 2026-10-06
 progress:
   total_phases: 4
@@ -44,7 +44,9 @@ Phase: 42 — Comprehensive Verification & Regression Immunity (milestone comple
 Plan: 39-01 — COMPLETED (80/80 Phase 39 tests green)
      40-01 — COMPLETED (50/50 Phase 40 tests green)
      41-01 — COMPLETED (87 Phase 41 tests green; backend suite fully green 197 passed / 1 skipped)
-     42-01 — COMPLETED (Vitest 81/81 files, 422 tests green from a fresh clone; build clean;
-              Playwright journey env-blocked in sandbox — no browser obtainable, see 42-VERIFICATION.md §4)
+     42-01 — COMPLETED (Vitest 81/81 files, 422 tests green from a fresh clone; backend 221 passed / 1 skipped
+              with 97% line coverage; build clean; Playwright journey env-blocked in sandbox —
+              no browser obtainable, see 42-VERIFICATION.md §4)
 Status: Milestone v5.0 COMPLETE — all 13 requirements verified (LAKE-READ/ RESAMPLE/ API / VERIFY)
-Last activity: 2026-10-06 — Phase 42 verified and documented; milestone closed
+Last activity: 2026-10-06 — Phase 42 re-verified (round 3): nondeterministic volume defect fixed,
+WS transport + reader edges covered (221 backend tests, 97% coverage), docs/README de-rotted

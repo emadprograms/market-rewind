@@ -8,6 +8,8 @@ Written test-first (red) before the resampling layer was added to
 """
 from __future__ import annotations
 
+import math
+import random
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -500,6 +502,89 @@ def test_timeframe_normalization_case_insensitive(tmp_path: Path) -> None:
     reader = reader_for(lake)
     assert reader.query_candles("AAPL", timeframe="1M", start_time="2026-10-02", end_time="2026-10-03") == \
            reader.query_candles("AAPL", timeframe="1m", start_time="2026-10-02", end_time="2026-10-03")
+
+
+# --------------------------------------------------------------------------- #
+# LAKE-RESAMPLE-02 — volume determinism across parallel aggregation
+# --------------------------------------------------------------------------- #
+
+def _drift_lake(root: Path, *, per_bucket: int = 700, buckets: int = 4, seed: int = 4242) -> Path:
+    """Lake whose float64 volumes are not exactly representable in binary.
+
+    Summed in parallel, such volumes produce order-dependent results at the ULP
+    level (e.g. ``14207.419999999998``), which is what made
+    ``test_timeframe_normalization_case_insensitive`` fail intermittently:
+    the two identical queries in that test were summed with different thread
+    scheduling.
+    """
+    rng = random.Random(seed)
+    entries: List[Dict[str, Any]] = []
+    for bucket in range(buckets):
+        base = datetime.fromisoformat(f"{DAY}T13:3{bucket}:00")
+        for i in range(per_bucket):
+            entries.append(
+                {
+                    "timestamp": base + timedelta(milliseconds=i * 80),
+                    "price": round(rng.uniform(100.0, 200.0), 4),
+                    "volume": round(rng.uniform(1.0, 40.0), 2),
+                    "session": "REG",
+                    "ingest_id": f"k{bucket}_{i}",
+                }
+            )
+    lake = fresh_lake(root)
+    write_rows_as(lake, "AAPL", DAY, rows_v1("AAPL", entries), filename="drift_000001.parquet")
+    return lake
+
+
+def test_candle_volume_is_reported_on_a_stable_decimal_grid(tmp_path: Path) -> None:
+    """Aggregated volume must not carry floating-point summation noise.
+
+    A parallel ``sum()`` over float64 can land a ULP away from the correctly
+    rounded total, so the same query can answer differently between runs. Every
+    reported volume must therefore sit on the 6-decimal grid the lake promises.
+    """
+    reader = reader_for(_drift_lake(tmp_path))
+    candles = reader.query_candles("AAPL", timeframe="1m", start_time=DAY, end_time="2026-10-03")
+
+    assert len(candles) == 4
+    off_grid = [c["volume"] for c in candles if c["volume"] != round(c["volume"], 6)]
+    assert off_grid == [], f"volume carries float-summation noise: {off_grid}"
+
+
+def test_candle_volume_equals_the_exact_tick_sum_on_the_grid(tmp_path: Path) -> None:
+    """Rounding must not lose real precision: the value is the exact total."""
+    rng = random.Random(99)
+    entries: List[Dict[str, Any]] = []
+    for i in range(500):
+        entries.append(
+            {
+                "timestamp": ts("13:30:00") + timedelta(milliseconds=i * 100),
+                "price": round(rng.uniform(100.0, 200.0), 4),
+                "volume": round(rng.uniform(1.0, 40.0), 2),
+                "session": "REG",
+                "ingest_id": f"exact_{i}",
+            }
+        )
+    lake = fresh_lake(tmp_path)
+    write_rows_as(lake, "AAPL", DAY, rows_v1("AAPL", entries), filename="exact_000001.parquet")
+
+    candles = reader_for(lake).query_candles("AAPL", timeframe="1m", start_time=DAY, end_time="2026-10-03")
+    assert len(candles) == 1
+    assert candles[0]["volume"] == round(math.fsum(r["volume"] for r in entries), 6)
+
+
+def test_candle_volume_is_identical_across_repeated_queries_and_readers(tmp_path: Path) -> None:
+    """The same question must always get the same answer (no scheduling races)."""
+    lake = _drift_lake(tmp_path)
+    reader = reader_for(lake)
+
+    first = [c["volume"] for c in reader.query_candles("AAPL", timeframe="1m", start_time=DAY, end_time="2026-10-03")]
+    for _ in range(5):
+        again = [c["volume"] for c in reader.query_candles("AAPL", timeframe="1m", start_time=DAY, end_time="2026-10-03")]
+        assert again == first
+
+    fresh = reader_for(lake)
+    assert [c["volume"] for c in fresh.query_candles("AAPL", timeframe="1m", start_time=DAY, end_time="2026-10-03")] == first
 
 
 # --------------------------------------------------------------------------- #
