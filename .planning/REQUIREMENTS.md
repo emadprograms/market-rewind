@@ -1,34 +1,39 @@
-# Milestone v4.3 Requirements: Live Data Stabilization and Testing
+# Milestone v5.0 Requirements: Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
 
 ## Overview
-Milestone v4.3 resolves the four P1 and P2 defects discovered during the final live-browser verification (96ca478) documented in `docs/reviews/FINAL-LIVE-BROWSER-REVIEW-96ca478.md`. 
-The primary goal is to ensure stability, proper context switching, temporal isolation, and UI consistency across real-data playback, pauses, timeframe changes, and symbol switches.
 
-As strictly requested, all fixes will follow a Test-Driven Development (TDD) approach: focused unit and Playwright tests replicating all four failure modes are implemented first. Code fixes follow in subsequent phases and must ensure all tests pass continuously.
+Milestone v5.0 transitions Market Rewind's data access architecture from the retired disk-backed `streaming.duckdb` database to Data Harvester's **Partitioned Parquet Tick Lake** in strict compliance with the **Repo B Tick Lake Read Contract (v1.5.0)** (`docs/contracts/repo_b_tick_lake_contract.md`).
+
+The requirements below eliminate all disk file-locking collisions, enforce zero code imports from `data-harvester`, provide vectorized in-memory DuckDB query execution with deterministic resampling, support dual-schema files, and guarantee 100% green test passes across all backend and frontend test suites.
 
 ---
 
 ## Requirements
 
-### Category 1: Test-First Harness & Review Reproduction (LIVE-TEST)
-- [x] **LIVE-TEST-01**: Diagnostic Unit Test Suite replicating all 4 failure modes from the `FINAL-LIVE-BROWSER-REVIEW-96ca478.md` review: volume mismatch on pause, old symbol history on new symbol chart, unsorted data on timeframe/rewind, and live price mismatch on pause.
-- [x] **LIVE-TEST-02**: Playwright E2E Verification Suite testing the exact workflows outlined in the review: play/pause transitions for daily volume, TSLA to AAPL symbol switches retaining old chart lines, rapid 5m->1m->5m timeframe switches with rewinds, and daily live price comparison across play/pause states.
-- [x] **LIVE-TEST-03**: Red Phase Execution Verification: all failure probes execute and fail predictably against the baseline, confirming genuine defect reproduction before altering application code.
+### Category 1: Standalone Lake Reader & Partition Pruning (LAKE-READ)
 
-### Category 2: Unified Daily Volume & Live Price Policy (LIVE-VOL)
-- [x] **LIVE-VOL-01**: Unified Daily Volume Aggregation: define a single source/coverage policy for daily aggregation and apply it to both snapshot and live playback, ensuring daily OHLCV exact equality across live and paused paths.
-- [x] **LIVE-VOL-02**: Stable Live Price Display: use the latest eligible price for the chart's own symbol at the cursor in both play and pause states. Prevent the daily "Live" price from reverting to a historical bar's close when paused.
+- [ ] **LAKE-READ-01**: **Zero-Import Lake Reader Core**: Provide a standalone `TickLakeReader` class with zero library imports from `data-harvester`, featuring root discovery precedence (`TICK_LAKE_ROOT` env var, fallback to `<repo>/data/tick_lake` symlink/relative path) and `lake.json` format verification.
+- [ ] **LAKE-READ-02**: **Canonical Symbol Path Encoding**: Implement uppercase percent-encoding for symbol partition path resolution (`ticks/symbol=<ENCODED_SYMBOL>/`) strictly honoring the `[A-Za-z0-9_-]` safe set (e.g. `BRK.B` -> `BRK%2EB`, `EUR/USD` -> `EUR%2FUSD`).
+- [ ] **LAKE-READ-03**: **Filesystem Partition Pruning**: Implement filesystem-level partition discovery resolving explicit Parquet file lists by symbol and UTC event date range (`date=<YYYY-MM-DD>`), returning an empty list immediately without DuckDB execution if no partitions match.
+- [ ] **LAKE-READ-04**: **Structured Error Taxonomy & Maintenance Guard**: Implement explicit exception classes (`LakeUnavailableError`, `LakeCorruptedMetadataError`, `LakeIncompatibleSchemaError`, `LakeMaintenanceInProgressError`), checking for `<lake_root>/_maintenance/in_progress.json` and failing fast or retrying before execution.
 
-### Category 3: Render Context Transitions & Delayed Responses (LIVE-CONTEXT)
-- [x] **LIVE-CONTEXT-01**: Strict Render-Context Changes: treat symbol, date, timeframe, and dataset-generation changes as explicit render-context changes. Replace the full series when the historical prefix changes, even if bar count and ending timestamp match.
-- [x] **LIVE-CONTEXT-02**: Discard Obsolete Responses: do not render old-symbol history as a new symbol while its request is pending. Discard any delayed or obsolete network responses that do not match the current context generation.
+### Category 2: Resampling Engine & Dual Schema Ingestion (LAKE-RESAMPLE)
 
-### Category 4: Merge Boundaries & Data Ordering (LIVE-ORDER)
-- [x] **LIVE-ORDER-01**: Strict Timestamp Ordering: enforce ordering and uniqueness at the history merge boundary. Merge valid responses by timestamp with a defined duplicate policy, validating strict ordering before rendering.
-- [x] **LIVE-ORDER-02**: Error State Handling: preserve the last valid chart state on a rejected update and expose a meaningful loading/error state rather than silently continuing with a stale chart.
+- [ ] **LAKE-RESAMPLE-01**: **Isolated In-Memory DuckDB Runner**: Execute queries via `read_parquet(?, hive_partitioning=false)` on isolated ephemeral `:memory:` DuckDB sessions with explicit concurrency bounds (`SET threads = 4`, `SET max_memory = '2GB'`, `SET TimeZone = 'UTC'`).
+- [ ] **LAKE-RESAMPLE-02**: **Deterministic OHLCV Candle Aggregation**: Dynamically aggregate ticks into candles across all standard timeframes (`1s` to `1d`) using vectorized DuckDB `time_bucket()` with deterministic `arg_min(..., (timestamp, ingest_id))` for open and `arg_max(..., (timestamp, ingest_id))` for close.
+- [ ] **LAKE-RESAMPLE-03**: **Dual Schema Compatibility**: Support both physical Schema v1 files (`timestamp`, `symbol`, `price`, `volume`, `bid`, `ask`, `source`, `session`, `ingest_id`) and Schema v2 rows (`bid_price`, `ask_price`), correctly coalescing quotes without column binder errors.
+- [ ] **LAKE-RESAMPLE-04**: **Daily RTH Session Isolation**: Strictly enforce Regular Trading Hours filtering (`session = 'REG'`) when aggregating daily (`1d`) candles.
 
-### Category 5: Systematic Verification & Zero Regressions (LIVE-VERIFY)
-- [x] **LIVE-VERIFY-01**: Full Green Phase Regression Verification: all 4 review probes, all Playwright tests, and all existing 366+ tests pass cleanly.
+### Category 3: Backend API Integration & Order Flow Tape (LAKE-API)
+
+- [ ] **LAKE-API-01**: **DuckDBService Adapter Migration**: Refactor `backend/streaming_service/duckdb_client.py` to route all queries through `TickLakeReader`, retiring direct `streaming.duckdb` file attachment while preserving existing method signatures and API contracts.
+- [ ] **LAKE-API-02**: **Reverse-Chronological Order Flow Tape**: Implement reverse-chronological tape queries with spread calculation (`ask - bid`) over the latest active date partition files, exposed via `/api/ticks`.
+- [ ] **LAKE-API-03**: **Server REST & WebSocket Endpoint Alignment**: Update `backend/streaming_service/server.py` endpoints (`/api/status`, `/api/symbols`, `/api/summary`, `/api/candles`, `/api/ticks`, `/ws/playback`) to return tick lake metadata, graceful 503 status during maintenance, and streaming tick playback.
+
+### Category 4: Systematic Verification & Regression Immunity (LAKE-VERIFY)
+
+- [ ] **LAKE-VERIFY-01**: **Backend Test Suite Green Phase**: Update backend pytest test suite in `backend/streaming_service/tests/` to run against both synthetic test fixtures and the real tick lake, achieving a 100% pass rate on `npm run backend:test`.
+- [ ] **LAKE-VERIFY-02**: **Full Regression & E2E Verification**: Validate that all 80 Vitest unit test files (418+ tests) and Playwright journey test suites pass cleanly with zero regressions.
 
 ---
 
@@ -36,13 +41,16 @@ As strictly requested, all fixes will follow a Test-Driven Development (TDD) app
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LIVE-TEST-01 | Phase 34 | PASSED |
-| LIVE-TEST-02 | Phase 34 | PASSED |
-| LIVE-TEST-03 | Phase 34 | PASSED |
-| LIVE-VOL-01  | Phase 35 | PASSED |
-| LIVE-VOL-02  | Phase 35 | PASSED |
-| LIVE-CONTEXT-01 | Phase 36 | PASSED |
-| LIVE-CONTEXT-02 | Phase 36 | PASSED |
-| LIVE-ORDER-01 | Phase 37 | PASSED |
-| LIVE-ORDER-02 | Phase 37 | PASSED |
-| LIVE-VERIFY-01 | Phase 38 | PASSED |
+| LAKE-READ-01 | Phase 39 | PENDING |
+| LAKE-READ-02 | Phase 39 | PENDING |
+| LAKE-READ-03 | Phase 39 | PENDING |
+| LAKE-READ-04 | Phase 39 | PENDING |
+| LAKE-RESAMPLE-01 | Phase 40 | PENDING |
+| LAKE-RESAMPLE-02 | Phase 40 | PENDING |
+| LAKE-RESAMPLE-03 | Phase 40 | PENDING |
+| LAKE-RESAMPLE-04 | Phase 40 | PENDING |
+| LAKE-API-01  | Phase 41 | PENDING |
+| LAKE-API-02  | Phase 41 | PENDING |
+| LAKE-API-03  | Phase 41 | PENDING |
+| LAKE-VERIFY-01 | Phase 42 | PENDING |
+| LAKE-VERIFY-02 | Phase 42 | PENDING |
