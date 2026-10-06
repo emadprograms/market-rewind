@@ -16,18 +16,25 @@ export function useMarketSimulator(
   const seekTickTime = usePlaybackStore((state) => state.seekTickTime);
   const masterData = usePlaybackStore((state) => state.masterData);
   const sessionGenRef = useRef(0);
+  // Refs to avoid stale closure in reset flow (date picked then Initialize before re-render)
+  const selectedDateRef = useRef(selectedDate);
+  const entryTimeRef = useRef(entryTime);
+  selectedDateRef.current = selectedDate;
+  entryTimeRef.current = entryTime;
 
   const loadMarketData = useCallback(async () => {
+    const curDate = selectedDateRef.current;
+    const curEntry = entryTimeRef.current;
     const currentGen = ++sessionGenRef.current;
     // Synchronously anchor replay cursor to target time before awaiting candles
-    const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
+    const targetTimeStr = getUtcTimeFromEt(curDate, curEntry);
     const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
     setCurrentTime(targetMs);
     seekTickTime(targetMs);
     setPaused(true);
 
     let data: RawBar[] = [];
-    const endBoundary = `${selectedDate} 23:59:59`;
+    const endBoundary = `${curDate} 23:59:59`;
     try {
       data = await streamingClient.getCandles(sessionTicker, {
         timeframe: '1min',
@@ -55,12 +62,14 @@ export function useMarketSimulator(
   }, [isSessionStarted, loadMarketData]);
 
   const handleResetToOpen = useCallback(() => {
-    const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime);
+    const curDate = selectedDateRef.current;
+    const curEntry = entryTimeRef.current;
+    const targetTimeStr = getUtcTimeFromEt(curDate, curEntry);
     const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
     setCurrentTime(targetMs);
     seekTickTime(targetMs);
     setPaused(true);
-  }, [selectedDate, entryTime, getUtcTimeFromEt, setCurrentTime, seekTickTime, setPaused]);
+  }, [getUtcTimeFromEt, setCurrentTime, seekTickTime, setPaused]);
 
   return { handleResetToOpen };
 }

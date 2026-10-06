@@ -245,10 +245,14 @@ export function useChartData({
       
 
       if (data && data.length === 1 && timeframe !== '1D') {
-        console.warn(`[useChartData ${id}] Suspicious single bar received for ${ticker} (${timeframe}). Retrying with open end boundary...`);
+        // Preserve selectedDate boundary on retry - previously this retried with open
+        // end boundary (no selectedDate), which ignored the chosen date and loaded all
+        // history till end. Keep the same endBoundary and limit.
+        console.warn(`[useChartData ${id}] Suspicious single bar received for ${ticker} (${timeframe}) date=${selectedDate}. Retrying with same bounded window...`);
         try {
           const retryData = await streamingClient.getCandles(ticker, {
             timeframe,
+            endTime: endBoundary,
             limit: INITIAL_CANDLE_LIMIT,
             signal: abortCtrl.signal,
           });

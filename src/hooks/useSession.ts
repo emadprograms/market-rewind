@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import { getUtcTimeFromEt } from '../lib/timezones';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 
 const DEFAULT_DATE = '2026-09-25';
@@ -13,6 +12,14 @@ export function useSession(tickers: string[]) {
   const [sessionTicker, setSessionTicker] = useState<string>(() => localStorage.getItem('lastUsedTicker') || 'AAPL');
   const [entryTime, setEntryTime] = useState('09:20');
   const [isSessionStarted, setIsSessionStarted] = useState(false);
+
+  // Refs to avoid stale closure when startSession is called immediately after date/time change
+  // (e.g., user picks date then clicks Initialize before React re-renders)
+  const selectedDateRef = useRef(selectedDate);
+  const entryTimeRef = useRef(entryTime);
+  // Keep refs in sync on every render (synchronous, not via effect)
+  selectedDateRef.current = selectedDate;
+  entryTimeRef.current = entryTime;
 
   // Sync sessionTicker with available tickers
   useEffect(() => {
@@ -61,19 +68,25 @@ export function useSession(tickers: string[]) {
   }, [selectedDate, entryTime, syncStoreTime]);
 
   const handleSetSelectedDate = useCallback((newDate: string) => {
+    // Update ref synchronously so subsequent startSession sees latest value even before re-render
+    selectedDateRef.current = newDate;
     setSelectedDate(newDate);
-    syncStoreTime(newDate, entryTime);
-  }, [entryTime, syncStoreTime]);
+    syncStoreTime(newDate, entryTimeRef.current);
+  }, [syncStoreTime]);
 
   const handleSetEntryTime = useCallback((newTime: string) => {
+    entryTimeRef.current = newTime;
     setEntryTime(newTime);
-    syncStoreTime(selectedDate, newTime);
-  }, [selectedDate, syncStoreTime]);
+    syncStoreTime(selectedDateRef.current, newTime);
+  }, [syncStoreTime]);
 
   const startSession = useCallback(() => {
-    syncStoreTime(selectedDate, entryTime);
+    // Read from refs to guarantee we use the latest date/time even if closure is stale
+    const date = selectedDateRef.current;
+    const time = entryTimeRef.current;
+    syncStoreTime(date, time);
     setIsSessionStarted(true);
-  }, [selectedDate, entryTime, syncStoreTime]);
+  }, [syncStoreTime]);
 
   const endSession = useCallback(() => {
     setIsSessionStarted(false);
