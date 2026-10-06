@@ -56,9 +56,20 @@ DEFAULT_SYMBOLS: Dict[str, Dict[str, Any]] = {
 #: Optional sandbox-resident lake, equal to the discovery candidate
 #: `<repo>/../data-harvester/data/tick_lake` on the sandbox layout. Overridable via
 #: `MR_SANDBOX_LAKE_ROOT`; fixtures skip (never fail) when the path is unavailable.
-SANDBOX_LAKE_ROOT = Path(
-    os.environ.get("MR_SANDBOX_LAKE_ROOT", "/home/user/data-harvester/data/tick_lake")
-)
+def _default_sandbox_lake_root() -> Path:
+    env_override = os.environ.get("MR_SANDBOX_LAKE_ROOT")
+    if env_override:
+        return Path(env_override)
+    candidate_sandbox = Path("/home/user/data-harvester/data/tick_lake")
+    try:
+        if candidate_sandbox.parent.exists() or candidate_sandbox.exists():
+            return candidate_sandbox
+    except OSError:
+        pass
+    return Path("/tmp/data-harvester-test-lake")
+
+
+SANDBOX_LAKE_ROOT = _default_sandbox_lake_root()
 
 
 def encode_symbol(symbol: str) -> str:
