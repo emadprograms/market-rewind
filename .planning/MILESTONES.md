@@ -1,5 +1,34 @@
 # Project Milestones: Market Rewind
 
+## v5.0 Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance) (Shipped: 2026-10-06)
+
+**Delivered:** Complete re-architecture of Market Rewind's data access layer from the retired disk-backed `streaming.duckdb` database to Data Harvester's zero-dependency Partitioned Parquet Tick Lake adhering strictly to the Repo B Read Contract (`docs/contracts/repo_b_tick_lake_contract.md` v1.5.0). Implemented isolated in-memory DuckDB query runner (`:memory:`), filesystem partition directory pruning, uppercase percent-encoding for `[A-Za-z0-9_-]` safe set, dual-schema compatibility (Schema v1 and Schema v2 / quote rewrite), deterministic `(timestamp, ingest_id)` OHLCV tie-breaking, reverse-chronological order flow tape with spread, fail-fast maintenance guards, and comprehensive test suite alignment.
+
+**Phases completed:** 39-42 (4 plans total)
+
+**Key accomplishments:**
+- Implemented standalone `TickLakeReader` in `backend/streaming_service/tick_lake_reader.py` with zero library imports from `data-harvester`
+- Partition pruning to `ticks/symbol=<ENCODED_SYMBOL>/date=<YYYY-MM-DD>/*.parquet`, safe encoding for symbols (`BRK.B` -> `BRK%2EB`, `EUR/USD` -> `EUR%2FUSD`)
+- Vectorized DuckDB `time_bucket()` resampling on ephemeral `:memory:` connections with `threads=4` and `max_memory=2GB`
+- Deterministic OHLCV candle aggregation with `arg_min` / `arg_max` tie-breaking across subsecond to daily timeframes
+- Dual-schema support coalescing Schema v1 (`price`, `volume`) and Schema v2 (`bid_price`, `ask_price`) without column binder errors
+- Strict RTH filtering for daily (`1d`) candles (`session = 'REG'`)
+- Reverse-chronological Time & Sales / Order Flow Tape queries with computed spread (`ask - bid`)
+- Maintenance guard checking `<lake_root>/_maintenance/in_progress.json` with HTTP 503 retry responses
+- Restored backend test suite from 11 failures to 220 passing tests (97% backend line coverage)
+- 100% green pass rate across 81 Vitest files (422 passed, 2 skipped), 69/69 Playwright journey tests, clean production build
+
+**Stats:**
+- 4 phases, 4 plans, 13 requirements verified (100%)
+- 220 backend pytest tests passing (97% line coverage)
+- 81/81 Vitest test files passing (422 tests)
+- 69/69 Playwright browser journey tests passing
+- Clean production build (459.65 kB JS / 141.21 kB gzip)
+
+**Git range:** `feat(phase-39)` → `feat(phase-42)` (`9968e9e` → `8446652`)
+
+---
+
 ## v4.3 Live Data Stabilization and Testing (Shipped: 2026-09-30)
 
 **Delivered:** Resolved the four critical defects discovered during the final live-browser verification (`FINAL-LIVE-BROWSER-REVIEW-96ca478.md`). Unified daily volume aggregation and live price policy across play/pause states, prevented old symbol history from leaking during symbol switches, guaranteed sorted, unique data when merging history chunks, and proved stability across all unit and Playwright test suites.

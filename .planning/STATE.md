@@ -28,6 +28,7 @@ progress:
 - **Milestone v4.1**: Replay Convergence, State Machine Synchronization & Transition Integrity (Shipped 2026-09-30)
 - **Milestone v4.2**: State Machine Convergence & Temporal Strictness (Shipped 2026-09-30)
 - **Milestone v4.3**: Live Data Stabilization and Testing (Shipped 2026-09-30)
+- **Milestone v5.0**: Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance) (Shipped 2026-10-06)
 
 ## Project Reference
 
