@@ -20,6 +20,7 @@ Schema v2 (contract §3, the deferred `quote_rewrite` target):
 from __future__ import annotations
 
 import json
+import os
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -52,9 +53,12 @@ DEFAULT_SYMBOLS: Dict[str, Dict[str, Any]] = {
 }
 
 
-#: Sandbox-resident lake. Equals discovery candidate `<repo>/../data-harvester/data/tick_lake`
-#: which is also the location `npm run backend` expects on a developer machine.
-SANDBOX_LAKE_ROOT = Path("/home/user/data-harvester/data/tick_lake")
+#: Optional sandbox-resident lake, equal to the discovery candidate
+#: `<repo>/../data-harvester/data/tick_lake` on the sandbox layout. Overridable via
+#: `MR_SANDBOX_LAKE_ROOT`; fixtures skip (never fail) when the path is unavailable.
+SANDBOX_LAKE_ROOT = Path(
+    os.environ.get("MR_SANDBOX_LAKE_ROOT", "/home/user/data-harvester/data/tick_lake")
+)
 
 
 def encode_symbol(symbol: str) -> str:

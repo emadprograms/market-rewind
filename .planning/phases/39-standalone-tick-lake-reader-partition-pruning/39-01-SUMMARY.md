@@ -79,3 +79,27 @@ requirements:
   `arg_max(price, (timestamp, ingest_id))` form is mandatory and is used from Phase 40 onward.
 - Local verification uses a shim venv at `/home/user/data-harvester/.venv` (outside this repo)
   so `npm run backend:test` resolves `../data-harvester/.venv/bin/pytest` unmodified.
+
+## Re-Verification Round 2 (post-audit hardening)
+
+Three defects were found by an independent audit (fresh-clone reproduction, environment matrix,
+mutation testing) and fixed test-first:
+
+1. **Test portability:** discovery test and sandbox-lake fixture were pinned to an absolute sandbox
+   path, failing in clones and on machines without a writable `/home/user`. Fixed with a hermetic
+   `session_lake` (session-scoped tmp) plus an optional `sandbox_lake` fixture that skips on
+   `OSError`; `MR_SANDBOX_LAKE_ROOT` allows operator override.
+2. **Non-canonical date partitions:** `date=20261002` / `date=2026-W40-1` were accepted because
+   `date.fromisoformat` is lenient; now restricted to the canonical `YYYY-MM-DD` form.
+3. **Bool-as-int metadata:** `schema_version: true` was accepted (Python `bool ⊂ int`); malformed
+   types now raise `LakeCorruptedMetadataError`, with `LakeIncompatibleSchemaError` reserved for
+   well-typed unsupported versions.
+
+New tests: `test_resolve_ignores_non_canonical_date_directory_names`,
+`test_non_integer_schema_version_raises_corrupted_metadata` (6 params),
+`test_non_integer_compatible_versions_raises_corrupted_metadata`,
+`test_default_discovery_finds_lake_on_a_candidate_path`,
+`test_rich_lake_resolves_symbols`, `test_rich_lake_encoded_symbols_reachable`.
+
+Final state: **80 passed, 1 skipped** in-repo; clean in fresh clones across the environment matrix;
+six of six injected mutations killed.

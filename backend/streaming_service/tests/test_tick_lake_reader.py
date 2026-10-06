@@ -16,6 +16,8 @@ from typing import List
 import duckdb
 import pytest
 
+from backend.streaming_service.tick_lake_reader import default_lake_root_candidates
+
 from tick_lake_factory import (
     SANDBOX_LAKE_ROOT,
     add_staging_decoy,
@@ -483,27 +485,74 @@ def test_list_partition_dates_is_sorted(mini_lake: Path) -> None:
     assert reader.list_partition_dates("ZZZZ") == []
 
 
+def test_resolve_ignores_non_canonical_date_directory_names(mini_lake: Path) -> None:
+    """`datetime.date.fromisoformat` also accepts `20261002` and ISO-week names such as
+    `2026-W40-1`; the contract (§2.2) allows only `date=<YYYY-MM-DD>`. Non-canonical
+    directories must be ignored, not silently folded into a query."""
+    import shutil
+
+    source = mini_lake / "ticks" / "symbol=NVDA" / "date=2026-10-02" / "batch_writer_1_000001.parquet"
+    for name in ("date=20261002", "date=2026-W40-1"):
+        target = mini_lake / "ticks" / "symbol=NVDA" / name
+        target.mkdir(parents=True, exist_ok=True)
+        shutil.copy(source, target / "smuggled.parquet")
+
+    reader = TickLakeReader(mini_lake)
+    files = [Path(f) for f in reader.resolve_files("NVDA")]
+    assert files
+    assert all(p.parent.name == "date=2026-10-02" for p in files)
+    assert all(p.name != "smuggled.parquet" for p in files)
+    assert reader.list_partition_dates("NVDA") == [date(2026, 10, 2)]
+
+
+@pytest.mark.parametrize("bad_version", [True, False, "1", 1.5, None, [1]])
+def test_non_integer_schema_version_raises_corrupted_metadata(tmp_path: Path, bad_version) -> None:
+    root = build_mini_lake(tmp_path / "lake")
+    (root / "lake.json").write_text(
+        json.dumps({"format": "tick_lake", "schema_version": bad_version, "compatible_versions": [1]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(LakeCorruptedMetadataError):
+        TickLakeReader(root)
+
+
+def test_non_integer_compatible_versions_raises_corrupted_metadata(tmp_path: Path) -> None:
+    root = build_mini_lake(tmp_path / "lake")
+    (root / "lake.json").write_text(
+        json.dumps({"format": "tick_lake", "schema_version": 1, "compatible_versions": [True]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(LakeCorruptedMetadataError):
+        TickLakeReader(root)
+
+
 # --------------------------------------------------------------------------- #
 # Integration — sandbox-resident and operator-provided lakes
 # --------------------------------------------------------------------------- #
 
-def test_persistent_lake_is_discovered_without_arguments(persistent_lake: Path) -> None:
-    if persistent_lake.resolve() != SANDBOX_LAKE_ROOT.resolve():
-        pytest.skip("persistent lake is not at the sandbox discovery-candidate path")
+def test_default_discovery_finds_lake_on_a_candidate_path(sandbox_lake: Path) -> None:
+    """No-argument discovery must resolve a lake that sits on a candidate path.
+
+    Skipped when this checkout's candidate list does not include the lake
+    (e.g. the repo is cloned outside the sandbox layout).
+    """
+    candidates = {candidate.resolve() for candidate in default_lake_root_candidates()}
+    if sandbox_lake.resolve() not in candidates:
+        pytest.skip("lake is not on this checkout's discovery candidate paths")
     reader = TickLakeReader()  # no argument, no env → discovery precedence
-    assert reader.lake_root == SANDBOX_LAKE_ROOT.resolve()
+    assert reader.lake_root == sandbox_lake.resolve()
     assert reader.schema_version == 1
 
 
-def test_persistent_lake_resolves_real_symbols(persistent_lake: Path) -> None:
-    reader = TickLakeReader(persistent_lake)
+def test_rich_lake_resolves_symbols(session_lake: Path) -> None:
+    reader = TickLakeReader(session_lake)
     files = reader.resolve_files("AAPL", date(2026, 10, 2), date(2026, 10, 2))
     assert files and all("symbol=AAPL" in f for f in files)
     assert set(reader.list_symbols()) == {"AAPL", "BRK.B", "EUR/USD", "JPM", "NVDA"}
 
 
-def test_persistent_lake_encoded_symbols_reachable(persistent_lake: Path) -> None:
-    reader = TickLakeReader(persistent_lake)
+def test_rich_lake_encoded_symbols_reachable(session_lake: Path) -> None:
+    reader = TickLakeReader(session_lake)
     assert reader.resolve_files("BRK.B", date(2026, 10, 2), date(2026, 10, 2))
     assert reader.resolve_files("EUR/USD", date(2026, 10, 2), date(2026, 10, 5))
 

@@ -63,3 +63,51 @@ implementation existed. Green-phase evidence: 72/72 Phase 39 tests pass after im
 2. The real production lake is unreachable from this sandbox; integration tests run against the
    contract-faithful sandbox mini-lake and `skipif` when an operator-supplied `TICK_LAKE_ROOT`
    is absent.
+
+---
+
+# Re-Verification Round 2 (2026-10-06) — independent audit
+
+Triggered by a request to re-check Phase 39 end-to-end. Method: fresh clone of the branch into a
+different filesystem path, environment-matrix runs, mutation testing, and a contract re-read.
+
+## Defects found and fixed
+
+| # | Defect | Severity | Fix | Tests added |
+|---|--------|----------|-----|-------------|
+| 1 | `test_persistent_lake_is_discovered_without_arguments` asserted a sandbox-absolute path, so it failed in any checkout outside `/home/user/market-rewind` (proved by cloning to `/tmp`). The `persistent_lake` fixture also tried to create `/home/user/...`, which would error on a machine where `/home` is not writable (e.g. macOS SIP). | Test-infrastructure defect (false red on other machines) | Split into a hermetic session lake (`tmp_path_factory`) and an optional `sandbox_lake` fixture that skips on `OSError`; discovery test now skips unless the lake sits on a candidate path for the current checkout; sandbox root overridable via `MR_SANDBOX_LAKE_ROOT`. | `test_default_discovery_finds_lake_on_a_candidate_path`, `test_rich_lake_resolves_symbols`, `test_rich_lake_encoded_symbols_reachable` |
+| 2 | `date.fromisoformat` also accepts `20261002` and ISO-week names (`2026-W40-1`); a non-canonical `date=` directory would have been silently folded into queries, violating the strict `date=<YYYY-MM-DD>` partition contract (§2.2). | Robustness defect (wrong data could be read) | Added `DATE_DIR_PATTERN` + `_parse_partition_date()`; `resolve_files` and `list_partition_dates` ignore non-canonical names. | `test_resolve_ignores_non_canonical_date_directory_names` |
+| 3 | `isinstance(True, int)` is `True`, so `schema_version: true` (or `[true]` in `compatible_versions`) was accepted as schema version 1. | Robustness defect (malformed metadata accepted) | Added `_is_plain_int()`; malformed types now raise `LakeCorruptedMetadataError`; `LakeIncompatibleSchemaError` is reserved for well-typed unsupported versions. | `test_non_integer_schema_version_raises_corrupted_metadata` (6 params), `test_non_integer_compatible_versions_raises_corrupted_metadata` |
+
+## Post-fix verification matrix
+
+| Scenario | Result |
+|---|---|
+| In-repo, no env | 80 passed, 1 skipped |
+| In-repo, `npm run backend:test` | 80 passed, 11 legacy failures (Phases 40–41 scope, unchanged), 1 skipped |
+| Fresh clone at `/tmp` (different path), no env | 79 passed, 2 skipped (0 failures) |
+| Fresh clone with valid `TICK_LAKE_ROOT` | 80 passed, 1 skipped |
+| Fresh clone with invalid `TICK_LAKE_ROOT=/tmp/nope` | 79 passed, 2 skipped (graceful skip, no error) |
+| `MR_SANDBOX_LAKE_ROOT` override to a missing path | 79 passed, 2 skipped (graceful skip) |
+| Sandbox lake deleted before run | Fixture rebuilt 14 Parquet files; 79 passed, 2 skipped |
+
+## Mutation testing (suite strength proof)
+
+Six deliberate implementation mutations were injected into a throwaway clone; every one was killed:
+
+| Mutation | Failing tests |
+|---|---|
+| `encode_symbol` becomes passthrough | 13 |
+| `resolve_files` ignores the end-date bound | 3 |
+| Maintenance guard always returns False | 4 |
+| `validate_lake` accepts any `schema_version` | 2 |
+| Pruning walks the lake root (staging leakage) | 22 |
+| Strict date parsing relaxed to `date.fromisoformat` | 1 (newly added test) |
+
+## Notes
+
+- An intermediate "failure" observed during the audit (the canonical-date test) was traced to a
+  **parallel mutation run rewriting the same clone** while verification executed — a tooling
+  mistake in this session, not a code defect. Serial re-runs were clean.
+- Contract re-check after fixes: §2.2/§2.3 pruning rules, §6.1 guard path, §7.1 exception mapping
+  and `inclusive_end` semantics remain satisfied; no contract text is contradicted by the code.

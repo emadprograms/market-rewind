@@ -26,10 +26,25 @@ def mini_lake(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
-def persistent_lake() -> Path:
-    """Sandbox-resident lake with more ticks; built once per test session."""
-    if not (SANDBOX_LAKE_ROOT / "lake.json").exists():
-        build_persistent_lake(SANDBOX_LAKE_ROOT)
+def session_lake(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Hermetic rich lake (staging decoys + control-plane noise), built once per session.
+
+    Deliberately NOT tied to any absolute path so the suite is portable across
+    checkouts (a previous revision pinned this to the sandbox path).
+    """
+    root = tmp_path_factory.mktemp("tick_lake_session") / "tick_lake"
+    return build_persistent_lake(root)
+
+
+@pytest.fixture(scope="session")
+def sandbox_lake() -> Path:
+    """Optional lake at the sandbox discovery-candidate path; skipped when unavailable."""
+    try:
+        SANDBOX_LAKE_ROOT.parent.mkdir(parents=True, exist_ok=True)
+        if not (SANDBOX_LAKE_ROOT / "lake.json").exists():
+            build_persistent_lake(SANDBOX_LAKE_ROOT)
+    except OSError as exc:  # e.g. read-only /home on macOS
+        pytest.skip(f"sandbox-resident lake unavailable: {exc}")
     return SANDBOX_LAKE_ROOT
 
 

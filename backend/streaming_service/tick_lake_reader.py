@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
@@ -65,6 +66,11 @@ SYMBOL_PREFIX = "symbol="
 DATE_PREFIX = "date="
 MAINTENANCE_GUARD_PARTS = ("_maintenance", "in_progress.json")
 PARQUET_GLOB = "*.parquet"
+
+#: Contract §2.2 canonical date-partition name: ``date=<YYYY-MM-DD>``. Applied strictly
+#: because ``date.fromisoformat`` also accepts ``20261002`` and ISO-week names such as
+#: ``2026-W40-1``, which must never be folded into a query.
+DATE_DIR_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 #: Repository root (``<repo>/backend/streaming_service/tick_lake_reader.py`` → ``<repo>``).
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
@@ -175,6 +181,28 @@ def default_lake_root_candidates() -> List[Path]:
     return ordered
 
 
+def _is_plain_int(value: Any) -> bool:
+    """True for real integers; rejects ``bool`` (which is an ``int`` subclass in Python)."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _parse_partition_date(dir_name: str) -> Optional[date]:
+    """Return the partition date for a canonical ``date=YYYY-MM-DD`` directory name.
+
+    Non-canonical names (``date=20261002``, ``date=2026-W40-1``) return ``None`` so they
+    are ignored rather than silently matched.
+    """
+    if not dir_name.startswith(DATE_PREFIX):
+        return None
+    text = dir_name[len(DATE_PREFIX):]
+    if not DATE_DIR_PATTERN.match(text):
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:  # pragma: no cover - regex already constrains the shape
+        return None
+
+
 def _to_utc_date(value: DateLike) -> date:
     """Normalize ``date``/``datetime``/ISO-string input to a UTC calendar date (§7.1)."""
     if isinstance(value, datetime):
@@ -277,13 +305,19 @@ class TickLakeReader:
 
         compatible = metadata.get("compatible_versions", list(self.compatible_versions))
         if not isinstance(compatible, (list, tuple)) or not all(
-            isinstance(item, int) for item in compatible
+            _is_plain_int(item) for item in compatible
         ):
             raise LakeCorruptedMetadataError(
                 f"compatible_versions must be a list of integers: {meta_path}"
             )
         schema_version = metadata["schema_version"]
-        if not isinstance(schema_version, int) or schema_version not in compatible:
+        if not _is_plain_int(schema_version):
+            # Malformed value (e.g. true, "1", 1.5) is metadata corruption, not a
+            # well-typed but unsupported version.
+            raise LakeCorruptedMetadataError(
+                f"schema_version must be an integer: {meta_path} (got {schema_version!r})"
+            )
+        if schema_version not in compatible:
             raise LakeIncompatibleSchemaError(
                 f"Incompatible lake schema_version {schema_version!r}; "
                 f"reader supports {list(compatible)}"
@@ -323,12 +357,11 @@ class TickLakeReader:
             return []
         dates: List[date] = []
         for entry in symbol_dir.iterdir():
-            if not entry.is_dir() or not entry.name.startswith(DATE_PREFIX):
+            if not entry.is_dir():
                 continue
-            try:
-                dates.append(date.fromisoformat(entry.name[len(DATE_PREFIX):]))
-            except ValueError:
-                continue
+            partition_date = _parse_partition_date(entry.name)
+            if partition_date is not None:
+                dates.append(partition_date)
         return sorted(dates)
 
     def resolve_files(
@@ -357,12 +390,11 @@ class TickLakeReader:
 
         matched: List[str] = []
         for entry in symbol_dir.iterdir():
-            if not entry.is_dir() or not entry.name.startswith(DATE_PREFIX):
+            if not entry.is_dir():
                 continue
-            try:
-                partition_date = date.fromisoformat(entry.name[len(DATE_PREFIX):])
-            except ValueError:
-                continue  # malformed date partition: ignore, never error (§7.1)
+            partition_date = _parse_partition_date(entry.name)
+            if partition_date is None:
+                continue  # non-canonical/malformed partition: ignore, never error (§7.1)
             if start is not None and partition_date < start:
                 continue
             if end is not None:
