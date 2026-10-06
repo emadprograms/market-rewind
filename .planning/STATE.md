@@ -1,21 +1,21 @@
 ---
 gsd_state_version: "1.0"
-milestone: v4.3
-milestone_name: Live Data Stabilization and Testing
-status: completed
-last_updated: "2026-09-30T18:12:00.000Z"
-last_activity: 2026-09-30
+milestone: v5.0
+milestone_name: Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
+status: ready_to_plan
+last_updated: "2026-10-06T15:35:00.000Z"
+last_activity: 2026-10-06
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 4
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-## Milestone: v4.3 — Live Data Stabilization and Testing
+## Milestone: v5.0 — Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
 
 ### Completed Milestones
 
@@ -35,13 +35,12 @@ See: [.planning/PROJECT.md](./PROJECT.md)
 See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
-**Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** Baseline established. All Milestones (v1.0 - v4.3) and strict single-DB engine enforcement fully resolved, verified, and committed — 100% test pass rate across unit (418 passed across 80 files), Playwright journey suites (69/69 across 13 suites), and clean production build.
+**Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, dynamic Parquet tick lake resampling, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
+**Current focus:** Re-architecting from retired `streaming.duckdb` to Data Harvester's zero-import Partitioned Parquet Tick Lake reader adhering to Repo B Read Contract v1.5.0.
 
 ## Current Position
 
-Phase: 38 — Systematic Verification & Zero Regressions
-Plan: 38-01 completed
-Status: Milestone v4.3 Completed (Baseline Established)
-Last activity: 2026-10-06 — Strict single-DB engine enforcement verified; debug artifacts pruned; clean baseline established at commit 6872e0a.
-
+Phase: 39 — Standalone Tick Lake Reader & Partition Pruning
+Plan: —
+Status: Planning phases
+Last activity: 2026-10-06 — Milestone v5.0 initialized; roadmap defined (Phases 39–42)

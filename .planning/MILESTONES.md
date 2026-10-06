@@ -1,5 +1,28 @@
 # Project Milestones: Market Rewind
 
+## v4.3 Live Data Stabilization and Testing (Shipped: 2026-09-30)
+
+**Delivered:** Resolved the four critical defects discovered during the final live-browser verification (`FINAL-LIVE-BROWSER-REVIEW-96ca478.md`). Unified daily volume aggregation and live price policy across play/pause states, prevented old symbol history from leaking during symbol switches, guaranteed sorted, unique data when merging history chunks, and proved stability across all unit and Playwright test suites.
+
+**Phases completed:** 34-38 (5 plans total)
+
+**Key accomplishments:**
+- Replicated all 4 live review failure modes in unit and Playwright tests before altering any code
+- Unified daily volume aggregation and live price calculation across live and paused states
+- Fixed render context transitions by clearing old canvas data and blocking pending requests on symbol switches
+- Guaranteed sorted and unique bar sequence when merging history chunks and rapid timeframe switching
+- Full verification: 80/80 Vitest test files passing (418 tests), 69/69 Playwright journey tests passing, clean production build
+
+**Stats:**
+- 5 phases, 5 plans, 10 requirements verified (100%)
+- 80/80 Vitest test files passing (418 tests)
+- 69/69 Playwright offline journey tests passing
+- Clean production build
+
+**Git range:** `feat(phase-34)` → `feat(phase-38)`
+
+---
+
 ## v4.2 State Machine Convergence & Temporal Strictness (Shipped: 2026-09-30)
 
 **Delivered:** Systematically resolved the three remaining P1 transition and look-ahead defects documented in `docs/reviews/2026-09-30-replay-review.md`. Following strict TDD, eliminated seek-then-play fallback volume drops, prevented switched-symbol unclosed 5m price leaks, strictly isolated daily forming candles to RTH session hours and completed minutes at 09:30:01, and proved mathematical equivalence across continuous playback, direct seek, seek-then-play, and rewind-and-replay.

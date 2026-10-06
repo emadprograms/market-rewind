@@ -1,12 +1,12 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v4.3 — Roadmap: Live Data Stabilization and Testing",
+  "milestone": "v5.0",
   "phases": [],
   "next": {
-    "command": "/gsd:discuss-phase",
+    "command": "/gsd-discuss-phase",
     "label": "Discuss the first phase",
     "reason": "Project initialized — plan your first phase"
   },
-  "updated_at": "2026-09-30T14:39:43.933Z"
+  "updated_at": "2026-10-06T15:30:03.778Z"
 }

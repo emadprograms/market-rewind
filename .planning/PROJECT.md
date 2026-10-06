@@ -6,14 +6,18 @@ Market Rewind is a high-performance local-first market replay and charting analy
 ## Core Value
 High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
 
-## Current Milestone: Milestone v4.3 — Live Data Stabilization and Testing
+## Current Milestone: Milestone v5.0 — Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
 
-**Goal:** Resolve the four critical defects discovered during the final live-browser verification (`FINAL-LIVE-BROWSER-REVIEW-96ca478.md`). Implement strict Test-Driven Development (TDD) for:
-1. Daily volume changes substantially when playback is paused.
-2. AAPL chart retains TSLA historical candles after symbol switch.
-3. Timeframe/rewind sequence supplies unsorted data to the chart.
-4. Pausing changes the daily "Live" price to a different value.
-5. Absolute convergence and no regressions across all tests.
+**Goal:** Re-architect Market Rewind's backend and data access layer from the deprecated disk-backed `streaming.duckdb` file to Data Harvester's zero-dependency Partitioned Parquet Tick Lake architecture in strict adherence to the Repo B Read Contract (`docs/contracts/repo_b_tick_lake_contract.md` v1.5.0).
+
+**Target features:**
+- Zero `data-harvester` library imports: standalone in-memory DuckDB reader (`duckdb.connect(":memory:")`) with strict memory and thread bounds.
+- Filesystem-level partition directory resolution and pruning (`ticks/symbol=<ENCODED_SYMBOL>/date=<YYYY-MM-DD>/*.parquet`) with uppercase hex percent-encoding for `[A-Za-z0-9_-]` safe set.
+- Dual-schema compatibility: Schema v1 (`price`, `volume`, `bid`, `ask`) and Schema v2 / new rows (`bid_price`, `ask_price`).
+- Deterministic OHLCV candle aggregation with `arg_min` / `arg_max` tie-breaking over `(timestamp, ingest_id)`.
+- Reverse-chronological order flow tape queries and maintenance guard checking (`_maintenance/in_progress.json`).
+- Dynamic lake root discovery (`TICK_LAKE_ROOT` env var, fallback to `data/tick_lake` symlink/relative path) and fail-fast structured exception taxonomy.
+- Full test suite alignment: update backend service and test suites to validate against the real Parquet tick lake with 100% green tests.
 
 ## Validated Requirements
 - ✓ Basic market replay engine (v1.0)
@@ -74,4 +78,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-26 after starting Milestone v3.1*
+*Last updated: 2026-10-06 after starting Milestone v5.0*
