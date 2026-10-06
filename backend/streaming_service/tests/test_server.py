@@ -139,6 +139,43 @@ class TestStreamingServer(_ServerTest):
         assert isinstance(data, list) and len(data) == 3
         assert {"time", "open", "high", "low", "close", "volume"} <= set(data[0])
 
+    async def test_streaming_symbols_alias_endpoint(self) -> None:
+        """The React client's primary endpoint for symbols is /api/streaming/symbols."""
+        resp = await self.client.request("GET", "/api/streaming/symbols")
+        assert resp.status == 200
+        data = await resp.json()
+        assert isinstance(data, list) and len(data) > 0
+        assert {"symbol", "tick_count"} <= set(data[0])
+
+    async def test_streaming_status_alias_endpoint(self) -> None:
+        resp = await self.client.request("GET", "/api/streaming/status")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "ok"
+
+    async def test_stream_tape_endpoint(self) -> None:
+        resp = await self.client.request("GET", "/api/stream/tape?symbol=NVDA&limit=5")
+        assert resp.status == 200
+        data = await resp.json()
+        assert isinstance(data, list) and len(data) == 5
+        assert all("spread" in row for row in data)
+
+    async def test_cors_headers_on_responses(self) -> None:
+        resp = await self.client.request("GET", "/api/status")
+        assert resp.headers.get("Access-Control-Allow-Origin") == "*"
+        assert "GET" in resp.headers.get("Access-Control-Allow-Methods", "")
+
+    async def test_cors_headers_on_404_error(self) -> None:
+        resp = await self.client.request("GET", "/api/nonexistent_route")
+        assert resp.status == 404
+        assert resp.headers.get("Access-Control-Allow-Origin") == "*"
+
+    async def test_cors_options_preflight(self) -> None:
+        resp = await self.client.request("OPTIONS", "/api/streaming/symbols")
+        assert resp.status == 204
+        assert resp.headers.get("Access-Control-Allow-Origin") == "*"
+        assert "GET" in resp.headers.get("Access-Control-Allow-Methods", "")
+
     async def test_encoded_slash_symbol_endpoint(self) -> None:
         """`EUR/USD` is reachable via its percent-encoded form (what the client sends)."""
         resp = await self.client.request("GET", "/api/symbols/EUR%2FUSD")

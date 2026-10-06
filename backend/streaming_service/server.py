@@ -148,7 +148,13 @@ async def cors_middleware(request, handler):
     if request.method == "OPTIONS":
         response = web.Response(status=204)
     else:
-        response = await handler(request)
+        try:
+            response = await handler(request)
+        except web.HTTPException as exc:
+            exc.headers["Access-Control-Allow-Origin"] = "*"
+            exc.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            exc.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+            raise exc
 
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
@@ -184,9 +190,16 @@ class StreamingApp:
 
     def _setup_routes(self):
         self.app.router.add_get("/api/status", self.handle_status)
+        self.app.router.add_get("/api/streaming/status", self.handle_status)
         self.app.router.add_get("/api/symbols", self.handle_symbols)
+        self.app.router.add_get("/api/streaming/symbols", self.handle_symbols)
         self.app.router.add_get("/api/symbols/{symbol}", self.handle_symbol_summary)
+        self.app.router.add_get("/api/streaming/symbols/{symbol}", self.handle_symbol_summary)
         self.app.router.add_get("/api/ticks", self.handle_ticks)
+        self.app.router.add_get("/api/streaming/ticks", self.handle_ticks)
+        self.app.router.add_get("/api/tape", self.handle_tape)
+        self.app.router.add_get("/api/stream/tape", self.handle_tape)
+        self.app.router.add_get("/api/streaming/tape", self.handle_tape)
         self.app.router.add_get("/api/candles", self.handle_candles)
         self.app.router.add_get("/api/streaming/candles", self.handle_candles)
         self.app.router.add_get("/ws/replay", self.handle_ws_replay)
@@ -254,6 +267,28 @@ class StreamingApp:
         except LakeReaderError as exc:
             return lake_error_response(exc)
         return web.Response(text=json_dumps(ticks), content_type="application/json")
+
+    async def handle_tape(self, request):
+        symbol = request.query.get("symbol")
+        if not symbol:
+            return bad_request("Missing required parameter 'symbol'")
+
+        start_time = request.query.get("start_time")
+        end_time = request.query.get("end_time")
+        try:
+            limit = int(request.query.get("limit", 50))
+        except (TypeError, ValueError):
+            return bad_request("'limit' must be an integer")
+        if limit < 0:
+            return bad_request("'limit' must be non-negative")
+
+        try:
+            tape = self.db.query_tape(
+                symbol, limit=limit, start_time=start_time, end_time=end_time
+            )
+        except LakeReaderError as exc:
+            return lake_error_response(exc)
+        return web.Response(text=json_dumps(tape), content_type="application/json")
 
     async def handle_candles(self, request):
         symbol = request.query.get("symbol")
