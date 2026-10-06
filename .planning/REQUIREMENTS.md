@@ -32,8 +32,8 @@ The requirements below eliminate all disk file-locking collisions, enforce zero 
 
 ### Category 4: Systematic Verification & Regression Immunity (LAKE-VERIFY)
 
-- [ ] **LAKE-VERIFY-01**: **Backend Test Suite Green Phase**: Update backend pytest test suite in `backend/streaming_service/tests/` to run against both synthetic test fixtures and the real tick lake, achieving a 100% pass rate on `npm run backend:test`.
-- [ ] **LAKE-VERIFY-02**: **Full Regression & E2E Verification**: Validate that all 80 Vitest unit test files (418+ tests) and Playwright journey test suites pass cleanly with zero regressions.
+- [x] **LAKE-VERIFY-01**: **Backend Test Suite Green Phase**: Update backend pytest test suite in `backend/streaming_service/tests/` to run against both synthetic test fixtures and the real tick lake, achieving a 100% pass rate on `npm run backend:test`.
+- [x] **LAKE-VERIFY-02**: **Full Regression & E2E Verification**: Validate that all 80 Vitest unit test files (418+ tests) and Playwright journey test suites pass cleanly with zero regressions.
 
 ---
 
@@ -52,5 +52,5 @@ The requirements below eliminate all disk file-locking collisions, enforce zero 
 | LAKE-API-01 | Phase 41 | COMPLETE |
 | LAKE-API-02 | Phase 41 | COMPLETE |
 | LAKE-API-03 | Phase 41 | COMPLETE |
-| LAKE-VERIFY-01 | Phase 42 | PENDING |
-| LAKE-VERIFY-02 | Phase 42 | PENDING |
+| LAKE-VERIFY-01 | Phase 42 | COMPLETE |
+| LAKE-VERIFY-02 | Phase 42 | COMPLETE |
