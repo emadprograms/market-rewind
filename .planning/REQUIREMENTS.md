@@ -12,10 +12,10 @@ The requirements below eliminate all disk file-locking collisions, enforce zero 
 
 ### Category 1: Standalone Lake Reader & Partition Pruning (LAKE-READ)
 
-- [ ] **LAKE-READ-01**: **Zero-Import Lake Reader Core**: Provide a standalone `TickLakeReader` class with zero library imports from `data-harvester`, featuring root discovery precedence (`TICK_LAKE_ROOT` env var, fallback to `<repo>/data/tick_lake` symlink/relative path) and `lake.json` format verification.
-- [ ] **LAKE-READ-02**: **Canonical Symbol Path Encoding**: Implement uppercase percent-encoding for symbol partition path resolution (`ticks/symbol=<ENCODED_SYMBOL>/`) strictly honoring the `[A-Za-z0-9_-]` safe set (e.g. `BRK.B` -> `BRK%2EB`, `EUR/USD` -> `EUR%2FUSD`).
-- [ ] **LAKE-READ-03**: **Filesystem Partition Pruning**: Implement filesystem-level partition discovery resolving explicit Parquet file lists by symbol and UTC event date range (`date=<YYYY-MM-DD>`), returning an empty list immediately without DuckDB execution if no partitions match.
-- [ ] **LAKE-READ-04**: **Structured Error Taxonomy & Maintenance Guard**: Implement explicit exception classes (`LakeUnavailableError`, `LakeCorruptedMetadataError`, `LakeIncompatibleSchemaError`, `LakeMaintenanceInProgressError`), checking for `<lake_root>/_maintenance/in_progress.json` and failing fast or retrying before execution.
+- [x] **LAKE-READ-01**: **Zero-Import Lake Reader Core**: Provide a standalone `TickLakeReader` class with zero library imports from `data-harvester`, featuring root discovery precedence (`TICK_LAKE_ROOT` env var, fallback to `<repo>/data/tick_lake` symlink/relative path) and `lake.json` format verification.
+- [x] **LAKE-READ-02**: **Canonical Symbol Path Encoding**: Implement uppercase percent-encoding for symbol partition path resolution (`ticks/symbol=<ENCODED_SYMBOL>/`) strictly honoring the `[A-Za-z0-9_-]` safe set (e.g. `BRK.B` -> `BRK%2EB`, `EUR/USD` -> `EUR%2FUSD`).
+- [x] **LAKE-READ-03**: **Filesystem Partition Pruning**: Implement filesystem-level partition discovery resolving explicit Parquet file lists by symbol and UTC event date range (`date=<YYYY-MM-DD>`), returning an empty list immediately without DuckDB execution if no partitions match.
+- [x] **LAKE-READ-04**: **Structured Error Taxonomy & Maintenance Guard**: Implement explicit exception classes (`LakeUnavailableError`, `LakeCorruptedMetadataError`, `LakeIncompatibleSchemaError`, `LakeMaintenanceInProgressError`), checking for `<lake_root>/_maintenance/in_progress.json` and failing fast or retrying before execution.
 
 ### Category 2: Resampling Engine & Dual Schema Ingestion (LAKE-RESAMPLE)
 
@@ -41,10 +41,10 @@ The requirements below eliminate all disk file-locking collisions, enforce zero 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LAKE-READ-01 | Phase 39 | PENDING |
-| LAKE-READ-02 | Phase 39 | PENDING |
-| LAKE-READ-03 | Phase 39 | PENDING |
-| LAKE-READ-04 | Phase 39 | PENDING |
+| LAKE-READ-01 | Phase 39 | COMPLETE |
+| LAKE-READ-02 | Phase 39 | COMPLETE |
+| LAKE-READ-03 | Phase 39 | COMPLETE |
+| LAKE-READ-04 | Phase 39 | COMPLETE |
 | LAKE-RESAMPLE-01 | Phase 40 | PENDING |
 | LAKE-RESAMPLE-02 | Phase 40 | PENDING |
 | LAKE-RESAMPLE-03 | Phase 40 | PENDING |
