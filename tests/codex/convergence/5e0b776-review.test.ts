@@ -1,8 +1,8 @@
-import { renderHook, act } from '/Users/emadarshadalam/Documents/GitHub/market-rewind/node_modules/@testing-library/react/dist/index.js';
+import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useChartLifecycle } from '/Users/emadarshadalam/Documents/GitHub/market-rewind/src/hooks/useChartLifecycle';
-import { usePlaybackStore } from '/Users/emadarshadalam/Documents/GitHub/market-rewind/src/store/usePlaybackStore';
-import type { RawBar } from '/Users/emadarshadalam/Documents/GitHub/market-rewind/src/types';
+import { useChartLifecycle } from '../../../src/hooks/useChartLifecycle';
+import { usePlaybackStore } from '../../../src/store/usePlaybackStore';
+import type { RawBar } from '../../../src/types';
 
 // Create fresh mock instances for each test
 const mockPriceScale = {
@@ -53,7 +53,7 @@ const mockVpPlugin = {
   setData: vi.fn(),
 };
 
-vi.mock('/Users/emadarshadalam/Documents/GitHub/market-rewind/src/hooks/chart/useChartInit', () => ({
+vi.mock('../../../src/hooks/chart/useChartInit', () => ({
   useChartInit: vi.fn(() => ({
     chartRef: { current: mockChart },
     priceSeriesRef: { current: mockPriceSeries },
@@ -62,7 +62,7 @@ vi.mock('/Users/emadarshadalam/Documents/GitHub/market-rewind/src/hooks/chart/us
   })),
 }));
 
-vi.mock('/Users/emadarshadalam/Documents/GitHub/market-rewind/src/hooks/chart/useChartPlugins', () => ({
+vi.mock('../../../src/hooks/chart/useChartPlugins', () => ({
   useChartPlugins: vi.fn(() => ({
     shadingPluginRef: { current: null },
     vpPluginRef: { current: mockVpPlugin },
@@ -154,10 +154,10 @@ it('v42: daily fallback volume must exclude premarket after hydration',async()=>
  expect(actual).toBeLessThanOrEqual(200);
 });
 
-import { useChartData } from '/Users/emadarshadalam/Documents/GitHub/market-rewind/src/hooks/useChartData';
-import { useWorkspaceStore } from '/Users/emadarshadalam/Documents/GitHub/market-rewind/src/store/useWorkspaceStore';
-import { streamingClient } from '/Users/emadarshadalam/Documents/GitHub/market-rewind/src/lib/streamingClient';
-vi.mock('/Users/emadarshadalam/Documents/GitHub/market-rewind/src/lib/streamingClient',()=>({streamingClient:{getCandles:vi.fn(),getTicks:vi.fn()}}));
+import { useChartData } from '../../../src/hooks/useChartData';
+import { useWorkspaceStore } from '../../../src/store/useWorkspaceStore';
+import { streamingClient } from '../../../src/lib/streamingClient';
+vi.mock('../../../src/lib/streamingClient',()=>({streamingClient:{getCandles:vi.fn(),getTicks:vi.fn()}}));
 it('5e0b776: starting before RTH must create the same daily candle as pausing',async()=>{
  vi.mocked(streamingClient.getCandles).mockResolvedValue([{time:'2026-09-21 12:00:00',open:100,high:110,low:90,close:101,volume:1000,session:'REG'}]);
  vi.mocked(streamingClient.getTicks).mockResolvedValue([]);
