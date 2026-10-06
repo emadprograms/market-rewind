@@ -1,52 +1,45 @@
-# Milestone v4.3 Roadmap: Live Data Stabilization and Testing
+# Milestone v5.0 Roadmap: Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
 
-**5 phases** | **10 requirements mapped** | All covered ✓
+**4 phases** | **13 requirements mapped** | All covered ✓
 
 | # | Phase | Goal | Requirements | Success Criteria | Status |
 |---|-------|------|--------------|------------------|--------|
-| 34 | Test-First Harness & Review Reproduction | Replicate all 4 live review failure modes in unit and Playwright tests before altering any code | LIVE-TEST-01, LIVE-TEST-02, LIVE-TEST-03 | 3 | COMPLETED |
-| 35 | Unified Daily Volume & Live Price Policy | Align daily volume aggregation and live price calculation across live and paused states | LIVE-VOL-01, LIVE-VOL-02 | 3 | COMPLETED |
-| 36 | Render Context Transitions | Prevent old symbol history from remaining on screen during and after a symbol switch | LIVE-CONTEXT-01, LIVE-CONTEXT-02 | 3 | COMPLETED |
-| 37 | Merge Boundaries & Data Ordering | Guarantee sorted, unique data when merging history and expose meaningful errors if updates fail | LIVE-ORDER-01, LIVE-ORDER-02 | 3 | COMPLETED |
-| 38 | Systematic Verification & Zero Regressions | Ensure all new and existing tests pass cleanly with no regressions | LIVE-VERIFY-01 | 2 | COMPLETED |
+| 39 | Standalone Tick Lake Reader & Partition Pruning | Build zero-dependency `TickLakeReader` with root discovery, symbol encoding, filesystem partition pruning, and structured exceptions | LAKE-READ-01, LAKE-READ-02, LAKE-READ-03, LAKE-READ-04 | 3 | PENDING |
+| 40 | Deterministic OHLCV Aggregation & Dual Schema Ingestion | Implement vectorized in-memory DuckDB candle resampling with `arg_min`/`arg_max` tie-breaking, dual schema support, and RTH filtering | LAKE-RESAMPLE-01, LAKE-RESAMPLE-02, LAKE-RESAMPLE-03, LAKE-RESAMPLE-04 | 3 | PENDING |
+| 41 | Backend Service Migration & Order Flow Tape | Refactor `DuckDBService` and `server.py` to route queries to the tick lake, supporting reverse-chronological tape queries and maintenance guards | LAKE-API-01, LAKE-API-02, LAKE-API-03 | 3 | PENDING |
+| 42 | Comprehensive Verification & Regression Immunity | Update backend pytest suite for 100% green pass on `npm run backend:test` and verify zero regressions across Vitest and Playwright suites | LAKE-VERIFY-01, LAKE-VERIFY-02 | 2 | PENDING |
+
+---
 
 ### Phase Details
 
-**Phase 34: Test-First Harness & Review Reproduction**
-Goal: Replicate all 4 live review failure modes in unit and Playwright tests before altering any code
-Requirements: LIVE-TEST-01, LIVE-TEST-02, LIVE-TEST-03
-Success criteria:
-1. Unit tests added mimicking pausing volume differences, symbol switches, timeframe sequence ordering issues, and live price mismatch.
-2. Playwright E2E tests capturing these workflows visually and logically.
-3. Tests confirm red phase (fail predictably).
+**Phase 39: Standalone Tick Lake Reader & Partition Pruning**
+- **Goal:** Build zero-dependency `TickLakeReader` with root discovery, symbol encoding, filesystem partition pruning, and structured exceptions
+- **Requirements:** LAKE-READ-01, LAKE-READ-02, LAKE-READ-03, LAKE-READ-04
+- **Success criteria:**
+  1. Standalone `TickLakeReader` module created in `backend/streaming_service/tick_lake_reader.py` with zero `data-harvester` library imports.
+  2. Canonical symbol encoder correctly encodes `[A-Za-z0-9_-]` safe set (e.g. `BRK.B` -> `BRK%2EB`, `EUR/USD` -> `EUR%2FUSD`) and resolves matching `ticks/symbol=.../date=.../*.parquet` partitions.
+  3. Structured error taxonomy implemented (`LakeUnavailableError`, `LakeCorruptedMetadataError`, `LakeIncompatibleSchemaError`, `LakeMaintenanceInProgressError`) with fail-fast validation against `lake.json` and `_maintenance/in_progress.json`.
 
-**Phase 35: Unified Daily Volume & Live Price Policy**
-Goal: Align daily volume aggregation and live price calculation across live and paused states
-Requirements: LIVE-VOL-01, LIVE-VOL-02
-Success criteria:
-1. Pausing during real-data playback does not suddenly jump daily volume.
-2. Live price stays identical regardless of play/pause state.
-3. Corresponding unit and Playwright tests (from Phase 34) now pass.
+**Phase 40: Deterministic OHLCV Aggregation & Dual Schema Ingestion**
+- **Goal:** Implement vectorized in-memory DuckDB candle resampling with `arg_min`/`arg_max` tie-breaking, dual schema support, and RTH filtering
+- **Requirements:** LAKE-RESAMPLE-01, LAKE-RESAMPLE-02, LAKE-RESAMPLE-03, LAKE-RESAMPLE-04
+- **Success criteria:**
+  1. Dynamic resampling queries execute via `read_parquet(?, hive_partitioning=false)` on isolated ephemeral `:memory:` DuckDB sessions with `threads=4` and `max_memory='2GB'`.
+  2. Open and close prices use deterministic `arg_min(..., (timestamp, ingest_id))` and `arg_max(..., (timestamp, ingest_id))` tie-breaking across all timeframes (`1s` to `1d`), handling both Schema v1 (`price`, `volume`) and Schema v2 (`bid_price`, `ask_price`).
+  3. Daily (`1d`) candles strictly filter for Regular Trading Hours (`session = 'REG'`).
 
-**Phase 36: Render Context Transitions**
-Goal: Prevent old symbol history from remaining on screen during and after a symbol switch
-Requirements: LIVE-CONTEXT-01, LIVE-CONTEXT-02
-Success criteria:
-1. Switching symbol correctly clears old canvas data and blocks pending requests.
-2. Full prefix replacement implemented instead of reusing bar counts.
-3. Relevant unit and Playwright tests now pass.
+**Phase 41: Backend Service Migration & Order Flow Tape**
+- **Goal:** Refactor `DuckDBService` and `server.py` to route queries to the tick lake, supporting reverse-chronological tape queries and maintenance guards
+- **Requirements:** LAKE-API-01, LAKE-API-02, LAKE-API-03
+- **Success criteria:**
+  1. `DuckDBService` wraps `TickLakeReader` while preserving all public method signatures (`get_status`, `get_symbols`, `get_symbol_summary`, `query_ticks`, `query_candles`) and API response structure.
+  2. Reverse-chronological Time & Sales tape queries with spread calculation (`ask - bid`) are supported and exposed via `/api/ticks`.
+  3. REST and WebSocket endpoints in `server.py` handle maintenance 503 responses and stream real Parquet ticks for live playback.
 
-**Phase 37: Merge Boundaries & Data Ordering**
-Goal: Guarantee sorted, unique data when merging history and expose meaningful errors if updates fail
-Requirements: LIVE-ORDER-01, LIVE-ORDER-02
-Success criteria:
-1. Rapid timeframe switching and rewinding correctly sorts merged chunks.
-2. If data is unsorted, it cleanly rejects rather than rendering a stale/invalid chart.
-3. Relevant tests pass.
-
-**Phase 38: Systematic Verification & Zero Regressions**
-Goal: Ensure all new and existing tests pass cleanly with no regressions
-Requirements: LIVE-VERIFY-01
-Success criteria:
-1. 100% of the 366+ existing tests pass.
-2. 100% of the new tests pass.
+**Phase 42: Comprehensive Verification & Regression Immunity**
+- **Goal:** Update backend pytest suite for 100% green pass on `npm run backend:test` and verify zero regressions across Vitest and Playwright suites
+- **Requirements:** LAKE-VERIFY-01, LAKE-VERIFY-02
+- **Success criteria:**
+  1. 100% of backend tests in `backend/streaming_service/tests/` pass against the real tick lake (`npm run backend:test`).
+  2. 100% of Vitest unit test files (418+ tests) and Playwright journey suites pass cleanly with zero regressions.
