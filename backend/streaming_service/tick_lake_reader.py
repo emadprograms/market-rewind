@@ -111,6 +111,7 @@ DEFAULT_MAX_MEMORY = "2GB"
 #: Result clamps mirroring the retired service (and bounding memory per query).
 MAX_CANDLE_LIMIT = 50000
 MAX_TICK_LIMIT = 100000
+MAX_TAPE_LIMIT = 100000
 
 _MEMORY_LIMIT_PATTERN = re.compile(r"^\d+(\.\d+)?\s*(KB|MB|GB|TB)$", re.IGNORECASE)
 
@@ -329,6 +330,16 @@ class _Projection:
     has_ingest_id_column: bool
     union_by_name: bool
     schema_fingerprint: Tuple[str, ...]
+
+
+def _parquet_row_count(path: Path) -> Optional[int]:
+    """Row count from Parquet footer metadata only; ``None`` when unavailable."""
+    try:
+        import pyarrow.parquet as pq  # local import: optional fast path
+
+        return int(pq.ParquetFile(str(path)).metadata.num_rows)
+    except Exception:
+        return None
 
 
 def _sql_literal(value: str) -> str:
@@ -906,6 +917,197 @@ class TickLakeReader:
             ]
 
         return self._execute_query(resolve, build, transform)
+
+    def query_tape(
+        self,
+        symbol: str,
+        limit: int = 50,
+        *,
+        max_partitions: int = 31,
+    ) -> List[Dict[str, Any]]:
+        """Reverse-chronological order-flow tape with computed spread (contract §4.2).
+
+        Reads the newest ``date=`` partitions first and only spills into older ones when
+        they cannot satisfy ``limit``, so a thin latest partition cannot silently truncate
+        a Time & Sales panel. Rows are ordered ``timestamp DESC, ingest_id DESC``; spread is
+        ``round(ask - bid, 4)`` and is ``NULL`` whenever either quote side is missing.
+        """
+        self.ensure_ready()
+        clamped_limit = min(max(int(limit), 0), MAX_TAPE_LIMIT)
+        if clamped_limit == 0:
+            return []
+
+        partition_dates = self.list_partition_dates(symbol)
+        if not partition_dates:
+            return []
+
+        def resolve_for(dates: Sequence[date]) -> List[str]:
+            files: List[str] = []
+            for day in dates:
+                files.extend(self.resolve_files(symbol, day, day))
+            return sorted(files)
+
+        def build(files: Sequence[str]) -> Tuple[str, List[Any]]:
+            projection = self._build_projection(files, symbol=symbol, need_session=False)
+            spread_expr = (
+                f"CASE WHEN {projection.bid_expr} IS NOT NULL AND {projection.ask_expr} IS NOT NULL "
+                f"THEN round({projection.ask_expr} - {projection.bid_expr}, 4) ELSE NULL END"
+            )
+            where = ""
+            params: List[Any] = []
+            if projection.has_symbol_column:
+                where = "WHERE upper(symbol) = ?"
+                params.append(symbol.upper())
+            sql = f"""
+                SELECT
+                    timestamp,
+                    {projection.symbol_expr} AS symbol,
+                    {projection.price_expr} AS price,
+                    {projection.volume_expr} AS volume,
+                    {projection.bid_expr} AS bid,
+                    {projection.ask_expr} AS ask,
+                    {spread_expr} AS spread,
+                    {projection.source_expr} AS source,
+                    {projection.session_expr} AS session
+                FROM {self._read_parquet_source(projection)}
+                {where}
+                ORDER BY timestamp DESC, {projection.ingest_id_expr} DESC
+                LIMIT {clamped_limit}
+            """
+            return sql, params
+
+        @staticmethod
+        def transform(rows: Sequence[Sequence[Any]]) -> List[Dict[str, Any]]:
+            return [
+                {
+                    "timestamp": row[0].isoformat() if hasattr(row[0], "isoformat") else str(row[0]),
+                    "symbol": row[1],
+                    "price": float(row[2]) if row[2] is not None else None,
+                    "volume": float(row[3]) if row[3] is not None else 1.0,
+                    "bid": float(row[4]) if row[4] is not None else None,
+                    "ask": float(row[5]) if row[5] is not None else None,
+                    "spread": float(row[6]) if row[6] is not None else None,
+                    "source": row[7],
+                    "session": row[8],
+                }
+                for row in rows
+            ]
+
+        # Newest partitions first; stop as soon as the requested window is satisfied.
+        ordered_dates = list(reversed(partition_dates))[: max(1, int(max_partitions))]
+        chosen: List[date] = []
+        result: List[Dict[str, Any]] = []
+        for day in ordered_dates:
+            chosen.append(day)
+            result = self._execute_query(lambda: resolve_for(chosen), build, transform)
+            if len(result) >= clamped_limit:
+                break
+        return result
+
+    def symbol_stats(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Per-symbol aggregates: tick count, first/last tick, min/max traded price.
+
+        With ``symbol=None`` the whole lake is aggregated in a single grouped query.
+        ``min_price``/``max_price`` use the same price expression as candle aggregation
+        (v1 ``price`` / v2 ``bid_price``, coalesced for mixed sets).
+        """
+        self.ensure_ready()
+
+        if symbol is not None:
+            files = self.resolve_files(symbol)
+            if not files:
+                return []
+        else:
+            files = []
+            for name in self.list_symbols():
+                files.extend(self.resolve_files(name))
+            files = sorted(files)
+            if not files:
+                return []
+
+        def build(file_list: Sequence[str]) -> Tuple[str, List[Any]]:
+            projection = self._build_projection(file_list, symbol=symbol or "", need_session=False)
+            filter_symbol = symbol is not None and projection.has_symbol_column
+            where = "WHERE upper(symbol) = ?" if filter_symbol else ""
+            params: List[Any] = [symbol.upper()] if filter_symbol else []
+            sql = f"""
+                SELECT
+                    {projection.symbol_expr} AS symbol,
+                    count(*) AS tick_count,
+                    min(timestamp) AS first_tick,
+                    max(timestamp) AS last_tick,
+                    min({projection.price_expr}) AS min_price,
+                    max({projection.price_expr}) AS max_price
+                FROM {self._read_parquet_source(projection)}
+                {where}
+                GROUP BY symbol
+                ORDER BY tick_count DESC, symbol ASC
+            """
+            return sql, params
+
+        @staticmethod
+        def transform(rows: Sequence[Sequence[Any]]) -> List[Dict[str, Any]]:
+            return [
+                {
+                    "symbol": row[0],
+                    "tick_count": int(row[1]),
+                    "first_tick": row[2].isoformat() if hasattr(row[2], "isoformat") else str(row[2]),
+                    "last_tick": row[3].isoformat() if hasattr(row[3], "isoformat") else str(row[3]),
+                    "min_price": float(row[4]) if row[4] is not None else None,
+                    "max_price": float(row[5]) if row[5] is not None else None,
+                }
+                for row in rows
+                if int(row[1]) > 0
+            ]
+
+        return self._execute_query(lambda: files, build, transform)
+
+    def lake_totals(self, *, footer_scan_limit: int = 2000) -> Dict[str, Any]:
+        """Lake inventory from directory names and Parquet footers (no data scan).
+
+        ``tick_count`` is ``None`` when the file count exceeds ``footer_scan_limit`` so a
+        very large lake cannot stall a status endpoint.
+        """
+        symbols = self.list_symbols()
+        partitions = 0
+        files: List[Path] = []
+        if self.ticks_dir.is_dir():
+            for symbol_dir in sorted(self.ticks_dir.iterdir()):
+                if not symbol_dir.is_dir() or not symbol_dir.name.startswith(SYMBOL_PREFIX):
+                    continue
+                for entry in sorted(symbol_dir.iterdir()):
+                    if entry.is_dir() and _parse_partition_date(entry.name) is not None:
+                        partitions += 1
+                        files.extend(sorted(entry.glob(PARQUET_GLOB)))
+
+        tick_count: Optional[int] = None
+        size_bytes = 0
+        if files:
+            for path in files:
+                try:
+                    size_bytes += path.stat().st_size
+                except OSError:
+                    pass
+            if len(files) <= footer_scan_limit:
+                total = 0
+                counted = True
+                for path in files:
+                    rows = _parquet_row_count(path)
+                    if rows is None:
+                        counted = False
+                        break
+                    total += rows
+                tick_count = total if counted else None
+
+        return {
+            "path": str(self.lake_root),
+            "exists": self.lake_root.is_dir(),
+            "symbol_count": len(symbols),
+            "partition_count": partitions,
+            "file_count": len(files),
+            "size_bytes": size_bytes,
+            "tick_count": tick_count,
+        }
 
     def list_symbols(self) -> List[str]:
         """Decoded display symbols present under ``ticks/`` (sorted)."""

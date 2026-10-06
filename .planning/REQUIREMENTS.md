@@ -26,9 +26,9 @@ The requirements below eliminate all disk file-locking collisions, enforce zero 
 
 ### Category 3: Backend API Integration & Order Flow Tape (LAKE-API)
 
-- [ ] **LAKE-API-01**: **DuckDBService Adapter Migration**: Refactor `backend/streaming_service/duckdb_client.py` to route all queries through `TickLakeReader`, retiring direct `streaming.duckdb` file attachment while preserving existing method signatures and API contracts.
-- [ ] **LAKE-API-02**: **Reverse-Chronological Order Flow Tape**: Implement reverse-chronological tape queries with spread calculation (`ask - bid`) over the latest active date partition files, exposed via `/api/ticks`.
-- [ ] **LAKE-API-03**: **Server REST & WebSocket Endpoint Alignment**: Update `backend/streaming_service/server.py` endpoints (`/api/status`, `/api/symbols`, `/api/summary`, `/api/candles`, `/api/ticks`, `/ws/playback`) to return tick lake metadata, graceful 503 status during maintenance, and streaming tick playback.
+- [x] **LAKE-API-01**: **DuckDBService Adapter Migration**: Refactor `backend/streaming_service/duckdb_client.py` to route all queries through `TickLakeReader`, retiring direct `streaming.duckdb` file attachment while preserving existing method signatures and API contracts.
+- [x] **LAKE-API-02**: **Reverse-Chronological Order Flow Tape**: Implement reverse-chronological tape queries with spread calculation (`ask - bid`) over the latest active date partition files, exposed via `/api/ticks`.
+- [x] **LAKE-API-03**: **Server REST & WebSocket Endpoint Alignment**: Update `backend/streaming_service/server.py` endpoints (`/api/status`, `/api/symbols`, `/api/summary`, `/api/candles`, `/api/ticks`, `/ws/playback`) to return tick lake metadata, graceful 503 status during maintenance, and streaming tick playback.
 
 ### Category 4: Systematic Verification & Regression Immunity (LAKE-VERIFY)
 
@@ -49,8 +49,8 @@ The requirements below eliminate all disk file-locking collisions, enforce zero 
 | LAKE-RESAMPLE-02 | Phase 40 | COMPLETE |
 | LAKE-RESAMPLE-03 | Phase 40 | COMPLETE |
 | LAKE-RESAMPLE-04 | Phase 40 | COMPLETE |
-| LAKE-API-01  | Phase 41 | PENDING |
-| LAKE-API-02  | Phase 41 | PENDING |
-| LAKE-API-03  | Phase 41 | PENDING |
+| LAKE-API-01 | Phase 41 | COMPLETE |
+| LAKE-API-02 | Phase 41 | COMPLETE |
+| LAKE-API-03 | Phase 41 | COMPLETE |
 | LAKE-VERIFY-01 | Phase 42 | PENDING |
 | LAKE-VERIFY-02 | Phase 42 | PENDING |

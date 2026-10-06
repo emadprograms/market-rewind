@@ -113,7 +113,7 @@ def generate_ticks(
     base: float,
     *,
     count: int = 60,
-    start_utc: str = "12:00:00",
+    start_utc: str = "13:30:00",
     seed: int = 1337,
 ) -> List[Dict[str, Any]]:
     """Deterministic, contract-shaped tick rows for one symbol/date partition.
