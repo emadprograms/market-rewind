@@ -36,7 +36,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       selectedId: null,
       tickers: {},
       groups: {},
-      groupTickers: { red: 'SPY', blue: 'SPY', green: 'SPY', yellow: 'SPY' },
+      groupTickers: { red: 'AAPL', blue: 'AAPL', green: 'AAPL', yellow: 'AAPL' },
       timeframes: {},
       theme: 'oled',
 

@@ -62,6 +62,16 @@ test.describe('TEST-01: Playwright Date Reset Isolation', () => {
       expect(currentTickIdx).toBeLessThanOrEqual(10);
     }
 
+    // Wait for replay buffering to settle
+    await expect(page.locator('.playback-bar')).toHaveAttribute('data-ticks-loading', 'false', { timeout: 20000 }).catch(() => {});
+
     expect(pageErrors).toEqual([]);
+  });
+
+  test.afterEach(async ({ page }) => {
+    const resetBtn = page.getByRole('button', { name: /Reset Session/i });
+    if (await resetBtn.isVisible().catch(() => false)) {
+      await resetBtn.click().catch(() => {});
+    }
   });
 });

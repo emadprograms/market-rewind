@@ -243,7 +243,7 @@ export function useChartData({
 
       console.log(`[useChartData ${id}] ${ticker} (${timeframe}) loaded ${data?.length || 0} bars: ${data?.[0]?.time} -> ${data?.[data?.length - 1]?.time}`);
       
-      // DATA-02: Automatic query retry on suspicious single-bar responses
+
       if (data && data.length === 1 && timeframe !== '1D') {
         console.warn(`[useChartData ${id}] Suspicious single bar received for ${ticker} (${timeframe}). Retrying with open end boundary...`);
         try {

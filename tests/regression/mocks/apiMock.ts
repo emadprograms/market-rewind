@@ -106,7 +106,7 @@ export async function installApiMocks(page: Page, options: MockMarketOptions = {
   });
 
   // --- Symbol list --------------------------------------------------------
-  await page.route(/\/api\/symbols(\?|$)/, (route) => {
+  await page.route(/\/api(\/streaming)?\/symbols(\?|$)/, (route) => {
     bump('symbols');
     return json(
       route,
@@ -155,14 +155,14 @@ export async function installApiMocks(page: Page, options: MockMarketOptions = {
     return json(route, ticks, latency);
   });
 
-  // --- Sub-second candles (registered before the generic /api/candles) ----
+  // --- Streaming candles (intraday, daily, sub-second) ---------------------
   await page.route(/\/api\/streaming\/candles(\?|$)/, (route) => {
     bump('streamingCandles');
     const url = new URL(route.request().url());
     const q = url.searchParams;
     handle.lastCandlesQuery = new URLSearchParams(q);
     const symbol = (q.get('symbol') || 'SPY').toUpperCase();
-    const tf = tfTokenToSeconds(q.get('tf') || q.get('timeframe') || '1s');
+    const tf = tfTokenToSeconds(q.get('tf') || q.get('timeframe') || '1m');
     const rows = options.emptyMarket
       ? []
       : queryCandles(symbol, tf, {

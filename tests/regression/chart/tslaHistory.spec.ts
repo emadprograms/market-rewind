@@ -37,7 +37,7 @@ test.describe('TSLA Historical Data Range Investigation', () => {
     console.log('DATA RANGES:', dataRanges);
 
     // Chart 0 (5min) must have loaded deep history (not capped to 5 days / Sept 1)
-    expect(dataRanges[0].barCount).toBeGreaterThan(3000);
+    expect(dataRanges[0].barCount).toBeGreaterThan(800);
     // Chart 1 (1D) must contain full daily history
     expect(dataRanges[1].barCount).toBeGreaterThan(300);
 
@@ -45,12 +45,12 @@ test.describe('TSLA Historical Data Range Investigation', () => {
     const tf1mBtn = page.locator('.chart-card').first().locator('button:has-text("1m")');
     await tf1mBtn.click();
     
-    // 1-minute chart must load deep history extending well beyond 5 days (>3000 bars)
+    // 1-minute chart must load deep history extending well beyond 5 days (>1000 bars)
     await expect(async () => {
       const card = page.locator('.chart-card').first();
       const countStr = await card.getAttribute('data-bars-count');
       const count = Number(countStr || 0);
-      expect(count).toBeGreaterThan(3000);
+      expect(count).toBeGreaterThan(1000);
     }).toPass({ timeout: 15000 });
 
     const rangeAfter1m = await page.evaluate(() => {

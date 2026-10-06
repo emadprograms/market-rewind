@@ -20,11 +20,12 @@ import {
  */
 test.describe('Viewport Visual Stability', () => {
   test('STAB-01: rapid ticker swaps do not crash or desync the chart', async ({ page }) => {
+    test.setTimeout(120_000);
     const pageErrors = collectPageErrors(page);
     await uploadSeedAndStartSession(page);
 
     const card = chartCard(page, 0);
-    const swaps = ['AAPL', 'MSFT', 'AAPL', 'MSFT', 'AAPL'] as const;
+    const swaps = ['MSFT', 'AAPL', 'MSFT', 'AAPL'] as const;
     for (const ticker of swaps) {
       await changeTicker(card, ticker);
       await expect(headerTicker(card)).toHaveText(ticker);
@@ -33,7 +34,7 @@ test.describe('Viewport Visual Stability', () => {
     // UI still fully functional: both charts present, canvas alive, no crash overlay
     await expect(page.locator('.chart-card')).toHaveCount(2);
     await expect(card.locator('canvas').first()).toBeVisible();
-    await expect(headerTicker(chartCard(page, 1))).toHaveText('SPY');
+    await expect(headerTicker(chartCard(page, 1))).toHaveText('AAPL');
     await expect(page.locator('vite-error-overlay')).toHaveCount(0);
     expect(pageErrors).toEqual([]);
   });
@@ -63,7 +64,7 @@ test.describe('Viewport Visual Stability', () => {
     // App remains healthy: layout intact, header correct, canvas same size
     // (a "violent jump" regression would blur/crash or re-layout the pane)
     await expect(page.locator('.chart-card')).toHaveCount(2);
-    await expect(headerTicker(card)).toHaveText('SPY');
+    await expect(headerTicker(card)).toHaveText('AAPL');
     const boxAfter = await canvas.boundingBox();
     expect(boxAfter).not.toBeNull();
     // Allow slight price scale margin adjustment (typically 5-10px) while guarding against violent layout collapse

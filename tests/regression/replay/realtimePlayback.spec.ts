@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { chartCard, startSession, collectPageErrors } from '../e2e-utils';
 
 test.describe('TEST-06: Real-Time Playback Clock & Tick Timing', () => {
+
   test('playback advances continuously based on market timestamps rather than fixed synthetic step interval', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
 

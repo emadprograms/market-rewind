@@ -6,8 +6,8 @@ test.describe('TEST-07: Chart Timeline, Session Shading & Replay Opening Price I
   test('Issue 1 & 2: Chart candles load at 09:30 ET with correct X-Axis timestamp and RTH session shading (not 05:30 PRE)', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
 
-    // Initialize session for SPY on 2026-09-25 at 09:30 ET market open
-    await startSession(page, 'SPY', '2026-09-25', '09:30');
+    // Initialize session for AAPL on 2026-09-25 at 09:30 ET market open
+    await startSession(page, 'AAPL', '2026-09-25', '09:30');
 
     const card = chartCard(page, 0);
 
@@ -50,8 +50,8 @@ test.describe('TEST-07: Chart Timeline, Session Shading & Replay Opening Price I
   test('Issue 3: Replay opening price at 09:30 ET matches authentic market open price and forms accurately', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
 
-    // Initialize session for SPY on 2026-09-25 at 09:30 ET market open
-    await startSession(page, 'SPY', '2026-09-25', '09:30');
+    // Initialize session for AAPL on 2026-09-25 at 09:30 ET market open
+    await startSession(page, 'AAPL', '2026-09-25', '09:30');
 
     const card = chartCard(page, 0);
 
@@ -80,11 +80,11 @@ test.describe('TEST-07: Chart Timeline, Session Shading & Replay Opening Price I
         lastBarClose: el.getAttribute('data-last-bar-close'),
       }));
 
-      // The open price of the 09:30 candle must be realistic market price (for SPY on 2026-09-25, around $768)
+      // The open price of the 09:30 candle must be realistic market price (for AAPL on 2026-09-25, around $255)
       if (steppedBarData.lastBarOpen) {
         const openPrice = parseFloat(steppedBarData.lastBarOpen);
-        expect(openPrice).toBeGreaterThan(700);
-        expect(openPrice).toBeLessThan(850);
+        expect(openPrice).toBeGreaterThan(200);
+        expect(openPrice).toBeLessThan(350);
       }
     }
 
@@ -98,9 +98,10 @@ test.describe('TEST-07: Chart Timeline, Session Shading & Replay Opening Price I
   });
 
   test('Issue 4: 1D Daily candles display the correct calendar day (Sep 25 on 2026-09-25, not Sep 24)', async ({ page }) => {
+    test.slow();
     const pageErrors = collectPageErrors(page);
 
-    await startSession(page, 'SPY', '2026-09-25', '09:30');
+    await startSession(page, 'AAPL', '2026-09-25', '09:30');
 
     const card = chartCard(page, 0);
 

@@ -6,7 +6,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
  */
 
 export const SEED_DATE = '2026-09-25';
-export const SEED_SYMBOLS = ['AAPL', 'MSFT', 'SPY', 'AMD'] as const;
+export const SEED_SYMBOLS = ['AAPL', 'MSFT', 'TSLA', 'AMD'] as const;
 
 /** The root `.chart-card` element for the chart at `index` (layout '2v' → 2 charts). */
 export function chartCard(page: Page, index: number): Locator {
@@ -24,11 +24,21 @@ export function headerTicker(card: Locator): Locator {
  */
 export async function startSession(
   page: Page, 
-  ticker: string = 'SPY', 
+  ticker: string = 'AAPL', 
   date: string = SEED_DATE,
   entryTime?: string
 ): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {}
+  });
   await page.goto('/');
+  const resetBtn = page.getByRole('button', { name: /Reset Session/i });
+  if (await resetBtn.isVisible().catch(() => false)) {
+    await resetBtn.click().catch(() => {});
+  }
   await expect(page.getByText('Configure Session')).toBeVisible({ timeout: 20000 });
   await expect(page.locator('.session-card select option')).not.toHaveCount(0);
   await page.locator('.session-card select').first().selectOption(ticker);
@@ -36,6 +46,7 @@ export async function startSession(
   if (entryTime) {
     await page.locator('.session-card input[type="time"]').fill(entryTime);
   }
+  await page.waitForTimeout(100);
   await page.getByRole('button', { name: /Initialize Market Simulator/i }).click();
   await expect(page.locator('.chart-card')).toHaveCount(2);
   await expect(headerTicker(chartCard(page, 0))).toHaveText(ticker);
@@ -62,6 +73,7 @@ export async function changeTicker(card: Locator, ticker: string): Promise<void>
   const select = card.locator('.chart-controls .custom-select').first();
   await select.click();
   const searchInput = card.locator('.dropdown-search input');
+  await searchInput.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
   if (await searchInput.isVisible()) {
     await searchInput.fill(ticker);
   }

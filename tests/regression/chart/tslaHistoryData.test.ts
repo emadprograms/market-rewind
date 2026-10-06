@@ -147,7 +147,19 @@ describe('TSLA Historical Data Range & Prepend Regression Tests', () => {
   });
 
   describe('Deep Historical Data Accessibility', () => {
-    it('should retrieve TSLA candles dating well before September 1st, 2026', async () => {
+    it('should retrieve TSLA candles dating well before September 1st, 2026', async (ctx) => {
+      let isAvailable = false;
+      try {
+        const res = await fetch(`${streamingClient.getBaseUrl()}/health`, { signal: AbortSignal.timeout(1000) });
+        isAvailable = res.ok;
+      } catch {
+        isAvailable = false;
+      }
+      if (!isAvailable) {
+        ctx.skip();
+        return;
+      }
+
       // Query 5m candles up to Sept 8, 2026 with higher limit
       const candles = await streamingClient.getCandles('TSLA', {
         timeframe: '5min',
@@ -161,7 +173,19 @@ describe('TSLA Historical Data Range & Prepend Regression Tests', () => {
       expect(earliest < '2026-07-01').toBe(true);
     }, 30000);
 
-    it('should retrieve TSLA 1D candles all the way back to March 2025 / Oct 2024', async () => {
+    it('should retrieve TSLA 1D candles all the way back to March 2025 / Oct 2024', async (ctx) => {
+      let isAvailable = false;
+      try {
+        const res = await fetch(`${streamingClient.getBaseUrl()}/health`, { signal: AbortSignal.timeout(1000) });
+        isAvailable = res.ok;
+      } catch {
+        isAvailable = false;
+      }
+      if (!isAvailable) {
+        ctx.skip();
+        return;
+      }
+
       const candles = await streamingClient.getCandles('TSLA', {
         timeframe: '1D',
         endTime: '2026-09-08 23:59:59',

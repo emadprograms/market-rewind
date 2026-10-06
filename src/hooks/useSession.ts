@@ -10,7 +10,7 @@ export function useSession(tickers: string[]) {
     if (!saved || saved > DEFAULT_DATE) return DEFAULT_DATE;
     return saved;
   });
-  const [sessionTicker, setSessionTicker] = useState<string>(() => localStorage.getItem('lastUsedTicker') || 'SPY');
+  const [sessionTicker, setSessionTicker] = useState<string>(() => localStorage.getItem('lastUsedTicker') || 'AAPL');
   const [entryTime, setEntryTime] = useState('09:20');
   const [isSessionStarted, setIsSessionStarted] = useState(false);
 
@@ -19,7 +19,7 @@ export function useSession(tickers: string[]) {
     if (tickers.length > 0) {
       setSessionTicker(prev => {
         if (tickers.includes(prev)) return prev;
-        return tickers.includes('SPY') ? 'SPY' : tickers[0];
+        return tickers.includes('AAPL') ? 'AAPL' : tickers[0];
       });
     }
   }, [tickers]);

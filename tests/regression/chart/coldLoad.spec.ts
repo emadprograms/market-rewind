@@ -40,8 +40,8 @@ test.describe('TEST-05: Cold Load & Chart Candle Visibility', () => {
     expect(box0!.height).toBeGreaterThan(100);
 
     // Verify header tickers match session ticker
-    await expect(headerTicker(card0)).toHaveText('SPY');
-    await expect(headerTicker(card1)).toHaveText('SPY');
+    await expect(headerTicker(card0)).toHaveText('AAPL');
+    await expect(headerTicker(card1)).toHaveText('AAPL');
 
     // Confirm no uncaught exceptions occurred during chart initialization
     expect(pageErrors).toEqual([]);

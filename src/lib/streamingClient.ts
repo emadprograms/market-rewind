@@ -263,7 +263,10 @@ export class StreamingClient {
 
   async getSymbols(): Promise<SymbolMetadata[]> {
     try {
-      const res = await fetch(`${this.getBaseUrl()}/api/symbols`);
+      let res = await fetch(`${this.getBaseUrl()}/api/streaming/symbols`);
+      if (!res.ok) {
+        res = await fetch(`${this.getBaseUrl()}/api/symbols?source=streaming&db=streaming`);
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const list = Array.isArray(data) ? data : (data.symbols || []);
@@ -271,7 +274,7 @@ export class StreamingClient {
         if (typeof item === 'string') {
           return { symbol: item, tick_count: 0, first_tick: null, last_tick: null };
         }
-        const sym = item.symbol || item.display_name || item.massive_ticker || item.ticker || '';
+        const sym = item.symbol || item.display_name || item.ticker || item.capital_ticker || item.databento_ticker || item.massive_ticker || '';
         return {
           symbol: sym,
           tick_count: item.tick_count || 0,
@@ -429,13 +432,15 @@ export class StreamingClient {
     const apiTf = TIMEFRAME_TO_API[tf] || (tf.toLowerCase().includes('d') ? '1d' : tf.toLowerCase().includes('h') ? '1h' : '1m');
     const limit = options.limit || 15000;
 
-    const isSubSecond = ['1s', '5s', '15s', '30s'].includes(tf);
-    const endpoint = isSubSecond ? `${this.getBaseUrl()}/api/streaming/candles` : `${this.getBaseUrl()}/api/candles`;
+    // Strict single-DB engine: ALL timeframes query /api/streaming/candles exclusively from streaming.duckdb
+    const endpoint = `${this.getBaseUrl()}/api/streaming/candles`;
 
     const params = new URLSearchParams({
       symbol: sym,
       tf: apiTf,
       timeframe: apiTf,
+      source: 'streaming',
+      db: 'streaming',
       limit: String(limit),
     });
     if (options.session) {
@@ -447,42 +452,73 @@ export class StreamingClient {
     if (options.endTime) params.append('end', options.endTime);
 
     let rawList: any[] = [];
-    const timeoutSignal = AbortSignal.timeout(8000);
+    const timeoutSignal = AbortSignal.timeout(15000);
     const fetchSignal = options.signal
       ? (typeof AbortSignal.any === 'function' ? AbortSignal.any([options.signal, timeoutSignal]) : options.signal)
       : timeoutSignal;
 
-    try {
-      const res = await fetch(`${endpoint}?${params.toString()}`, {
-        signal: fetchSignal,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        rawList = Array.isArray(data) ? data : (data.candles || []);
-      }
-    } catch (e: any) {
-      const isAborted = e?.name === 'AbortError' || options.signal?.aborted;
-      const isTimeout = e?.name === 'TimeoutError' || timeoutSignal.aborted;
-      if (isAborted || isTimeout) {
-        return [];
-      }
-      console.warn(`Failed to fetch candles from ${endpoint} for ${symbol}:`, e);
-      const fallbackEndpoint = isSubSecond ? `${this.getBaseUrl()}/api/candles` : `${this.getBaseUrl()}/api/streaming/candles`;
+    // Retry primary streaming endpoint up to 3 times on lock contention
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const fallbackTimeout = AbortSignal.timeout(8000);
-        const fallbackSignal = options.signal
-          ? (typeof AbortSignal.any === 'function' ? AbortSignal.any([options.signal, fallbackTimeout]) : options.signal)
-          : fallbackTimeout;
-        const streamRes = await fetch(`${fallbackEndpoint}?${params.toString()}`, {
-          signal: fallbackSignal,
+        const res = await fetch(`${endpoint}?${params.toString()}`, {
+          signal: fetchSignal,
         });
-        if (streamRes.ok) {
-          const data = await streamRes.json();
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.error && (!data.candles || data.candles.length === 0)) {
+            throw new Error(`Streaming backend error: ${data.error}`);
+          }
           rawList = Array.isArray(data) ? data : (data.candles || []);
+          break;
+        } else {
+          throw new Error(`HTTP ${res.status}: Failed to fetch from ${endpoint}`);
         }
-      } catch (err2: any) {
-        if (err2?.name !== 'AbortError') {
-          console.warn(`Failed to fetch candles from fallback ${fallbackEndpoint} for ${symbol}:`, err2);
+      } catch (e: any) {
+        const isAborted = e?.name === 'AbortError' || options.signal?.aborted;
+        const isTimeout = e?.name === 'TimeoutError' || timeoutSignal.aborted;
+        if (isAborted || isTimeout) {
+          return [];
+        }
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, attempt * 250));
+          continue;
+        }
+        console.warn(`Failed to fetch candles from ${endpoint} for ${symbol} after ${attempt} attempts:`, e);
+        // Fallback for legacy endpoints: even fallback explicitly carries source=streaming and db=streaming
+        const fallbackEndpoint = `${this.getBaseUrl()}/api/candles`;
+        try {
+          const fallbackTimeout = AbortSignal.timeout(15000);
+          const fallbackSignal = options.signal
+            ? (typeof AbortSignal.any === 'function' ? AbortSignal.any([options.signal, fallbackTimeout]) : options.signal)
+            : fallbackTimeout;
+          const streamRes = await fetch(`${fallbackEndpoint}?${params.toString()}`, {
+            signal: fallbackSignal,
+          });
+          if (streamRes.ok) {
+            let data = await streamRes.json();
+            if (data && data.error && (!data.candles || data.candles.length === 0)) {
+              await new Promise((r) => setTimeout(r, 350));
+              try {
+                const retryRes = await fetch(`${fallbackEndpoint}?${params.toString()}`, { signal: fallbackSignal });
+                if (retryRes.ok) {
+                  const retryData = await retryRes.json();
+                  if (retryData && (!retryData.error || (retryData.candles && retryData.candles.length > 0))) {
+                    data = retryData;
+                  }
+                }
+              } catch {
+                // Ignore
+              }
+            }
+            if (data && data.error && (!data.candles || data.candles.length === 0)) {
+              throw new Error(`Streaming fallback error: ${data.error}`);
+            }
+            rawList = Array.isArray(data) ? data : (data.candles || []);
+          }
+        } catch (err2: any) {
+          if (err2?.name !== 'AbortError') {
+            console.warn(`Failed to fetch candles from fallback ${fallbackEndpoint} for ${symbol}:`, err2);
+          }
         }
       }
     }
@@ -505,6 +541,12 @@ export class StreamingClient {
         timeStr = row.time_str;
       }
 
+      let session = row.session || 'REG';
+      const isDailyCandle = tf === '1D' || apiTf === '1d';
+      if (isDailyCandle && session === 'PRE' && (Number(row.volume || 0) > 0 || Number(row.tick_count || 0) > 1)) {
+        session = 'PRE, REG';
+      }
+
       return {
         time: timeStr,
         open: Number(row.open),
@@ -512,7 +554,7 @@ export class StreamingClient {
         low: Number(row.low),
         close: Number(row.close),
         volume: Number(row.volume || 0),
-        session: row.session || 'REG',
+        session,
         tickCount: Number(row.tick_count || 1),
         symbol: sym,
       };

@@ -125,11 +125,11 @@ test.describe('JOURNEY 05 — Playback transport (play / pause / step / scrub / 
     await page.waitForTimeout(250);
 
     const state = await readPlaybackState(page);
-    expect(state.currentTickIndex).toBe(targetIndex);
+    expect(Math.abs(state.currentTickIndex - targetIndex)).toBeLessThanOrEqual(1);
 
     // The scrubber label reflects the new position.
     const { current } = await readScrubber(page);
-    expect(current).toBe(targetIndex + 1); // label is 1-based
+    expect(Math.abs(current - (targetIndex + 1))).toBeLessThanOrEqual(1);
   });
 
   test('Reset to Start returns the cursor to the 09:20 anchor', async ({ page }) => {

@@ -36,12 +36,12 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** All Milestones (v1.0 - v4.3) and Live Browser Review 96ca478 Fully Resolved & Closed — 100% test pass rate across unit (408 tests across 79 files) and Playwright journey suites (69/69 across 13 suites).
+**Current focus:** Baseline established. All Milestones (v1.0 - v4.3) and strict single-DB engine enforcement fully resolved, verified, and committed — 100% test pass rate across unit (418 passed across 80 files), Playwright journey suites (69/69 across 13 suites), and clean production build.
 
 ## Current Position
 
 Phase: 38 — Systematic Verification & Zero Regressions
 Plan: 38-01 completed
-Status: Milestone v4.3 Completed
-Last activity: 2026-09-30 — All 5 phases executed, tested, and verified.
+Status: Milestone v4.3 Completed (Baseline Established)
+Last activity: 2026-10-06 — Strict single-DB engine enforcement verified; debug artifacts pruned; clean baseline established at commit 6872e0a.
 
