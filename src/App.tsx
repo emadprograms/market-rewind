@@ -106,18 +106,27 @@ export default function App() {
   }, [activeStepMinutes, setStepMinutes]);
 
   const sessionGenRef = useRef(0);
+  // Keep latest selectedDate/entryTime in refs to avoid stale closure when
+  // startSession triggers load before App re-renders with new date (reset flow)
+  const selectedDateRef = useRef(selectedDate);
+  const entryTimeRef = useRef(entryTime);
+  selectedDateRef.current = selectedDate;
+  entryTimeRef.current = entryTime;
 
   // Buffer live ticks when session begins or date/ticker changes
   const loadStreamingTicks = useCallback(async () => {
     if (!sessionTicker) return;
+    // Use refs to get latest date/time even if closure is stale (reset→pick date→Initialize race)
+    const curDate = selectedDateRef.current;
+    const curEntry = entryTimeRef.current;
     const currentGen = ++sessionGenRef.current;
     const { setIsLoadingTicks, setBufferedTicks } = usePlaybackStore.getState();
     setIsLoadingTicks(true);
     try {
-      const queryStartEt = entryTime && entryTime < '09:20' ? entryTime : '09:20';
-      const startTime = getUtcTimeFromEt(selectedDate, queryStartEt);
-      const endTime = `${selectedDate} 23:59:59`;
-      const targetTimeStr = getUtcTimeFromEt(selectedDate, entryTime || '09:20');
+      const queryStartEt = curEntry && curEntry < '09:20' ? curEntry : '09:20';
+      const startTime = getUtcTimeFromEt(curDate, queryStartEt);
+      const endTime = `${curDate} 23:59:59`;
+      const targetTimeStr = getUtcTimeFromEt(curDate, curEntry || '09:20');
       const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
       usePlaybackStore.getState().setCurrentTime(targetMs);
       usePlaybackStore.getState().seekTickTime(targetMs);
