@@ -306,6 +306,68 @@ def corrupt_lake_json(root: Path) -> Path:
     return path
 
 
+def rows_v1(
+    symbol: str,
+    entries: Sequence[Dict[str, Any]],
+    *,
+    source: str = "CAPITAL",
+) -> List[Dict[str, Any]]:
+    """Explicit schema-v1 rows. Each entry: timestamp, price, volume, session, ingest_id (bid/ask optional)."""
+    rows: List[Dict[str, Any]] = []
+    for entry in entries:
+        price = float(entry["price"])
+        rows.append(
+            {
+                "timestamp": entry["timestamp"],
+                "symbol": symbol,
+                "price": price,
+                "volume": entry.get("volume"),
+                "bid": entry.get("bid", round(price - 0.01, 6)),
+                "ask": entry.get("ask", round(price + 0.01, 6)),
+                "source": entry.get("source", source),
+                "session": entry.get("session", "REG"),
+                "ingest_id": entry["ingest_id"],
+            }
+        )
+    return rows
+
+
+def rows_v2(
+    symbol: str,
+    entries: Sequence[Dict[str, Any]],
+    *,
+    source: str = "BINANCE",
+) -> List[Dict[str, Any]]:
+    """Explicit schema-v2 rows (bid_price/ask_price only — no price, no volume)."""
+    rows: List[Dict[str, Any]] = []
+    for entry in entries:
+        rows.append(
+            {
+                "timestamp": entry["timestamp"],
+                "symbol": symbol,
+                "bid": float(entry["bid_price"]),
+                "ask": float(entry["ask_price"]),
+                "source": entry.get("source", source),
+                "session": entry.get("session", "REG"),
+                "ingest_id": entry["ingest_id"],
+            }
+        )
+    return rows
+
+
+def write_rows_as(
+    root: Path,
+    symbol: str,
+    day: str,
+    rows: Sequence[Dict[str, Any]],
+    *,
+    schema: str = "v1",
+    filename: str = "batch_writer_1_000001.parquet",
+) -> Path:
+    """Write explicit rows in the requested physical schema (v1 or v2)."""
+    return write_partition(root, symbol, day, rows, filename=filename, schema=schema)
+
+
 def build_persistent_lake(root: Path, *, count: int = 240, seed: int = 20261006) -> Path:
     """Build the larger sandbox-resident mini lake used for integration tests.
 
@@ -314,6 +376,22 @@ def build_persistent_lake(root: Path, *, count: int = 240, seed: int = 20261006)
     """
     root = Path(root)
     build_mini_lake(root, count=count, seed=seed)
+    # Session-spanning partition (PRE/REG/POST on one UTC date) so the daily RTH
+    # policy has observable, deterministic evidence in the rich lake.
+    span_rows = rows_v1(
+        "NVDA",
+        [
+            {"timestamp": datetime.fromisoformat("2026-10-02T12:00:00"), "price": 120.0, "volume": 5.0,
+             "session": "PRE", "ingest_id": "span_pre_0001"},
+            {"timestamp": datetime.fromisoformat("2026-10-02T13:30:00"), "price": 121.0, "volume": 1.0,
+             "session": "REG", "ingest_id": "span_reg_0001"},
+            {"timestamp": datetime.fromisoformat("2026-10-02T15:00:00"), "price": 122.0, "volume": 2.0,
+             "session": "REG", "ingest_id": "span_reg_0002"},
+            {"timestamp": datetime.fromisoformat("2026-10-02T21:00:00"), "price": 118.0, "volume": 9.0,
+             "session": "POST", "ingest_id": "span_post_0001"},
+        ],
+    )
+    write_rows_as(root, "NVDA", "2026-10-02", span_rows, filename="chunk_000002.parquet")
     add_staging_decoy(root)
     control = root / "_control"
     control.mkdir(parents=True, exist_ok=True)

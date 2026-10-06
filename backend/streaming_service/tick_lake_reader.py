@@ -17,18 +17,29 @@ Implements Market Rewind's side of the **Repo B Tick Lake Read Contract v1.5.0**
   ``LakeReaderError``.
 * **Maintenance guard** (§6.1): ``_maintenance/in_progress.json`` blocks execution.
 
-Phase 39 scope: root discovery, metadata validation, encoding, pruning, guard.
-Query execution (in-memory DuckDB resampling) is layered on in Phase 40 via
-``ensure_ready()`` + :meth:`TickLakeReader.resolve_files`.
+Phase 39 delivered root discovery, metadata validation, symbol encoding, partition
+pruning and the maintenance guard. Phase 40 layers the query engine on top (§3.4, §4.1):
+
+* **Isolated in-memory DuckDB sessions** (``:memory:`` with ``threads = 4``,
+  ``max_memory = '2GB'``, ``TimeZone = 'UTC'``) — no disk database, no locks.
+* **Deterministic OHLCV resampling** via ``time_bucket`` plus ``arg_min``/``arg_max``
+  over the ``(timestamp, ingest_id)`` tuple key.
+* **Dual schema ingestion**: schema v1 files use ``price``; schema v2 rows use
+  ``bid_price``; heterogeneous file sets are coalesced with ``union_by_name``.
+* **Daily RTH isolation** for ``1d`` candles (``session = 'REG'``).
+* **Retry-once on ``duckdb.IOException``** with re-resolution (§7.3.3).
 """
 from __future__ import annotations
 
 import json
 import os
 import re
-from datetime import date, datetime, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, time as _time, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+
+import duckdb
 
 __all__ = [
     "SAFE_SYMBOL_CHARS",
@@ -71,6 +82,37 @@ PARQUET_GLOB = "*.parquet"
 #: because ``date.fromisoformat`` also accepts ``20261002`` and ISO-week names such as
 #: ``2026-W40-1``, which must never be folded into a query.
 DATE_DIR_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+#: Timeframe → DuckDB interval literal. Mirrors the retired service's map (1s .. 1d);
+#: an unknown timeframe falls back to ``1 minute`` for API compatibility.
+INTERVAL_MAP: Dict[str, str] = {
+    "1s": "1 second",
+    "5s": "5 seconds",
+    "15s": "15 seconds",
+    "30s": "30 seconds",
+    "1m": "1 minute",
+    "3m": "3 minutes",
+    "5m": "5 minutes",
+    "15m": "15 minutes",
+    "30m": "30 minutes",
+    "1h": "1 hour",
+    "4h": "4 hours",
+    "1d": "1 day",
+}
+DEFAULT_INTERVAL = "1 minute"
+
+#: Timeframes whose candles are daily (Regular Trading Hours policy applies).
+DAILY_TIMEFRAMES = frozenset({"1d", "1 day"})
+
+#: DuckDB session bounds (contract §4.1 / LAKE-RESAMPLE-01).
+DEFAULT_THREADS = 4
+DEFAULT_MAX_MEMORY = "2GB"
+
+#: Result clamps mirroring the retired service (and bounding memory per query).
+MAX_CANDLE_LIMIT = 50000
+MAX_TICK_LIMIT = 100000
+
+_MEMORY_LIMIT_PATTERN = re.compile(r"^\d+(\.\d+)?\s*(KB|MB|GB|TB)$", re.IGNORECASE)
 
 #: Repository root (``<repo>/backend/streaming_service/tick_lake_reader.py`` → ``<repo>``).
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
@@ -221,6 +263,82 @@ def _to_utc_date(value: DateLike) -> date:
     raise TypeError(f"Unsupported date value: {value!r} ({type(value).__name__})")
 
 
+def _to_utc_datetime(value: Union[DateLike, datetime, None]) -> Optional[datetime]:
+    """Normalize ``date``/``datetime``/ISO-string input to a naive UTC datetime (§7.1).
+
+    Timezone-aware inputs are converted to UTC; naive inputs are taken as UTC. Strings may
+    be ISO dates, naive ISO datetimes, or ``Z``/offset-suffixed datetimes.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is not None and value.tzinfo.utcoffset(value) is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, _time.min)
+    if isinstance(value, str):
+        text = value.strip()
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return datetime.combine(date.fromisoformat(text), _time.min)
+        return _to_utc_datetime(parsed)
+    raise TypeError(f"Unsupported datetime value: {value!r} ({type(value).__name__})")
+
+
+def _is_date_only(value: Any) -> bool:
+    """True when the caller supplied a calendar date without a time-of-day component."""
+    if isinstance(value, datetime):
+        return False
+    if isinstance(value, date):
+        return True
+    if isinstance(value, str):
+        return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip()))
+    return False
+
+
+def _end_boundary(value: Any) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """Normalize an end bound.
+
+    A date-only end bound is inclusive of that whole UTC date (``< next midnight``); an
+    explicit timestamp keeps the legacy ``<=`` semantics. Returns ``(inclusive, exclusive)``.
+    """
+    if value is None:
+        return None, None
+    if _is_date_only(value):
+        day = _to_utc_datetime(value)
+        return None, day + timedelta(days=1)
+    return _to_utc_datetime(value), None
+
+
+@dataclass(frozen=True)
+class _Projection:
+    """SQL expressions and read options derived from the resolved files' physical columns."""
+
+    symbol_expr: str
+    price_expr: str
+    volume_expr: str
+    bid_expr: str
+    ask_expr: str
+    source_expr: str
+    session_expr: str
+    ingest_id_expr: str
+    has_symbol_column: bool
+    has_session_column: bool
+    has_ingest_id_column: bool
+    union_by_name: bool
+    schema_fingerprint: Tuple[str, ...]
+
+
+def _sql_literal(value: str) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _coalesce_expr(primary: str, fallback: str) -> str:
+    return f"coalesce({primary}, {fallback})"
+
+
 # --------------------------------------------------------------------------- #
 # Reader
 # --------------------------------------------------------------------------- #
@@ -235,13 +353,24 @@ class TickLakeReader:
         expected_format: str = LAKE_FORMAT,
         compatible_versions: Sequence[int] = DEFAULT_COMPATIBLE_VERSIONS,
         validate: bool = True,
+        threads: int = DEFAULT_THREADS,
+        max_memory: str = DEFAULT_MAX_MEMORY,
     ) -> None:
         self.expected_format = expected_format
         self.compatible_versions = tuple(compatible_versions)
+        self.threads = int(threads)
+        if self.threads < 1:
+            raise ValueError("threads must be >= 1")
+        if not _MEMORY_LIMIT_PATTERN.match(str(max_memory)):
+            raise ValueError(f"max_memory must look like '2GB' (got {max_memory!r})")
+        self.max_memory = str(max_memory).upper()
         self.lake_root: Path = self._resolve_root(lake_root)
         self.ticks_dir: Path = self.lake_root / TICKS_DIRNAME
         self.metadata: Optional[Dict[str, Any]] = None
         self.schema_version: Optional[int] = None
+        # Parquet footers are immutable; cache column sets keyed by (mtime, size) to avoid
+        # re-reading footers on every query. File *lists* are never cached (contract §7.3.2).
+        self._schema_cache: Dict[Tuple[str, int, int], Tuple[str, ...]] = {}
         if validate:
             self.validate_lake()
 
@@ -406,6 +535,377 @@ class TickLakeReader:
                 if parquet_file.is_file():
                     matched.append(str(parquet_file))
         return sorted(matched)
+
+    # -- in-memory DuckDB execution (contract §4.1; LAKE-RESAMPLE-01) -------- #
+
+    def _connect(self) -> duckdb.DuckDBPyConnection:
+        """Open an isolated in-memory session with the contract's bounded settings."""
+        connection = duckdb.connect(":memory:")
+        connection.execute("SET TimeZone = 'UTC'")
+        connection.execute(f"SET threads = {self.threads}")
+        connection.execute(f"SET max_memory = '{self.max_memory}'")
+        return connection
+
+    def _file_columns(self, path: str) -> Tuple[str, ...]:
+        """Physical column names of one Parquet file (footer metadata only)."""
+        try:
+            stat = os.stat(path)
+        except OSError as exc:
+            raise duckdb.IOException(f"IO Error: could not stat {path}: {exc}") from exc
+        key = (str(path), stat.st_mtime_ns, stat.st_size)
+        cached = self._schema_cache.get(key)
+        if cached is not None:
+            return cached
+
+        try:
+            import pyarrow.parquet as pq  # local import: optional fast path
+
+            columns = tuple(pq.read_schema(path).names)
+        except ImportError:  # pragma: no cover - pyarrow is present in the test env
+            connection = self._connect()
+            try:
+                described = connection.execute(
+                    "SELECT * FROM read_parquet([?], hive_partitioning=false) LIMIT 0", [str(path)]
+                ).description
+                columns = tuple(column[0] for column in described)
+            finally:
+                connection.close()
+
+        self._schema_cache[key] = columns
+        return columns
+
+    def _build_projection(
+        self, files: Sequence[str], *, symbol: str, need_session: bool
+    ) -> _Projection:
+        """Derive SQL expressions from the columns physically present in ``files``.
+
+        Contract §3: v1 files carry ``price``/``volume``/``bid``/``ask``; v2 rows carry
+        ``bid_price``/``ask_price`` and no ``volume``. A projection referencing a column
+        that is absent raises a DuckDB binder error, so the expressions are built from the
+        intersection (common) and union of the files' column sets; ``union_by_name=true``
+        is only enabled when the files are heterogeneous.
+        """
+        if not files:
+            raise LakeUnavailableError("projection requested for an empty file list")
+
+        column_sets = [set(self._file_columns(path)) for path in files]
+        common: set = set.intersection(*column_sets)
+        union: set = set.union(*column_sets)
+        mixed = common != union
+
+        if "timestamp" not in common:
+            raise LakeIncompatibleSchemaError(
+                "Resolved Parquet files lack a common 'timestamp' column (§3.2)"
+            )
+        if "ingest_id" not in common:
+            raise LakeIncompatibleSchemaError(
+                "Resolved Parquet files lack a common 'ingest_id' column; deterministic "
+                "tie-breaking on (timestamp, ingest_id) is impossible (§3.2/§3.4)"
+            )
+        if need_session and "session" not in common:
+            raise LakeIncompatibleSchemaError(
+                "Resolved Parquet files lack a common 'session' column; the requested "
+                "session/RTH filter cannot be enforced (§3.2)"
+            )
+
+        price_candidates = [name for name in ("price", "bid_price") if name in union]
+        if not price_candidates:
+            raise LakeIncompatibleSchemaError(
+                "Resolved Parquet files contain neither 'price' (v1) nor 'bid_price' (v2)"
+            )
+        if "price" in common and "bid_price" in common:
+            price_expr = _coalesce_expr("price", "bid_price")
+        elif "price" in common:
+            price_expr = "price"
+        elif "bid_price" in common:
+            price_expr = "bid_price"
+        else:
+            price_expr = _coalesce_expr("price", "bid_price")
+
+        if "volume" in common:
+            volume_expr = "coalesce(volume, 1.0)"
+        elif "volume" in union:
+            volume_expr = "coalesce(volume, 1.0)"
+        else:
+            volume_expr = "1.0"
+
+        bid_expr = self._quote_expr("bid", "bid_price", common, union)
+        ask_expr = self._quote_expr("ask", "ask_price", common, union)
+
+        has_symbol = "symbol" in common
+        symbol_expr = "symbol" if has_symbol else _sql_literal(symbol.upper())
+        source_expr = "source" if "source" in common else "NULL"
+        session_expr = "session" if "session" in common else "NULL"
+
+        return _Projection(
+            symbol_expr=symbol_expr,
+            price_expr=price_expr,
+            volume_expr=volume_expr,
+            bid_expr=bid_expr,
+            ask_expr=ask_expr,
+            source_expr=source_expr,
+            session_expr=session_expr,
+            ingest_id_expr="ingest_id",
+            has_symbol_column=has_symbol,
+            has_session_column="session" in common,
+            has_ingest_id_column=True,
+            union_by_name=mixed,
+            schema_fingerprint=tuple(sorted(common)),
+        )
+
+    @staticmethod
+    def _quote_expr(primary: str, fallback: str, common: set, union: set) -> str:
+        if primary in common and fallback in common:
+            return _coalesce_expr(primary, fallback)
+        if primary in common:
+            return primary
+        if fallback in common:
+            return fallback
+        if primary in union or fallback in union:
+            return _coalesce_expr(primary, fallback)
+        return "NULL"
+
+    def _read_parquet_source(self, projection: _Projection) -> str:
+        options = "hive_partitioning=false"
+        if projection.union_by_name:
+            options += ", union_by_name=true"
+        return f"read_parquet(?, {options})"
+
+    def _execute_query(
+        self,
+        resolve: Callable[[], List[str]],
+        build: Callable[[Sequence[str]], Tuple[str, List[Any]]],
+        transform: Callable[[Sequence[Sequence[Any]]], List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        """Resolve → build → execute, retrying once on ``duckdb.IOException`` (§7.3.3)."""
+        files = resolve()
+        if not files:
+            return []
+
+        attempts = 0
+        while True:
+            connection = None
+            try:
+                sql, params = build(files)
+                connection = self._connect()
+                rows = connection.execute(sql, [list(files)] + list(params)).fetchall()
+                return transform(rows)
+            except duckdb.IOException:
+                # A file may vanish before or during execution (compaction/maintenance);
+                # contract §7.3.3 requires re-resolution and a single retry.
+                if attempts >= 1:
+                    raise
+                attempts += 1
+                files = resolve()
+                if not files:
+                    return []
+            finally:
+                if connection is not None:
+                    connection.close()
+
+    # -- resampling queries (LAKE-RESAMPLE-02/03/04) ------------------------- #
+
+    def query_candles(
+        self,
+        symbol: str,
+        timeframe: str = "1m",
+        start_time: Optional[Union[DateLike, datetime]] = None,
+        end_time: Optional[Union[DateLike, datetime]] = None,
+        limit: int = 15000,
+        direction: Optional[str] = None,
+        session: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Aggregate ticks into deterministic OHLCV candles (contract §3.4).
+
+        ``direction='desc'`` (or ``end_time`` without ``start_time``) selects the most recent
+        ``limit`` buckets; results are always returned in ascending bucket order.
+        ``1d`` candles enforce ``session = 'REG'`` unless an explicit session is given
+        (``session='ALL'`` disables the filter).
+        """
+        self.ensure_ready()
+        normalized = (timeframe or "1m").lower()
+        interval = INTERVAL_MAP.get(normalized, DEFAULT_INTERVAL)
+
+        session_text = str(session).strip().upper() if session is not None else None
+        if session_text == "":
+            session_text = None  # empty string means "unspecified", not "no filter"
+        session_filter: Optional[str] = None
+        if session_text is not None and session_text != "ALL":
+            session_filter = session_text
+        elif session_text is None and normalized in DAILY_TIMEFRAMES:
+            session_filter = "REG"
+
+        start_dt = _to_utc_datetime(start_time)
+        end_dt, end_exclusive = _end_boundary(end_time)
+        clamped_limit = min(max(int(limit), 0), MAX_CANDLE_LIMIT)
+        if clamped_limit == 0:
+            return []
+
+        if direction is not None:
+            order_desc = str(direction).lower() == "desc"
+        else:
+            order_desc = start_time is None and end_time is not None
+        order_dir = "DESC" if order_desc else "ASC"
+
+        last_partition_date = (
+            end_dt.date() if end_dt is not None
+            else (end_exclusive - timedelta(days=1)).date() if end_exclusive is not None
+            else None
+        )
+
+        def resolve() -> List[str]:
+            return self.resolve_files(
+                symbol,
+                start_dt.date() if start_dt else None,
+                last_partition_date,
+            )
+
+        def build(files: Sequence[str]) -> Tuple[str, List[Any]]:
+            projection = self._build_projection(
+                files, symbol=symbol, need_session=session_filter is not None
+            )
+            where: List[str] = []
+            params: List[Any] = []
+            if projection.has_symbol_column:
+                where.append("upper(symbol) = ?")
+                params.append(symbol.upper())
+            if session_filter is not None:
+                where.append("upper(session) = ?")
+                params.append(session_filter)
+            if start_dt is not None:
+                where.append("timestamp >= ?")
+                params.append(start_dt)
+            if end_dt is not None:
+                where.append("timestamp <= ?")
+                params.append(end_dt)
+            if end_exclusive is not None:
+                where.append("timestamp < ?")
+                params.append(end_exclusive)
+            where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+            sql = f"""
+                SELECT
+                    time_bucket(INTERVAL '{interval}', timestamp) AS bucket_time,
+                    {projection.symbol_expr} AS symbol,
+                    arg_min({projection.price_expr}, (timestamp, {projection.ingest_id_expr})) AS open,
+                    max({projection.price_expr}) AS high,
+                    min({projection.price_expr}) AS low,
+                    arg_max({projection.price_expr}, (timestamp, {projection.ingest_id_expr})) AS close,
+                    sum({projection.volume_expr}) AS volume,
+                    count(*) AS tick_count
+                FROM {self._read_parquet_source(projection)}
+                {where_sql}
+                GROUP BY bucket_time, symbol
+                ORDER BY bucket_time {order_dir}
+                LIMIT {clamped_limit}
+            """
+            return sql, params
+
+        @staticmethod
+        def transform(rows: Sequence[Sequence[Any]]) -> List[Dict[str, Any]]:
+            candles = [
+                {
+                    "time": row[0].isoformat() if hasattr(row[0], "isoformat") else str(row[0]),
+                    "symbol": row[1],
+                    "open": float(row[2]),
+                    "high": float(row[3]),
+                    "low": float(row[4]),
+                    "close": float(row[5]),
+                    "volume": float(row[6]),
+                    "tick_count": int(row[7]),
+                }
+                for row in rows
+            ]
+            if order_desc:
+                candles.reverse()  # contract-facing order is always chronological
+            return candles
+
+        return self._execute_query(resolve, build, transform)
+
+    def query_ticks(
+        self,
+        symbol: str,
+        start_time: Optional[Union[DateLike, datetime]] = None,
+        end_time: Optional[Union[DateLike, datetime]] = None,
+        limit: int = 10000,
+        offset: int = 0,
+        direction: str = "asc",
+    ) -> List[Dict[str, Any]]:
+        """Return raw ticks ordered by ``(timestamp, ingest_id)`` in the requested direction."""
+        self.ensure_ready()
+        start_dt = _to_utc_datetime(start_time)
+        end_dt, end_exclusive = _end_boundary(end_time)
+        clamped_limit = min(max(int(limit), 0), MAX_TICK_LIMIT)
+        clamped_offset = max(int(offset), 0)
+        if clamped_limit == 0:
+            return []
+        order_dir = "ASC" if str(direction).lower() == "asc" else "DESC"
+
+        last_partition_date = (
+            end_dt.date() if end_dt is not None
+            else (end_exclusive - timedelta(days=1)).date() if end_exclusive is not None
+            else None
+        )
+
+        def resolve() -> List[str]:
+            return self.resolve_files(
+                symbol,
+                start_dt.date() if start_dt else None,
+                last_partition_date,
+            )
+
+        def build(files: Sequence[str]) -> Tuple[str, List[Any]]:
+            projection = self._build_projection(files, symbol=symbol, need_session=False)
+            where: List[str] = []
+            params: List[Any] = []
+            if projection.has_symbol_column:
+                where.append("upper(symbol) = ?")
+                params.append(symbol.upper())
+            if start_dt is not None:
+                where.append("timestamp >= ?")
+                params.append(start_dt)
+            if end_dt is not None:
+                where.append("timestamp <= ?")
+                params.append(end_dt)
+            if end_exclusive is not None:
+                where.append("timestamp < ?")
+                params.append(end_exclusive)
+            where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+            sql = f"""
+                SELECT
+                    timestamp,
+                    {projection.symbol_expr} AS symbol,
+                    {projection.price_expr} AS price,
+                    {projection.volume_expr} AS volume,
+                    {projection.bid_expr} AS bid,
+                    {projection.ask_expr} AS ask,
+                    {projection.source_expr} AS source,
+                    {projection.session_expr} AS session
+                FROM {self._read_parquet_source(projection)}
+                {where_sql}
+                ORDER BY timestamp {order_dir}, {projection.ingest_id_expr} {order_dir}
+                LIMIT {clamped_limit} OFFSET {clamped_offset}
+            """
+            return sql, params
+
+        @staticmethod
+        def transform(rows: Sequence[Sequence[Any]]) -> List[Dict[str, Any]]:
+            return [
+                {
+                    "time": row[0].isoformat() if hasattr(row[0], "isoformat") else str(row[0]),
+                    "symbol": row[1],
+                    "price": float(row[2]) if row[2] is not None else None,
+                    "volume": float(row[3]) if row[3] is not None else 1.0,
+                    "bid": float(row[4]) if row[4] is not None else None,
+                    "ask": float(row[5]) if row[5] is not None else None,
+                    "source": row[6],
+                    "session": row[7],
+                }
+                for row in rows
+            ]
+
+        return self._execute_query(resolve, build, transform)
 
     def list_symbols(self) -> List[str]:
         """Decoded display symbols present under ``ticks/`` (sorted)."""

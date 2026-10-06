@@ -19,10 +19,10 @@ The requirements below eliminate all disk file-locking collisions, enforce zero 
 
 ### Category 2: Resampling Engine & Dual Schema Ingestion (LAKE-RESAMPLE)
 
-- [ ] **LAKE-RESAMPLE-01**: **Isolated In-Memory DuckDB Runner**: Execute queries via `read_parquet(?, hive_partitioning=false)` on isolated ephemeral `:memory:` DuckDB sessions with explicit concurrency bounds (`SET threads = 4`, `SET max_memory = '2GB'`, `SET TimeZone = 'UTC'`).
-- [ ] **LAKE-RESAMPLE-02**: **Deterministic OHLCV Candle Aggregation**: Dynamically aggregate ticks into candles across all standard timeframes (`1s` to `1d`) using vectorized DuckDB `time_bucket()` with deterministic `arg_min(..., (timestamp, ingest_id))` for open and `arg_max(..., (timestamp, ingest_id))` for close.
-- [ ] **LAKE-RESAMPLE-03**: **Dual Schema Compatibility**: Support both physical Schema v1 files (`timestamp`, `symbol`, `price`, `volume`, `bid`, `ask`, `source`, `session`, `ingest_id`) and Schema v2 rows (`bid_price`, `ask_price`), correctly coalescing quotes without column binder errors.
-- [ ] **LAKE-RESAMPLE-04**: **Daily RTH Session Isolation**: Strictly enforce Regular Trading Hours filtering (`session = 'REG'`) when aggregating daily (`1d`) candles.
+- [x] **LAKE-RESAMPLE-01**: **Isolated In-Memory DuckDB Runner**: Execute queries via `read_parquet(?, hive_partitioning=false)` on isolated ephemeral `:memory:` DuckDB sessions with explicit concurrency bounds (`SET threads = 4`, `SET max_memory = '2GB'`, `SET TimeZone = 'UTC'`).
+- [x] **LAKE-RESAMPLE-02**: **Deterministic OHLCV Candle Aggregation**: Dynamically aggregate ticks into candles across all standard timeframes (`1s` to `1d`) using vectorized DuckDB `time_bucket()` with deterministic `arg_min(..., (timestamp, ingest_id))` for open and `arg_max(..., (timestamp, ingest_id))` for close.
+- [x] **LAKE-RESAMPLE-03**: **Dual Schema Compatibility**: Support both physical Schema v1 files (`timestamp`, `symbol`, `price`, `volume`, `bid`, `ask`, `source`, `session`, `ingest_id`) and Schema v2 rows (`bid_price`, `ask_price`), correctly coalescing quotes without column binder errors.
+- [x] **LAKE-RESAMPLE-04**: **Daily RTH Session Isolation**: Strictly enforce Regular Trading Hours filtering (`session = 'REG'`) when aggregating daily (`1d`) candles.
 
 ### Category 3: Backend API Integration & Order Flow Tape (LAKE-API)
 
@@ -45,10 +45,10 @@ The requirements below eliminate all disk file-locking collisions, enforce zero 
 | LAKE-READ-02 | Phase 39 | COMPLETE |
 | LAKE-READ-03 | Phase 39 | COMPLETE |
 | LAKE-READ-04 | Phase 39 | COMPLETE |
-| LAKE-RESAMPLE-01 | Phase 40 | PENDING |
-| LAKE-RESAMPLE-02 | Phase 40 | PENDING |
-| LAKE-RESAMPLE-03 | Phase 40 | PENDING |
-| LAKE-RESAMPLE-04 | Phase 40 | PENDING |
+| LAKE-RESAMPLE-01 | Phase 40 | COMPLETE |
+| LAKE-RESAMPLE-02 | Phase 40 | COMPLETE |
+| LAKE-RESAMPLE-03 | Phase 40 | COMPLETE |
+| LAKE-RESAMPLE-04 | Phase 40 | COMPLETE |
 | LAKE-API-01  | Phase 41 | PENDING |
 | LAKE-API-02  | Phase 41 | PENDING |
 | LAKE-API-03  | Phase 41 | PENDING |
