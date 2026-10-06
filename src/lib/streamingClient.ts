@@ -1,6 +1,7 @@
 /**
  * Streaming Client for Market Rewind.
- * Pure DuckDB streaming client communicating with streaming.duckdb backend service.
+ * Client for the streaming service, which resamples the partitioned Parquet tick
+ * lake through isolated in-memory DuckDB sessions (no disk database).
  */
 import type { MarketTick, RawBar, Timeframe } from '../types';
 
@@ -301,7 +302,7 @@ export class StreamingClient {
   }
 
   /**
-   * Queries raw ticks from streaming.duckdb.
+   * Queries raw ticks from the partitioned Parquet tick lake.
    * Strictly enforces date/time bounding. If no ticks match the requested range,
    * returns an empty array (never falls back to unconstrained future tape).
    */
@@ -401,8 +402,8 @@ export class StreamingClient {
   }
 
   /**
-   * Fetches candles aggregated directly from streaming.duckdb via time_bucket().
-   * Runs exclusively on streaming.duckdb for all timeframes (sub-second to daily).
+   * Fetches candles resampled from the tick lake via in-memory DuckDB time_bucket().
+   * Every timeframe (sub-second to daily) is aggregated from the same tick lake.
    */
   async getCandles(
     symbol: string,
@@ -432,7 +433,7 @@ export class StreamingClient {
     const apiTf = TIMEFRAME_TO_API[tf] || (tf.toLowerCase().includes('d') ? '1d' : tf.toLowerCase().includes('h') ? '1h' : '1m');
     const limit = options.limit || 15000;
 
-    // Strict single-DB engine: ALL timeframes query /api/streaming/candles exclusively from streaming.duckdb
+    // Single data plane: ALL timeframes query /api/streaming/candles (tick-lake resampling).
     const endpoint = `${this.getBaseUrl()}/api/streaming/candles`;
 
     const params = new URLSearchParams({

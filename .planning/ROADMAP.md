@@ -4,10 +4,10 @@
 
 | # | Phase | Goal | Requirements | Success Criteria | Status |
 |---|-------|------|--------------|------------------|--------|
-| 39 | Standalone Tick Lake Reader & Partition Pruning | Build zero-dependency `TickLakeReader` with root discovery, symbol encoding, filesystem partition pruning, and structured exceptions | LAKE-READ-01, LAKE-READ-02, LAKE-READ-03, LAKE-READ-04 | 3 | PENDING |
-| 40 | Deterministic OHLCV Aggregation & Dual Schema Ingestion | Implement vectorized in-memory DuckDB candle resampling with `arg_min`/`arg_max` tie-breaking, dual schema support, and RTH filtering | LAKE-RESAMPLE-01, LAKE-RESAMPLE-02, LAKE-RESAMPLE-03, LAKE-RESAMPLE-04 | 3 | PENDING |
-| 41 | Backend Service Migration & Order Flow Tape | Refactor `DuckDBService` and `server.py` to route queries to the tick lake, supporting reverse-chronological tape queries and maintenance guards | LAKE-API-01, LAKE-API-02, LAKE-API-03 | 3 | PENDING |
-| 42 | Comprehensive Verification & Regression Immunity | Update backend pytest suite for 100% green pass on `npm run backend:test` and verify zero regressions across Vitest and Playwright suites | LAKE-VERIFY-01, LAKE-VERIFY-02 | 2 | PENDING |
+| 39 | Standalone Tick Lake Reader & Partition Pruning | Build zero-dependency `TickLakeReader` with root discovery, symbol encoding, filesystem partition pruning, and structured exceptions | LAKE-READ-01, LAKE-READ-02, LAKE-READ-03, LAKE-READ-04 | 3 | COMPLETED |
+| 40 | Deterministic OHLCV Aggregation & Dual Schema Ingestion | Implement vectorized in-memory DuckDB candle resampling with `arg_min`/`arg_max` tie-breaking, dual schema support, and RTH filtering | LAKE-RESAMPLE-01, LAKE-RESAMPLE-02, LAKE-RESAMPLE-03, LAKE-RESAMPLE-04 | 3 | COMPLETED |
+| 41 | Backend Service Migration & Order Flow Tape | Refactor `DuckDBService` and `server.py` to route queries to the tick lake, supporting reverse-chronological tape queries and maintenance guards | LAKE-API-01, LAKE-API-02, LAKE-API-03 | 3 | COMPLETED |
+| 42 | Comprehensive Verification & Regression Immunity | Update backend pytest suite for 100% green pass on `npm run backend:test` and verify zero regressions across Vitest and Playwright suites | LAKE-VERIFY-01, LAKE-VERIFY-02 | 2 | COMPLETED |
 
 ---
 
@@ -43,3 +43,7 @@
 - **Success criteria:**
   1. 100% of backend tests in `backend/streaming_service/tests/` pass against the real tick lake (`npm run backend:test`).
   2. 100% of Vitest unit test files (418+ tests) and Playwright journey suites pass cleanly with zero regressions.
+     - Vitest: 81/81 files green (422 passed, 2 skipped) including the new repo-hygiene guards; re-verified from a fresh clone.
+     - Playwright journey: harness verified (dev server boots, 13 specs / 73 tests registered) but not executable in the
+       sandbox — no browser binary is obtainable (CDN blocked, no NSS libs installable). Disclosed with evidence and the
+       remediation command (`npx playwright install chromium && npm run test:journey`) in `42-VERIFICATION.md` §4.
