@@ -11,9 +11,9 @@
 
 ---
 
-### Phase Details
+## Phase Details
 
-**Phase 39: Standalone Tick Lake Reader & Partition Pruning**
+### Phase 39: Standalone Tick Lake Reader & Partition Pruning
 - **Goal:** Build zero-dependency `TickLakeReader` with root discovery, symbol encoding, filesystem partition pruning, and structured exceptions
 - **Requirements:** LAKE-READ-01, LAKE-READ-02, LAKE-READ-03, LAKE-READ-04
 - **Success criteria:**
@@ -21,7 +21,7 @@
   2. Canonical symbol encoder correctly encodes `[A-Za-z0-9_-]` safe set (e.g. `BRK.B` -> `BRK%2EB`, `EUR/USD` -> `EUR%2FUSD`) and resolves matching `ticks/symbol=.../date=.../*.parquet` partitions.
   3. Structured error taxonomy implemented (`LakeUnavailableError`, `LakeCorruptedMetadataError`, `LakeIncompatibleSchemaError`, `LakeMaintenanceInProgressError`) with fail-fast validation against `lake.json` and `_maintenance/in_progress.json`.
 
-**Phase 40: Deterministic OHLCV Aggregation & Dual Schema Ingestion**
+### Phase 40: Deterministic OHLCV Aggregation & Dual Schema Ingestion
 - **Goal:** Implement vectorized in-memory DuckDB candle resampling with `arg_min`/`arg_max` tie-breaking, dual schema support, and RTH filtering
 - **Requirements:** LAKE-RESAMPLE-01, LAKE-RESAMPLE-02, LAKE-RESAMPLE-03, LAKE-RESAMPLE-04
 - **Success criteria:**
@@ -29,7 +29,7 @@
   2. Open and close prices use deterministic `arg_min(..., (timestamp, ingest_id))` and `arg_max(..., (timestamp, ingest_id))` tie-breaking across all timeframes (`1s` to `1d`), handling both Schema v1 (`price`, `volume`) and Schema v2 (`bid_price`, `ask_price`).
   3. Daily (`1d`) candles strictly filter for Regular Trading Hours (`session = 'REG'`).
 
-**Phase 41: Backend Service Migration & Order Flow Tape**
+### Phase 41: Backend Service Migration & Order Flow Tape
 - **Goal:** Refactor `DuckDBService` and `server.py` to route queries to the tick lake, supporting reverse-chronological tape queries and maintenance guards
 - **Requirements:** LAKE-API-01, LAKE-API-02, LAKE-API-03
 - **Success criteria:**
@@ -37,7 +37,7 @@
   2. Reverse-chronological Time & Sales tape queries with spread calculation (`ask - bid`) are supported and exposed via `/api/ticks`.
   3. REST and WebSocket endpoints in `server.py` handle maintenance 503 responses and stream real Parquet ticks for live playback.
 
-**Phase 42: Comprehensive Verification & Regression Immunity**
+### Phase 42: Comprehensive Verification & Regression Immunity
 - **Goal:** Update backend pytest suite for 100% green pass on `npm run backend:test` and verify zero regressions across Vitest and Playwright suites
 - **Requirements:** LAKE-VERIFY-01, LAKE-VERIFY-02
 - **Success criteria:**
