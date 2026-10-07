@@ -1,11 +1,65 @@
 # Review request — local Mac agent
 
 **Branch:** `arena/bbbe0bc6-market-rewind` · **PR:** [#4](https://github.com/emadprograms/market-rewind/pull/4)
-**Fix commit for the priority item:** `a29f632`
+**Current head:** `de7eb03`
 
 Please review and verify on real hardware. Everything below is either something I could
 not test in the sandbox (macOS `launchd`, real GPU, real tick lake) or something where my
 measurement says one thing and your machine may say another.
+
+---
+
+# Test matrix — run these, in this order
+
+Five perf runs plus two checks. The whole set is maybe 30–40 minutes. **Tier 1 is the
+priority** — if you only do three things, do runs 1, 2 and 6.
+
+**Hold every other variable constant across a comparison**: same symbol, same replay date,
+same window size, same browser window, no other tabs. Change one axis at a time. Hard-reload
+(Cmd+Shift+R) before each measurement.
+
+| # | Tier | Run | Fix | Vary | Question it answers |
+|---|---|---|---|---|---|
+| 1 | **1** | Fix A/B | 25×, 12 charts, same timeframe | `7bd01d6` → `de7eb03` | Did the per-frame invalidation fix move CPU/GPU? |
+| 2 | **1** | Chart scaling | 25×, `de7eb03` | 1, 2, 4, 12 charts | Does cost scale with chart count? → is off-screen culling the next lever? |
+| 3 | **1** | Speed scaling | 12 charts, `de7eb03` | 1×, 5×, 25× | Is the cost frame-bound or tick-bound? → tells me what to attack next |
+| 4 | 2 | DPR | 25×, 12 charts, `de7eb03` | DPR 1 vs native | How big is the "Performance Mode" lever? |
+| 5 | 2 | Timeframe | 25×, `de7eb03` | 1D vs 1m | Does the 1D index fix apply to your workload at all? |
+| 6 | **1** | Auto-start | — | — | Is the tablet fix actually active on your Mac? (section 1) |
+| 7 | 2 | `benchmark.sh` | — | — | Do the load/compression mechanisms still pass? (section 3) |
+
+### How to switch commits and re-measure
+
+```bash
+cd /path/to/market-rewind
+git fetch origin
+git checkout <sha>                 # e.g. 7bd01d6 (before) or de7eb03 (after)
+./tools/mac/restart-services.sh
+sleep 15                           # it rebuilds the bundle before serving
+./tools/mac/status-services.sh     # confirm: Serving: PRODUCTION bundle
+```
+
+Then hard-reload the browser before measuring.
+
+### How to record
+
+**Use the same instruments as your earlier run** — comparability matters more than
+sophistication. Whatever produced the 69.3% CPU / 68.0% GPU peak numbers, keep using it.
+
+Add one thing if you can: **Chrome DevTools → Performance → record ~10 s at 25×** and report
+**FPS** and **dropped frames**. CPU% alone cannot tell us whether frames are actually being
+dropped, and dropped frames are what "performance" means here.
+
+### Why these axes specifically
+
+- **Run 2 is the important new one.** If cost scales roughly linearly with chart count, then
+  per-chart work dominates and culling off-screen charts is the biggest remaining win — larger
+  than anything in this PR so far. If it is flat, the cost is global and culling is pointless.
+- **Run 3 separates "60 fps of overhead regardless of data" from "cost proportional to ticks".**
+  Every fix so far targets the former. If CPU instead scales with replay speed, I have been
+  aiming at the wrong term and should stop.
+- **Run 4 prices the DPR trade before anyone makes it.** A DPR cap only makes sense if the
+  number it buys is worth the softness.
 
 ---
 
@@ -85,7 +139,7 @@ faster, that is important — tell me.
 
 ---
 
-## 1b. NEW — per-frame chart invalidation (`a1c6023`). Test this one first.
+## 1b. Per-frame chart invalidation (`a1c6023`) — perf run 1, the main event
 
 **This is the most likely candidate for the missing CPU**, and it is newer code than the
 69% measurement it is being judged against (`main`'s bid/ask work, merged at `4c84258`).
@@ -192,16 +246,91 @@ compression, which are unchanged by this round but sit in the same PR.
 
 ## 4. What to send back
 
-1. `status-services.sh` output after Check B — specifically the **Serving:** line.
-2. Whether `com.marketrewind.*` plists existed **before** you ran Check B (i.e. was the
-   machine on the dev server this whole time?).
-3. The 4-row A/B table above, or as much of it as you can get.
-4. Grid layout + DPR during the perf runs.
-5. `benchmark.sh` result.
-6. The tablet cold-load number after Check C.
+You can paste this template back filled in — that is genuinely all I need. Leave a cell
+**blank** if you could not measure it; blank is fine, guessed is not.
 
-Anything that fails or looks wrong — send it as-is rather than investigating first. I would
-rather have the raw failure than a cleaned-up summary.
+```
+### Machine
+Mac model / chip:            M4?
+  display + DPR:             (e.g. 3024x1964 scaled, DPR 2)
+  Chrome version:
+  Instrument used for CPU%:  (whatever produced the earlier numbers)
+  Instrument used for GPU%:
+
+### Run 6 — auto-start (do this FIRST, it changes how much the rest matters)
+Plists present before Check B?   yes / no
+Serving line before fix:         PRODUCTION / DEV / n/a
+Serving line after Check B:      PRODUCTION / DEV
+First-launch time after fix:     ___ s   (it now builds before serving)
+Any respawn loop?                yes / no
+frontend.build.log errors:       none / (paste)
+
+### Run 1 — fix A/B          25x, 12 charts, tf: ____
+                    CPU avg   CPU peak   GPU avg   GPU peak   FPS   dropped
+7bd01d6 (#1)        ______    ______     ______    ______     ___   ______
+de7eb03 (#2)        ______    ______     ______    ______     ___   ______
+
+Chart count actually used:       ____
+Any charts off-screen/inactive:  yes / no
+
+### Run 2 — chart scaling     25x, de7eb03, tf: ____
+charts   CPU avg   CPU peak   GPU avg   GPU peak   FPS
+1        ______    ______     ______    ______     ___
+2        ______    ______     ______    ______     ___
+4        ______    ______     ______    ______     ___
+12       ______    ______     ______    ______     ___
+
+### Run 3 — speed scaling     12 charts, de7eb03, tf: ____
+speed    CPU avg   CPU peak   GPU avg   GPU peak   FPS
+1x       ______    ______     ______    ______     ___
+5x       ______    ______     ______    ______     ___
+25x      ______    ______     ______    ______     ___
+
+### Run 4 — DPR               25x, 12 charts, de7eb03
+DPR      CPU avg   GPU avg   GPU peak   FPS   dropped
+1        ______    ______    ______     ___   ______
+native   ______    ______    ______     ___   ______
+
+(If native is not 2, tell me what it is.)
+
+### Run 5 — timeframe         25x, de7eb03
+tf       CPU avg   CPU peak   GPU avg   GPU peak   FPS
+1D       ______    ______     ______    ______     ___
+1m       ______    ______     ______    ______     ___
+
+**Critical question:** the original 69.3% -> 69.0% measurement — which timeframe was that
+taken on?   1D / 1m / 5m / other: ____
+
+### Run 7 — benchmark.sh
+Result:      9 PASS / 0 FAIL?   yes / no
+Raw tail:    (paste)
+
+### Anything else
+Visual regressions (bid/ask lines, tape, price lines):  none / (describe)
+Anything that looked or felt wrong:  (describe)
+```
+
+**Please send failures raw, not cleaned up.** A half-filled template with a
+"this didn't move" note is more useful to me than a tidy summary that rounds off the
+interesting part. If something looks wrong, tell me rather than investigating it first.
+
+---
+
+## What I will do with the numbers
+
+So you know it is going somewhere:
+
+- **Run 2 linear →** implement chart-visibility culling (skip tick processing and repaints
+  for charts not in the viewport). That would dwarf the rest of this PR.
+- **Run 2 flat →** stop looking at per-chart cost; the remaining cost is global.
+- **Run 3 flat across speeds →** confirm the frame-bound theory; keep reducing per-frame work.
+- **Run 3 scaling with speed →** I have been optimising the wrong term; switch to per-tick.
+- **Run 1 still flat →** the invalidation fix is not the CPU. That would be the most useful
+  negative result available, and it sends me to a profiler rather than more guessing.
+- **Run 4 shows a large DPR delta →** bring you a Performance Mode proposal with the trade
+  quantified, for you to decide rather than me.
+- **Run 5 confirms 1D is not your workload →** the 1D index stays as correctness-neutral
+  insurance and I stop counting it as a CPU win.
 
 ---
 
