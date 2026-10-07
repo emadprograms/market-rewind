@@ -262,9 +262,12 @@ export class StreamingClient {
 
   async getSymbols(): Promise<SymbolMetadata[]> {
     try {
-      let res = await fetch(`${this.getBaseUrl()}/api/streaming/symbols`);
+      // names_only: the startup inventory needs symbol names, not per-symbol aggregates.
+      // The aggregate form scans every tick row in the lake, which stalled startup; the
+      // names-only form resolves partition directories and returns immediately.
+      let res = await fetch(`${this.getBaseUrl()}/api/streaming/symbols?names_only=1`);
       if (!res.ok) {
-        res = await fetch(`${this.getBaseUrl()}/api/symbols?source=streaming&db=streaming`);
+        res = await fetch(`${this.getBaseUrl()}/api/symbols?names_only=1&source=streaming&db=streaming`);
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();

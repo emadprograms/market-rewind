@@ -85,7 +85,11 @@ export class BoundaryLinePlugin implements ISeriesPrimitive<Time> {
   }
 
   updateAllViews() {
-    this._requestUpdate();
+    // Deliberately empty. LWC calls this from inside its draw path, so calling
+    // _requestUpdate() here is a self-sustaining repaint loop at display refresh rate
+    // (see tests/unit/primitiveUpdateContract.test.ts). _getXCoordinate() recomputes
+    // from the live chart each draw, so there is no cached view data to refresh.
+    // setBoundaryTime() still requests an update, which is where it belongs.
   }
 
   paneViews(): readonly ISeriesPrimitivePaneView[] {

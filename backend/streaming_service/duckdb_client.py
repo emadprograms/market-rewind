@@ -113,7 +113,11 @@ class DuckDBService:
     # -- symbol inventory ---------------------------------------------------- #
 
     def get_symbols(self) -> List[Dict[str, Any]]:
-        """Per-symbol tick counts and time ranges, sorted by tick count descending."""
+        """Per-symbol tick counts and time ranges, sorted by tick count descending.
+
+        Costs a full-lake aggregation. Callers that only need names (notably the app's
+        startup inventory) should use :meth:`get_symbol_names` instead.
+        """
         stats = self.reader.symbol_stats()
         return [
             {
@@ -124,6 +128,14 @@ class DuckDBService:
             }
             for row in stats
         ]
+
+    def get_symbol_names(self) -> List[Dict[str, Any]]:
+        """Symbol inventory without aggregation (boot path).
+
+        Returns ``[{"symbol": ...}]`` resolved from partition directory names. No tick
+        data is read, so this does not scale with lake size.
+        """
+        return self.reader.symbol_names()
 
     def get_symbol_summary(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Aggregate metrics plus the latest quote for one symbol (None when unknown)."""

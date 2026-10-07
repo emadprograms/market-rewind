@@ -112,7 +112,10 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
   public setConfig(timeframe: Timeframe, isET: boolean) {
     this._timeframe = timeframe;
     this._isET = isET;
-    this.updateAllViews();
+    this._cache = null;
+    // A real configuration change, so a repaint is genuinely wanted -- unlike
+    // updateAllViews(), which LWC calls from inside its draw path.
+    this._requestUpdate();
   }
 
   attached({ chart, series, requestUpdate }: SeriesAttachedParameter<Time, "Candlestick">) {
@@ -128,8 +131,18 @@ export class SessionShadingPlugin implements ISeriesPrimitive<Time> {
   }
 
   updateAllViews() {
+    // Drops the cached projections only -- it must NOT request a repaint.
+    //
+    // LWC calls this from inside its draw path (drawImpl -> updateGui -> adjustSizeImpl
+    // -> _internal_updateAllSources). Calling _requestUpdate() here re-invalidates the
+    // chart that is mid-draw, which schedules another draw, which calls this again: a
+    // permanent repaint loop at display refresh rate with nothing changing on screen.
+    //
+    // Nulling the cache is the correct, useful half: it holds coordinates projected
+    // against the previous viewport, and the draw already in flight is about to rebuild
+    // it. _getViewData() also re-validates against the live logical range, width and bar
+    // spacing, so a stale cache could not be served anyway.
     this._cache = null;
-    this._requestUpdate();
   }
 
   paneViews(): readonly ISeriesPrimitivePaneView[] {

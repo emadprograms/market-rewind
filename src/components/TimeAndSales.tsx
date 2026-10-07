@@ -1,7 +1,47 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { getTzForTicker } from '../lib/timezones';
+import type { MarketTick } from '../types';
 import { X, Activity } from 'lucide-react';
+
+/**
+ * Positions within `bufferedTicks` belonging to the displayed symbol, in order.
+ *
+ * Built once per (buffer, symbol) rather than once per frame. The previous
+ * implementation re-derived both the visible window and the executed count by copying
+ * and filtering the entire buffer on every render; driven at 60fps by the playback
+ * clock over a 100k-tick buffer that was ~200,000 element visits per frame (~58% of a
+ * frame budget, measured) to display 80 rows.
+ */
+interface TapeIndex {
+  positions: number[];
+}
+
+function buildTapeIndex(ticks: MarketTick[], symbol: string): TapeIndex {
+  const positions: number[] = [];
+  if (!symbol || symbol === 'LIVE') {
+    for (let i = 0; i < ticks.length; i++) positions.push(i);
+    return { positions };
+  }
+  const target = symbol.toUpperCase();
+  for (let i = 0; i < ticks.length; i++) {
+    const tickSymbol = ticks[i].symbol;
+    if (!tickSymbol || tickSymbol.toUpperCase() === target) positions.push(i);
+  }
+  return { positions };
+}
+
+/** Count of entries in a sorted ascending array that are <= value. O(log n). */
+function upperBound(values: number[], value: number): number {
+  let lo = 0;
+  let hi = values.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (values[mid] <= value) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
 
 interface TimeAndSalesProps {
   isOpen: boolean;
@@ -23,26 +63,41 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [currentTickIndex]);
 
+  const displaySymbol = symbol || currentTick?.symbol || (bufferedTicks[0]?.symbol) || 'LIVE';
+
+  // Executed trades up to currentTickIndex strictly matching displaySymbol (RENDER-04).
+  // The index is rebuilt only when the buffer or symbol changes; per frame this is a
+  // binary search plus a bounded slice, so cost no longer scales with buffer size.
+  const tapeIndex = useMemo(
+    () => buildTapeIndex(bufferedTicks, displaySymbol || ''),
+    [bufferedTicks, displaySymbol],
+  );
+
+  const maxDisplay = 80;
+  const executedCount = currentTickIndex >= 0
+    ? upperBound(tapeIndex.positions, currentTickIndex)
+    : 0;
+  const totalSymbolTicks = tapeIndex.positions.length;
+
+  const visibleTicks = useMemo(() => {
+    const from = Math.max(0, executedCount - maxDisplay);
+    const out: MarketTick[] = [];
+    for (let i = from; i < executedCount; i++) {
+      out.push(bufferedTicks[tapeIndex.positions[i]]);
+    }
+    return out;
+  }, [tapeIndex, bufferedTicks, executedCount]);
+
+  // Every hook must run before this early return: returning earlier would change the
+  // hook count when the panel is toggled ("Rendered more hooks than during the previous
+  // render"). Non-hook derivations stay below it so a closed panel still does no work.
   if (!isOpen) return null;
 
-  const displaySymbol = symbol || currentTick?.symbol || (bufferedTicks[0]?.symbol) || 'LIVE';
   const tz = getTzForTicker(displaySymbol);
   const latestSymbolTick = displaySymbol && displaySymbol !== 'LIVE'
     ? latestTickBySymbol?.[displaySymbol.toUpperCase()] ||
       (currentTick?.symbol?.toUpperCase() === displaySymbol.toUpperCase() ? currentTick : null)
     : currentTick;
-
-  // Filter executed trades up to currentTickIndex strictly matching displaySymbol (RENDER-04)
-  const maxDisplay = 80;
-  const executedTicks = currentTickIndex >= 0 ? bufferedTicks.slice(0, currentTickIndex + 1) : [];
-  const symbolExecutedTicks = displaySymbol && displaySymbol !== 'LIVE'
-    ? executedTicks.filter((t) => !t.symbol || t.symbol.toUpperCase() === displaySymbol.toUpperCase())
-    : executedTicks;
-  const visibleTicks = symbolExecutedTicks.slice(-maxDisplay);
-
-  const totalSymbolTicks = displaySymbol && displaySymbol !== 'LIVE'
-    ? bufferedTicks.filter((t) => !t.symbol || t.symbol.toUpperCase() === displaySymbol.toUpperCase()).length
-    : bufferedTicks.length;
 
   const formatTapeTime = (isoTime: string) => {
     const ms = isoToMs(isoTime);
@@ -187,7 +242,7 @@ export function TimeAndSales({ isOpen, onClose, symbol }: TimeAndSalesProps) {
         color: '#787b86',
         fontSize: '10px',
       }}>
-        <span>TICK: {totalSymbolTicks > 0 ? `${symbolExecutedTicks.length}/${totalSymbolTicks}` : '0/0'}</span>
+        <span>TICK: {totalSymbolTicks > 0 ? `${executedCount}/${totalSymbolTicks}` : '0/0'}</span>
         <span style={{ color: '#2962ff', fontWeight: 600 }}>
           {latestSymbolTick ? `$${latestSymbolTick.price.toFixed(2)}` : '--'}
         </span>

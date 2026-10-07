@@ -1153,3 +1153,19 @@ class TickLakeReader:
             except ValueError:
                 continue
         return sorted(symbols)
+
+    def symbol_names(self) -> List[Dict[str, Any]]:
+        """Symbol inventory from partition directory names only.
+
+        This is the boot-path counterpart to :meth:`symbol_stats`. It performs **no**
+        Parquet I/O: symbols are decoded from ``symbol=`` directory names, so the cost is
+        O(number of symbols) rather than a full-column scan over every tick row. On a
+        many-partition lake the two differ by orders of magnitude, which is why the
+        startup path must use this one.
+
+        Snapshot semantics (contract §7.3): enumeration reads the live directory, so a
+        partition published after this call is simply visible to the next call. Nothing
+        is cached — in particular no resolved *file* list, which §7.3.2 forbids.
+        """
+        self.ensure_ready()
+        return [{"symbol": name} for name in self.list_symbols()]

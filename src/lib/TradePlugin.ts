@@ -402,7 +402,20 @@ export class TradePlugin implements ISeriesPrimitive<Time> {
     }
 
     updateAllViews() {
-        this._requestUpdate();
+        // Deliberately empty.
+        //
+        // Lightweight Charts calls this from inside its draw path (price-scale
+        // recalculation -> _internal_updateAllSources) so a primitive can refresh view
+        // data it has cached against the current scale. This primitive caches nothing:
+        // TradePaneView.renderer() calls _getViewData(), which recomputes every
+        // coordinate from the live series/chart on each draw.
+        //
+        // Do NOT call this._requestUpdate() here. It resolves to
+        // model._internal_fullUpdate() -> invalidate(InvalidateMask.full()), so requesting
+        // a redraw from inside a redraw escalates the light invalidation LWC intended into
+        // a FULL one, which also reruns _private__updateGui() (time axis, price axis
+        // widgets, layout width). Data changes already invalidate via setItems/setTrade/
+        // setHoveredId, which is where _requestUpdate() belongs.
     }
 
     paneViews(): readonly ISeriesPrimitivePaneView[] {

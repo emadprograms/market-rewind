@@ -317,7 +317,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   advanceSimulationTime: (targetTimeMs: number) => {
-    const { bufferedTicks, currentTickIndex, latestTickBySymbol, masterData, ticksBySymbol } = get();
+    const { bufferedTicks, currentTickIndex, currentTick, latestTickBySymbol, masterData, ticksBySymbol } = get();
 
     if (bufferedTicks.length === 0) {
       if (masterData.length > 0) {
@@ -388,35 +388,45 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     }
 
     let nextIdx = currentTickIndex < 0 ? -1 : currentTickIndex;
-    const updatedLatest = { ...latestTickBySymbol };
+    let advanced = false;
+    // Built lazily. At 25x a tick elapses on only ~35% of frames, and on the rest there
+    // is nothing to merge -- allocating a fresh map there would wake every identity-keyed
+    // subscriber (TimeAndSales, useChartData) for a frame that carries no new data.
+    let merged: Record<string, MarketTick> | null = null;
 
     while (nextIdx + 1 < bufferedTicks.length) {
       const candidate = bufferedTicks[nextIdx + 1];
-      const candidateMs = isoToMs(candidate.time);
-      if (candidateMs <= targetTimeMs) {
+      if (ensureTickMs(candidate) <= targetTimeMs) {
         nextIdx++;
+        advanced = true;
         if (candidate && candidate.symbol) {
-          updatedLatest[candidate.symbol.toUpperCase()] = candidate;
+          merged = merged || { ...latestTickBySymbol };
+          merged[candidate.symbol.toUpperCase()] = candidate;
         }
       } else {
         break;
       }
     }
 
-    const curr = nextIdx >= 0 ? bufferedTicks[nextIdx] : null;
-    if (curr && curr.symbol && isoToMs(curr.time) <= targetTimeMs) {
-      updatedLatest[curr.symbol.toUpperCase()] = curr;
+    const nextTick = nextIdx >= 0 ? bufferedTicks[nextIdx] : null;
+    let latestOut: Record<string, MarketTick> = merged || latestTickBySymbol;
+    if (nextTick && nextTick.symbol) {
+      const key = nextTick.symbol.toUpperCase();
+      if (latestOut[key] !== nextTick) {
+        latestOut = { ...latestOut, [key]: nextTick };
+      }
     }
 
-    const lastTickMs = isoToMs(bufferedTicks[bufferedTicks.length - 1].time);
+    const lastTickMs = ensureTickMs(bufferedTicks[bufferedTicks.length - 1]);
     const reachedEnd = nextIdx >= bufferedTicks.length - 1 && targetTimeMs >= lastTickMs;
-    const nextTick = nextIdx >= 0 ? bufferedTicks[nextIdx] : null;
 
+    // Each slice is spread in only when its value actually changes, so zustand hands the
+    // previous reference back and identity-keyed subscribers skip the frame entirely.
     set({
       currentTime: targetTimeMs,
-      currentTickIndex: nextIdx,
-      currentTick: nextTick,
-      latestTickBySymbol: updatedLatest,
+      ...(advanced ? { currentTickIndex: nextIdx } : {}),
+      ...(nextTick !== null && nextTick !== currentTick ? { currentTick: nextTick } : {}),
+      ...(latestOut !== latestTickBySymbol ? { latestTickBySymbol: latestOut } : {}),
       ...(reachedEnd ? { isPaused: true } : {}),
     });
   },

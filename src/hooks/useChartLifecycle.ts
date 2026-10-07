@@ -1,23 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { IChartApi, ISeriesApi, Time, TickMarkType, IPriceLine } from 'lightweight-charts';
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
-import { TF_SECONDS } from '../types';
+
 import { getTzForTicker, isRthTick, isRthBar } from '../lib/timezones';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { useChartInit } from './chart/useChartInit';
 import { useChartPlugins } from './chart/useChartPlugins';
 import { useChartDrawings } from './chart/useChartDrawings';
 import { useChartViewport } from './chart/useChartViewport';
-
-const getBucketTime = (timestampMs: number, tf: Timeframe): number => {
-  const date = new Date(timestampMs);
-  if (tf === '1D') {
-    return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0) / 1000);
-  }
-  const durationSec = TF_SECONDS[tf] || 60;
-  const bucketStartMs = Math.floor(timestampMs / (durationSec * 1000)) * (durationSec * 1000);
-  return Math.floor(bucketStartMs / 1000);
-};
+import { getBucketTime, resolveDailyIndex, type DailyIndex } from '../lib/dailyIndex';
 
 const getTickMs = (t: any): number => {
   if (!t) return 0;
@@ -242,6 +233,10 @@ export function useChartLifecycle({
   const lastDataCountRef = useRef(0);
   const bidPriceLineRef = useRef<IPriceLine | null>(null);
   const askPriceLineRef = useRef<IPriceLine | null>(null);
+  // Last price actually pushed to each line, so the per-frame subscriber can skip
+  // applyOptions() when nothing moved (see updateBidAskPriceLines).
+  const lastBidRef = useRef<number | null>(null);
+  const lastAskRef = useRef<number | null>(null);
 
   const cleanupBidAskPriceLines = () => {
     if (initPriceSeriesRef.current && typeof initPriceSeriesRef.current.removePriceLine === 'function') {
@@ -261,6 +256,9 @@ export function useChartLifecycle({
       bidPriceLineRef.current = null;
       askPriceLineRef.current = null;
     }
+    // The lines are gone, so the cached prices no longer describe anything on the chart.
+    lastBidRef.current = null;
+    lastAskRef.current = null;
   };
 
   const updateBidAskPriceLines = (tick: any | null, fallbackPrice: number | null) => {
@@ -305,13 +303,18 @@ export function useChartLifecycle({
           });
           bidPriceLineRef.current = line || null;
         } catch (_) {}
-      } else {
+      } else if (lastBidRef.current !== bid) {
+        // Only when the value actually changes. applyOptions() marks the chart dirty and
+        // schedules a repaint even when the price is identical, and this runs from the
+        // per-frame store subscriber -- so an unguarded call repainted every chart at
+        // 60fps for the whole replay with nothing moving.
         try {
           if (typeof bidPriceLineRef.current.applyOptions === 'function') {
             bidPriceLineRef.current.applyOptions({ price: bid });
           }
         } catch (_) {}
       }
+      lastBidRef.current = bid;
     } else if (bidPriceLineRef.current) {
       try {
         if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
@@ -319,6 +322,7 @@ export function useChartLifecycle({
         }
       } catch (_) {}
       bidPriceLineRef.current = null;
+      lastBidRef.current = null;
     }
 
     // Ask price line on y-axis
@@ -337,13 +341,15 @@ export function useChartLifecycle({
           });
           askPriceLineRef.current = line || null;
         } catch (_) {}
-      } else {
+      } else if (lastAskRef.current !== ask) {
+        // Guarded for the same reason as the bid line above.
         try {
           if (typeof askPriceLineRef.current.applyOptions === 'function') {
             askPriceLineRef.current.applyOptions({ price: ask });
           }
         } catch (_) {}
       }
+      lastAskRef.current = ask;
     } else if (askPriceLineRef.current) {
       try {
         if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
@@ -351,6 +357,7 @@ export function useChartLifecycle({
         }
       } catch (_) {}
       askPriceLineRef.current = null;
+      lastAskRef.current = null;
     }
   };
 
@@ -368,6 +375,9 @@ export function useChartLifecycle({
     bucketTime: -1,
     minutes: new Map(),
   });
+  // Daily bar buckets, rebuilt once per session load instead of rescanned per tick.
+  // See src/lib/dailyIndex.ts for the measurements that motivated this.
+  const dailyIndexRef = useRef<DailyIndex | null>(null);
   
   const isDrawingModeRef = useRef(isDrawingMode);
   const currentTickerRef = useRef(ticker);
@@ -804,11 +814,18 @@ export function useChartLifecycle({
           let foundAny = false;
 
           const evalTimeMs = state.currentTime && state.currentTime > tickTimeMs ? state.currentTime : tickTimeMs;
-          for (const bar of masterData) {
-            if (bar.symbol && bar.symbol.toUpperCase() !== sym) continue;
-            if (!isRthBar(bar, ticker, timeframe)) continue;
-            const barMs = isoToMs(bar.time);
-            if (getBucketTime(barMs, timeframe) === bucketTime && barMs <= evalTimeMs) {
+
+          // Bucket membership and per-bar facts are tick-invariant, so they are computed
+          // once per session load rather than once per bar per tick (see dailyIndex.ts).
+          // The tick-dependent `barMs <= evalTimeMs` test is still applied here.
+          const bucketBars = masterData.length > 0
+            ? (resolveDailyIndex(dailyIndexRef, masterData, sym, ticker, timeframe).byBucket.get(bucketTime) || [])
+            : [];
+
+          for (const entry of bucketBars) {
+            const bar = entry.bar;
+            const barMs = entry.barMs;
+            if (barMs <= evalTimeMs) {
               if (firstBarOpen === undefined) {
                 firstBarOpen = bar.open;
               }
