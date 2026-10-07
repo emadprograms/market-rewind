@@ -1,7 +1,7 @@
 # Review request — local Mac agent
 
 **Branch:** `arena/bbbe0bc6-market-rewind` · **PR:** [#4](https://github.com/emadprograms/market-rewind/pull/4)
-**Current head:** `de7eb03`
+**Current head:** `71e3e89` (code fix `6ca62c7`)
 
 Please review and verify on real hardware. Everything below is either something I could
 not test in the sandbox (macOS `launchd`, real GPU, real tick lake) or something where my
@@ -43,9 +43,33 @@ And confirmed against the real plugins: reverting `SessionShading.ts` **alone** 
 
 **Why this survived my previous fix:** `f6c016a` fixed two of the six plugins. All six attach to every chart, and `SessionShadingPlugin` was one of the four I missed — so the loop was still there the whole time you were measuring. That is my error, and it lines up exactly with your numbers: 4 charts, every canvas, every frame, paused.
 
-## What I need: re-run the round 3 test — 2 minutes
+## Step 1 — get the new build running (do NOT skip this)
 
-On `6ca62c7`, 4-chart layout, hydrated, **paused**:
+`dist/` is gitignored, so pulling the branch does **not** update the bundle you are measuring. If you measure without rebuilding, you will measure the old code and the result will be meaningless.
+
+```bash
+cd <your market-rewind checkout>
+git fetch origin
+git checkout arena/bbbe0bc6-market-rewind
+git merge --ff-only origin/arena/bbbe0bc6-market-rewind
+git rev-parse --short HEAD          # expect 6ca62c7 or 71e3e89
+./tools/mac/start-services.sh       # rebuilds dist/ then reloads the agents
+```
+
+Then confirm the fix is actually in the bundle that will be served — this is the check that makes the run trustworthy, so please do paste the output:
+
+```bash
+F=$(ls dist/assets/index-*.js)
+echo "no-op plugins:   $(grep -o 'updateAllViews(){}' $F | wc -l | tr -d ' ')"          # expect 5
+echo "cache-drop:      $(grep -o 'updateAllViews(){this\._cache=null}' $F | wc -l | tr -d ' ')"  # expect 1
+echo "BUGGY remaining: $(grep -o 'updateAllViews(){this\._requestUpdate()}' $F | wc -l | tr -d ' ')"  # expect 0
+```
+
+**5 + 1 = all six plugins, 0 buggy.** (Two were already fixed in `f6c016a`, so 5 no-ops is the correct total, not 4.) On my build the bundle is `dist/assets/index-BbXSU_UC.js`; if your hash differs that is fine, just tell me which one — what matters is that it is not the old one.
+
+## Step 2 — re-run the round 3 test — 2 minutes
+
+4-chart layout, hydrated, **paused**:
 
 1. **Paint flashing → is there still any flashing?** Expect none.
 2. **Chrome CPU / GPU% and M4 GPU% while paused**, same instruments as before.
@@ -60,6 +84,16 @@ On `6ca62c7`, 4-chart layout, hydrated, **paused**:
 **Predicted:** flashing gone, GPU process collapses toward a few percent, M4 GPU back to roughly an idle compositor. If the GPU process drops but the **Tab** renderer stays high, there is a *second*, separate cost and I want to know — that would be the first thing I have not yet explained.
 
 **If it still flashes**, that is important and I would like a 5-second paused Performance recording; it would mean a seventh invalidation source exists that I have not found.
+
+## Result → next move
+
+| Result | My next move |
+|---|---|
+| No flashing, GPU process a few %, M4 GPU near idle | The loop was the whole paused floor. I'll consolidate, re-state the before/after, and call the perf work done. |
+| No flashing, GPU process drops, **Tab renderer stays high** | A second independent cost exists. I'll go after it — that is new information and I'd want `.cpuprofile` from a 5 s paused recording. |
+| Still flashing | A seventh invalidation source exists. 5 s paused Performance recording, and I'll dig again from the profile rather than from source reading. |
+
+Please paste raw numbers rather than a summary — blanks are fine, guesses are not.
 
 ## One honest correction to my last message
 
