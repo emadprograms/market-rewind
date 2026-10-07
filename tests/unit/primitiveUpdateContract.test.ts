@@ -34,6 +34,9 @@
  *   4. Each plugin must still request updates for genuine data changes.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { createChart } from 'lightweight-charts';
 import { TradePlugin } from '../../src/lib/TradePlugin';
 import { VolumeProfilePlugin } from '../../src/lib/VolumeProfilePlugin';
@@ -233,5 +236,63 @@ describe('each plugin: updateAllViews is inert, real changes still invalidate', 
 
     plugin.setData([{ time: 1, open: 1, high: 2, low: 0, close: 1.5, volume: 10 } as any]);
     expect(requestUpdate).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------------
+// Enumeration guard.
+//
+// The original fix covered 2 of the 6 plugins and the loop survived, because
+// useChartPlugins attaches ALL of them to every chart -- so one missed plugin is enough
+// to pin an entire chart at 100% repaint. Every list in this file is written by hand,
+// which means adding a seventh plugin would silently reopen the bug: the behavioural
+// test above would still pass, because it only attaches the six it knows about.
+//
+// This test reads the source tree and fails if a new ISeriesPrimitive implementation
+// appears that no test here covers. The fix for a failure is to add the plugin to the
+// lists above AND make its updateAllViews inert -- not to add it to this array alone.
+describe('enumeration guard: every ISeriesPrimitive implementation is covered above', () => {
+  const COVERED = [
+    'BoundaryLinePlugin',
+    'HorizontalRayPlugin',
+    'RectanglePlugin',
+    'SessionShadingPlugin',
+    'TradePlugin',
+    'VolumeProfilePlugin',
+  ];
+
+  it('found the same six primitives in src/ that this file tests, and none extra', () => {
+    const files = execSync('grep -rl "implements ISeriesPrimitive<" src/', {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf-8',
+    })
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+
+    // The concrete series primitives are declared as `implements ISeriesPrimitive<Time>`.
+    // The pane renderer / pane view / axis view sub-interfaces are different types and do
+    // not have the updateAllViews hook, so the `<` is what separates the two.
+    const found: string[] = [];
+    for (const file of files) {
+      for (const line of fs.readFileSync(file, 'utf-8').split('\n')) {
+        const match = /^export class (\w+) implements ISeriesPrimitive</.exec(line.trim());
+        if (match) found.push(match[1]);
+      }
+    }
+
+    expect(found.sort()).toEqual([...COVERED].sort());
+  });
+
+  it('every covered primitive actually declares updateAllViews', () => {
+    for (const name of COVERED) {
+      const source = execSync(`grep -rl "export class ${name} " src/lib/`, {
+        cwd: path.resolve(__dirname, '../..'),
+        encoding: 'utf-8',
+      });
+      const file = source.trim().split('\n')[0];
+      // Matches a real declaration, not the mention of the name in a comment.
+      expect(fs.readFileSync(file, 'utf-8')).toMatch(/^\s*updateAllViews\(\)\s*\{/m);
+    }
   });
 });

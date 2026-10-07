@@ -1,7 +1,7 @@
 # Review request — local Mac agent
 
 **Branch:** `arena/bbbe0bc6-market-rewind` · **PR:** [#4](https://github.com/emadprograms/market-rewind/pull/4)
-**Current head:** `71e3e89` (code fix `6ca62c7`)
+**Current head:** `9710b08` · round 4 **verified on hardware** — see `261007-tlp-VERIFICATION-R4.md`. No further action needed.
 
 Please review and verify on real hardware. Everything below is either something I could
 not test in the sandbox (macOS `launchd`, real GPU, real tick lake) or something where my
