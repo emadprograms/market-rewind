@@ -24,6 +24,12 @@ export default defineConfig(({ mode }) => {
       host: true,
       port: 3000,
       proxy,
+      // Same rationale as the preview block below: `host: true` binds all interfaces
+      // but Vite still rejects unrecognised Host headers (its DNS-rebinding guard), so
+      // reaching the dev server by hostname — .local, or a tunnelled hostname — returns
+      // 403. Bare IPs are not affected, which is why this only bites some setups. Keep
+      // this in step with preview so `start-frontend.sh --dev` stays usable off-machine.
+      allowedHosts: true,
     },
     // Serving the built bundle is the default outside local development (see
     // tools/mac/start-frontend.sh): one bundled asset instead of a per-module request

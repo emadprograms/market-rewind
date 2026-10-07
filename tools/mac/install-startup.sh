@@ -86,6 +86,12 @@ cat <<EOF > "${BACKEND_PLIST}"
 </plist>
 EOF
 
+# The frontend job deliberately runs start-frontend.sh rather than node_modules/vite
+# directly: invoking vite.js straight would always launch the *dev* server, silently
+# bypassing SERVE_MODE and reinstating the per-module request waterfall over Wi-Fi that
+# makes the tablet's cold load slow. The script builds and serves the bundled output by
+# default (--dev opts out), and its --foreground path execs vite so launchd keeps
+# supervising a single PID.
 cat <<EOF > "${FRONTEND_PLIST}"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -95,12 +101,9 @@ cat <<EOF > "${FRONTEND_PLIST}"
     <string>${FRONTEND_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${NODE_BIN}</string>
-        <string>${REPO_ROOT}/node_modules/vite/bin/vite.js</string>
-        <string>--host</string>
-        <string>0.0.0.0</string>
-        <string>--port</string>
-        <string>${FRONTEND_PORT}</string>
+        <string>/bin/bash</string>
+        <string>${SCRIPT_DIR}/start-frontend.sh</string>
+        <string>--foreground</string>
     </array>
     <key>WorkingDirectory</key>
     <string>${REPO_ROOT}</string>

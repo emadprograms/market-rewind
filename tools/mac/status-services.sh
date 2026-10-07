@@ -82,6 +82,19 @@ if [ "${FRONTEND_ONLINE}" = true ]; then
     echo -e "  Memory:  ${MEM}"
     echo -e "  Uptime:  ${UPTIME}"
   fi
+
+  # Which mode is actually being served. A dev server injects /@vite/client into the
+  # document; the bundled preview serves hashed /assets/ files instead. This matters
+  # because a dev server reinstates the per-module request waterfall that makes the
+  # tablet's cold load slow, and it is easy to end up on one without noticing.
+  FRONTEND_HTML=$(curl -s -m 3 "http://127.0.0.1:${DETECTED_PORT}/" 2>/dev/null || echo "")
+  if printf '%s' "${FRONTEND_HTML}" | grep -q '@vite/client'; then
+    echo -e "  Serving: ${YELLOW}Vite DEV server${NC} (unbundled \u2014 slow cold load on the tablet)"
+    echo -e "           ${YELLOW}Run ./tools/mac/restart-services.sh to serve the built bundle.${NC}"
+  else
+    ASSET=$(printf '%s' "${FRONTEND_HTML}" | grep -o '/assets/index-[A-Za-z0-9_-]*\.js' 2>/dev/null | sed -n '1p' || true)
+    echo -e "  Serving: ${GREEN}PRODUCTION bundle${NC}${ASSET:+ (${ASSET})}"
+  fi
 else
   echo -e "  Health:  ${RED}OFFLINE${NC}"
 fi
