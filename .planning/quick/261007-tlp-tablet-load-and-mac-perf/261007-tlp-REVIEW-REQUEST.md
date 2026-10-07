@@ -9,7 +9,71 @@ measurement says one thing and your machine may say another.
 
 ---
 
-# Round 2 — revised plan
+# Round 3 — one diagnostic, and an honest correction
+
+Round 2 settled the important things. Production confirmed (`/assets/index-*.js`, `@vite/client` count 0),
+so **the 65% CPU is real production CPU** — the dev-build theory is dead. The launchd rewrite in
+`e6d1975` is verified working (`Serving: PRODUCTION bundle`, zero errors, respawn loop gone). Thank you.
+
+**And your paused/playing table is the most valuable thing in the report**, because it isolates the
+remaining cost precisely: **54.9% Chrome CPU and 40.8% M4 GPU while completely paused**, with playback
+adding only +16.2% JS. A *static* page should cost approximately nothing. That is an anomaly, not a
+budget, and it is now the only thing I want to chase.
+
+## Correction: I chased it and my first answer was wrong
+
+I found that both plugins implemented the LWC primitive hook as `updateAllViews() { this._requestUpdate(); }`.
+Since LWC calls that hook *from inside its draw path*, and `requestUpdate` resolves to
+`model._internal_fullUpdate()` → `invalidate(InvalidateMask.full())`, I thought I had an infinite repaint
+loop and it explained your paused GPU exactly.
+
+**Reading the LWC source disproved it.** `autoScale` is only ever set in an InvalidateMask on *pane
+creation* (`lightweight-charts.development.mjs:7599`); a plain `full()` leaves the per-pane flag
+`undefined`, so `_private__applyMomentaryAutoScale` never re-arms. The loop is not self-sustaining.
+
+The hook was still wrong for a smaller reason — it escalated a *light* invalidation into a **full** one
+(including `_private__updateGui()`: time axis, price-axis widgets, layout width) on every price-scale
+recalculation. Fixed in `f6c016a`, with a regression test. **But that is a bounded efficiency fix, not
+the explanation for the paused floor.** I did not ship it as a fix for the thing it does not fix.
+
+One more thing worth knowing: `tests/unit/TradePlugin.test.ts` had a test named *"triggers update callback
+when updateAllViews() is called"* — it was asserting the bug as intended behaviour. Corrected.
+
+## The ONE test I need — 2 minutes, no code changes
+
+**Chrome DevTools → open the three-dot menu → More tools → Rendering → tick "Paint flashing".**
+
+Then: load the 4-chart layout, let it hydrate, **press pause**, and just watch for 20 seconds.
+
+| what you see | what it means | what I do next |
+|---|---|---|
+| Chart areas **flash continuously** while paused | Something invalidates a chart every frame. The bug is ours and it is findable. | Hunt the invalidation source with the Performance panel; I have three candidates already (the 250 ms per-chart interval, the unguarded `ResizeObserver` → `applyOptions({width,height})`, and a price-scale recalculation path). |
+| **No flashing** while paused, but GPU still ~40% | Nothing is repainting. The cost is **compositing/rasterisation**, not our code. | Stop looking at JS entirely; it becomes a CSS/layer/canvas-compositing question, and I will say so rather than keep patching. |
+| Flashing **only while playing** | Expected and benign. | Nothing to do. |
+
+If it does flash, a **Performance panel recording (~5 s, paused)** would let me finish this myself —
+the flame chart names the function driving the invalidations. Feel free to send the raw JSON export
+instead of a screenshot if that is easier.
+
+### Two optional tie-breakers if the flashing result is ambiguous
+
+1. **Same test in Safari** with the app paused. If Safari sits idle and Chrome does not, it is a
+   Chrome compositing path rather than anything in our code.
+2. **GPU% with the session-card removed**: in Elements, select `.session-card` (it carries the one
+   remaining `backdrop-filter: blur(20px)` over a large area) and delete it, then watch GPU%.
+   If the number collapses, the blur is the cost and I will remove it the same way as the others.
+
+## Everything else from round 1 and 2 is closed
+
+- Perf runs 1–5: production build confirmed — no re-run needed.
+- DPR: dropped, per your measurement.
+- 1D index: kept as insurance, acknowledged as not a CPU lever.
+- `benchmark.sh`: 9 PASS / 0 FAIL confirmed.
+- launchd: verified fixed on your M4.
+
+---
+
+# Round 2 — revised plan (answered; kept for the record)
 
 Round 1 answered three questions decisively. Thank you — the paused/speed/chart axes were exactly
 what was needed, and two of my assumptions died in the process.
