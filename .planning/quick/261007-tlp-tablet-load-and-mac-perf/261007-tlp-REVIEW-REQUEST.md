@@ -9,6 +9,64 @@ measurement says one thing and your machine may say another.
 
 ---
 
+# Round 4 — FOUND IT. Please re-run the same diagnostic.
+
+Your paint-flashing test was the one that cracked this. Thank you — it was decisive.
+
+## What it was
+
+All six chart plugins implemented the LWC primitive hook as:
+
+```js
+updateAllViews() { this._requestUpdate(); }
+```
+
+`updateAllViews()` is a notification **from** Lightweight Charts, not a request to it. LWC calls it **from inside its own draw path**:
+
+```
+drawImpl → updateGui → syncGuiWithModel → adjustSizeImpl
+         → model._internal_setWidth() → _internal_updateAllSources()
+         → primitive.updateAllViews()
+```
+
+`requestUpdate` resolves to `model._internal_fullUpdate()` → `invalidate(InvalidateMask.full())`. So **asking for a redraw from inside a redraw** schedules another draw, which calls `updateAllViews()` again. The chart repaints itself forever at display refresh rate — which is exactly the 75 Hz you measured, and exactly why it happened while paused.
+
+Reproduced deterministically here by driving LWC's rAF queue by hand, real `lightweight-charts`:
+
+| | rAF requested per frame |
+|---|---|
+| looping primitive | `1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1` — never stops (197 `updateAllViews` calls / 15 frames) |
+| no-op primitive | `1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0` |
+| no primitive | `1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0` |
+
+And confirmed against the real plugins: reverting `SessionShading.ts` **alone** makes the "all six real plugins settle when idle" test fail with `expected [1,1,1,1,1] to deeply equal [0,0,0,0,0]`. One plugin is enough to pin an entire chart at continuous 100% repaint.
+
+**Why this survived my previous fix:** `f6c016a` fixed two of the six plugins. All six attach to every chart, and `SessionShadingPlugin` was one of the four I missed — so the loop was still there the whole time you were measuring. That is my error, and it lines up exactly with your numbers: 4 charts, every canvas, every frame, paused.
+
+## What I need: re-run the round 3 test — 2 minutes
+
+On `6ca62c7`, 4-chart layout, hydrated, **paused**:
+
+1. **Paint flashing → is there still any flashing?** Expect none.
+2. **Chrome CPU / GPU% and M4 GPU% while paused**, same instruments as before.
+
+| | before (your round 3) | now — please fill in |
+|---|---|---|
+| Tab (Renderer) | 18.4% | |
+| GPU Process | 38.5% | |
+| Total Chrome CPU | 56.9% | |
+| M4 GPU Device Util | 80.3% | |
+
+**Predicted:** flashing gone, GPU process collapses toward a few percent, M4 GPU back to roughly an idle compositor. If the GPU process drops but the **Tab** renderer stays high, there is a *second*, separate cost and I want to know — that would be the first thing I have not yet explained.
+
+**If it still flashes**, that is important and I would like a 5-second paused Performance recording; it would mean a seventh invalidation source exists that I have not found.
+
+## One honest correction to my last message
+
+I said the loop was "not self-sustaining" and based that on checking the `autoScale` flag, which is only set on pane creation. That reasoning was wrong: the re-arming happens through `adjustSizeImpl` → `_internal_setWidth` → `_internal_updateAllSources`, which runs on every full invalidation and reaches the primitive unconditionally. The disproof above is the correction.
+
+---
+
 # Round 3 — one diagnostic, and an honest correction
 
 Round 2 settled the important things. Production confirmed (`/assets/index-*.js`, `@vite/client` count 0),
