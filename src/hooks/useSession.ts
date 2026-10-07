@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePlaybackStore } from '../store/usePlaybackStore';
-
-const DEFAULT_DATE = '2026-09-25';
+import { getYesterdayDate } from '../lib/timezones';
 
 export function useSession(tickers: string[]) {
   const [selectedDate, setSelectedDate] = useState<string>(() => {
+    // Purge legacy hardcoded default date from localStorage if present
     const saved = localStorage.getItem('lastUsedDate');
-    if (!saved || saved > DEFAULT_DATE) return DEFAULT_DATE;
-    return saved;
+    if (saved === '2026-09-25') {
+      localStorage.removeItem('lastUsedDate');
+    }
+    return getYesterdayDate();
   });
   const [sessionTicker, setSessionTicker] = useState<string>(() => localStorage.getItem('lastUsedTicker') || 'AAPL');
   const [entryTime, setEntryTime] = useState('09:20');
@@ -32,10 +34,6 @@ export function useSession(tickers: string[]) {
   }, [tickers]);
 
   // Persistence
-  useEffect(() => {
-    localStorage.setItem('lastUsedDate', selectedDate);
-  }, [selectedDate]);
-
   useEffect(() => {
     localStorage.setItem('lastUsedTicker', sessionTicker);
   }, [sessionTicker]);

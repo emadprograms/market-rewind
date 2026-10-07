@@ -156,3 +156,24 @@ export function isRthTick(tick: { time: string | number; session?: string; symbo
   if (isNaN(ms)) return true;
   return getSessionType(Math.floor(ms / 1000), tick.symbol || ticker) === 'RTH';
 }
+
+/**
+ * Returns yesterday's calendar date formatted as YYYY-MM-DD in the specified time zone (defaults to America/New_York).
+ * An optional referenceDate parameter can be provided (defaults to new Date()).
+ */
+export function getYesterdayDate(timeZone: string = 'America/New_York', referenceDate?: Date): string {
+  const now = referenceDate || new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const year = parts.find((p) => p.type === 'year')!.value;
+  const month = parts.find((p) => p.type === 'month')!.value;
+  const day = parts.find((p) => p.type === 'day')!.value;
+  const dateObj = new Date(`${year}-${month}-${day}T12:00:00Z`);
+  dateObj.setUTCDate(dateObj.getUTCDate() - 1);
+  return dateObj.toISOString().slice(0, 10);
+}
+
