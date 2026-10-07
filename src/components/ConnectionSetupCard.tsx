@@ -104,7 +104,7 @@ export const ConnectionSetupCard: React.FC<ConnectionSetupCardProps> = ({
         </div>
 
         <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: '1.5', marginBottom: '16px' }}>
-          Market Rewind requires the DuckDB streaming backend on port 8420 for high-frequency tick playback. When accessing from a Tailscale device, use your host's Tailscale address.
+          Market Rewind requires the DuckDB streaming backend on port 8765 for high-frequency tick playback. When accessing from a remote device, use your host's network address.
         </p>
 
         <form
@@ -144,7 +144,7 @@ export const ConnectionSetupCard: React.FC<ConnectionSetupCardProps> = ({
                 type="text"
                 value={inputUrl}
                 onChange={(e) => setInputUrl(e.target.value)}
-                placeholder="http://100.x.y.z:8420"
+                placeholder="http://localhost:8765"
                 style={{
                   width: '100%',
                   background: 'rgba(255, 255, 255, 0.05)',
@@ -178,21 +178,12 @@ export const ConnectionSetupCard: React.FC<ConnectionSetupCardProps> = ({
                 type="button"
                 className="btn-outline"
                 style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                onClick={() => handlePreset('http://100.72.128.22:8420')}
-                title="Use direct Tailscale stream IP (http://100.72.128.22:8420)"
+                onClick={() => handlePreset('http://localhost:8765')}
+                title="Use local DuckDB streaming service (http://localhost:8765)"
               >
-                Tailscale IP (100.72.128.22:8420)
+                Localhost (localhost:8765)
               </button>
-              <button
-                type="button"
-                className="btn-outline"
-                style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                onClick={() => handlePreset('http://arshad-pc-1:8420')}
-                title="Use permanent Tailscale MagicDNS name (http://arshad-pc-1:8420)"
-              >
-                MagicDNS (arshad-pc-1:8420)
-              </button>
-              {hostDefault !== 'http://100.72.128.22:8420' && hostDefault !== 'http://arshad-pc-1:8420' && (
+              {hostDefault !== 'http://localhost:8765' && (
                 <button
                   type="button"
                   className="btn-outline"
@@ -204,9 +195,6 @@ export const ConnectionSetupCard: React.FC<ConnectionSetupCardProps> = ({
                 </button>
               )}
             </div>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginTop: '6px', opacity: 0.8 }}>
-              💡 Tailscale Tip: <strong>arshad-pc-1:8420</strong> is your permanent MagicDNS host, which persists even if Tailscale reassigns IP addresses.
-            </span>
           </div>
 
           {errorMessage && (

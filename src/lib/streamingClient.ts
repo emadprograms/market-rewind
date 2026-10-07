@@ -26,9 +26,7 @@ export interface BackendStatus {
   };
 }
 
-export const TAILSCALE_STREAMING_IP = '100.72.128.22';
-export const TAILSCALE_STREAMING_MAGICDNS = 'arshad-pc-1';
-export const DEFAULT_STREAMING_URL = `http://${TAILSCALE_STREAMING_IP}:8420`;
+export const DEFAULT_STREAMING_URL = 'http://localhost:8765';
 
 /**
  * Pure helper to resolve the default streaming URL given environment, hostname, or storage.
@@ -50,18 +48,18 @@ export function resolveServiceUrl(options?: {
     return options.envUrl.trim();
   }
 
-  // 3. In unit test environment without explicit host override, default to localhost:8420 for mock servers
+  // 3. In unit test environment without explicit host override, default to localhost:8765 for mock servers
   if (options?.isTest) {
-    return 'http://localhost:8420';
+    return 'http://localhost:8765';
   }
 
-  // 4. In browser context: If accessing from a non-localhost host (like 100.72.128.22 or arshad-pc-1), match its port 8420
+  // 4. In browser context: If accessing from a non-localhost host (like over LAN or Tailscale), match its port 8765
   if (options?.hostname && options.hostname !== 'localhost' && options.hostname !== '127.0.0.1') {
     const proto = options.protocol === 'https:' ? 'https:' : 'http:';
-    return `${proto}//${options.hostname}:8420`;
+    return `${proto}//${options.hostname}:8765`;
   }
 
-  // 5. Default Tailscale streaming host when running on client/localhost
+  // 5. Default local streaming host when running on client/localhost
   return DEFAULT_STREAMING_URL;
 }
 
@@ -94,14 +92,14 @@ export function getDefaultStreamingUrl(): string {
 }
 
 /**
- * Gets the smart default host URL (e.g. http://<hostname>:8420) ignoring localStorage.
+ * Gets the smart default host URL (e.g. http://<hostname>:8765) ignoring localStorage.
  * Useful for the "Current Host" reset preset.
  */
 export function getHostDefaultStreamingUrl(): string {
   if (typeof window !== 'undefined' && window.location?.hostname) {
     if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
       const proto = window.location.protocol === 'https:' ? 'https:' : 'http:';
-      return `${proto}//${window.location.hostname}:8420`;
+      return `${proto}//${window.location.hostname}:8765`;
     }
   }
   return DEFAULT_STREAMING_URL;
@@ -117,7 +115,7 @@ export function normalizeServiceUrl(rawUrl: string): { httpUrl: string; wsUrl: s
     cleaned = getDefaultStreamingUrl();
   }
 
-  // Handle bare hostname/IP like "100.85.12.34:8420" or "localhost:8420"
+  // Handle bare hostname/IP like "100.85.12.34:8765" or "localhost:8765"
   if (!/^https?:\/\//i.test(cleaned)) {
     if (/^wss:\/\//i.test(cleaned)) {
       cleaned = cleaned.replace(/^wss:\/\//i, 'https://');

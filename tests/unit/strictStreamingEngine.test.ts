@@ -6,7 +6,7 @@ describe('Strict Single-DB Engine Enforcement (streaming.duckdb only)', () => {
 
   beforeEach(() => {
     client = new StreamingClient();
-    client.setServiceUrl('http://100.72.128.22:8420');
+    client.setServiceUrl('http://localhost:8765');
   });
 
   afterEach(() => {

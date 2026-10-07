@@ -74,7 +74,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     } catch {
       setTestResult({
         success: false,
-        message: `Failed to reach ${normalized.httpUrl}/api/status. Check host IP and port 8420.`,
+        message: `Failed to reach ${normalized.httpUrl}/api/status. Check host IP and port 8765.`,
       });
     } finally {
       setIsTesting(false);
@@ -171,7 +171,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               letterSpacing: '0.05em',
             }}
           >
-            DuckDB Service URL (Port 8420)
+            DuckDB Service URL (Port 8765)
           </label>
           <input
             id="connection-modal-url-input"
@@ -181,7 +181,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               setUrlInput(e.target.value);
               setTestResult(null);
             }}
-            placeholder="http://100.x.y.z:8420"
+            placeholder="http://localhost:8765"
             style={{
               width: '100%',
               background: 'rgba(255, 255, 255, 0.05)',
@@ -206,26 +206,14 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               className="btn-outline"
               style={{ fontSize: '0.75rem', padding: '4px 8px' }}
               onClick={() => {
-                setUrlInput('http://100.72.128.22:8420');
+                setUrlInput('http://localhost:8765');
                 setTestResult(null);
               }}
-              title="Use direct Tailscale stream IP"
+              title="Use local DuckDB streaming service"
             >
-              Tailscale IP (100.72.128.22:8420)
+              Localhost (localhost:8765)
             </button>
-            <button
-              type="button"
-              className="btn-outline"
-              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-              onClick={() => {
-                setUrlInput('http://arshad-pc-1:8420');
-                setTestResult(null);
-              }}
-              title="Use permanent Tailscale MagicDNS name"
-            >
-              MagicDNS (arshad-pc-1:8420)
-            </button>
-            {hostDefault !== 'http://100.72.128.22:8420' && hostDefault !== 'http://arshad-pc-1:8420' && (
+            {hostDefault !== 'http://localhost:8765' && (
               <button
                 type="button"
                 className="btn-outline"
@@ -239,9 +227,6 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               </button>
             )}
           </div>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginTop: '6px', opacity: 0.8 }}>
-            💡 Tailscale Tip: <strong>arshad-pc-1:8420</strong> is your permanent MagicDNS host, which persists even if Tailscale reassigns IP addresses.
-          </span>
         </div>
 
         {testResult && (

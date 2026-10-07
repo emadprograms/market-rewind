@@ -5,7 +5,7 @@ import type { MarketTick } from '../../src/types';
 
 describe('Time and Sales Tick Density & Timing Regression Tests', () => {
   beforeEach(() => {
-    streamingClient.setServiceUrl('http://100.72.128.22:8420');
+    streamingClient.setServiceUrl('http://localhost:8765');
     usePlaybackStore.setState({
       bufferedTicks: [],
       ticksBySymbol: {},

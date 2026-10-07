@@ -22,13 +22,13 @@ describe('Streaming URL Resolution & Normalization', () => {
       expect(url).toBe('http://100.110.120.130:8420');
     });
 
-    it('defaults to http://<hostname>:8420 when accessed over Tailscale/LAN in browser', () => {
+    it('defaults to http://<hostname>:8765 when accessed over Tailscale/LAN in browser', () => {
       const url = resolveServiceUrl({
         hostname: '100.85.14.92',
         protocol: 'http:',
         isTest: false,
       });
-      expect(url).toBe('http://100.85.14.92:8420');
+      expect(url).toBe('http://100.85.14.92:8765');
     });
 
     it('preserves https protocol for secure deployments', () => {
@@ -37,15 +37,15 @@ describe('Streaming URL Resolution & Normalization', () => {
         protocol: 'https:',
         isTest: false,
       });
-      expect(url).toBe('https://rewind.my-tailnet.ts.net:8420');
+      expect(url).toBe('https://rewind.my-tailnet.ts.net:8765');
     });
 
-    it('defaults to DEFAULT_STREAMING_URL (http://100.72.128.22:8420) on localhost in browser', () => {
+    it('defaults to DEFAULT_STREAMING_URL (http://localhost:8765) on localhost in browser', () => {
       const url = resolveServiceUrl({
         hostname: 'localhost',
         isTest: false,
       });
-      expect(url).toBe('http://100.72.128.22:8420');
+      expect(url).toBe('http://localhost:8765');
     });
 
     it('falls back to envUrl or localhost in test mode when no savedUrl', () => {
@@ -58,7 +58,7 @@ describe('Streaming URL Resolution & Normalization', () => {
       const urlDefault = resolveServiceUrl({
         isTest: true,
       });
-      expect(urlDefault).toBe('http://localhost:8420');
+      expect(urlDefault).toBe('http://localhost:8765');
     });
   });
 
@@ -169,15 +169,10 @@ describe('Connection UI Components', () => {
     const input = screen.getByLabelText(/Streaming Service URL/i) as HTMLInputElement;
     expect(input.value).toBe('http://100.200.300.400:8420');
 
-    // Click Tailscale IP preset
-    const tailscaleBtn = screen.getByRole('button', { name: /Tailscale IP/i });
-    fireEvent.click(tailscaleBtn);
-    expect(input.value).toBe('http://100.72.128.22:8420');
-
-    // Click MagicDNS preset
-    const magicDnsBtn = screen.getByRole('button', { name: /MagicDNS/i });
-    fireEvent.click(magicDnsBtn);
-    expect(input.value).toBe('http://arshad-pc-1:8420');
+    // Click Localhost preset
+    const localhostBtn = screen.getByRole('button', { name: /Localhost/i });
+    fireEvent.click(localhostBtn);
+    expect(input.value).toBe('http://localhost:8765');
   });
 
   it('tests and connects successfully in ConnectionSetupCard when service is healthy', async () => {
