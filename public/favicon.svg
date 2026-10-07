@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#161b26" />
+      <stop offset="50%" stop-color="#10141e" />
+      <stop offset="100%" stop-color="#090c12" />
+    </linearGradient>
+
+    <!-- Border Gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b4866" />
+      <stop offset="50%" stop-color="#242d40" />
+      <stop offset="100%" stop-color="#151b27" />
+    </linearGradient>
+
+    <!-- Radial Glow Behind Chart -->
+    <radialGradient id="centerGlow" cx="50%" cy="52%" r="48%">
+      <stop offset="0%" stop-color="#2962ff" stop-opacity="0.35" />
+      <stop offset="60%" stop-color="#2962ff" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#2962ff" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Rewind Arrow Gradient (Electric Cyan to Blue) -->
+    <linearGradient id="arrowGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1e54e4" />
+      <stop offset="40%" stop-color="#2979ff" />
+      <stop offset="85%" stop-color="#00d2ff" />
+      <stop offset="100%" stop-color="#00f0ff" />
+    </linearGradient>
+
+    <!-- Bullish Green Candle Gradient -->
+    <linearGradient id="greenCandle" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00e676" />
+      <stop offset="100%" stop-color="#1e9488" />
+    </linearGradient>
+
+    <!-- Bearish Red Candle Gradient -->
+    <linearGradient id="redCandle" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff5252" />
+      <stop offset="100%" stop-color="#cb3837" />
+    </linearGradient>
+
+    <!-- Drop Shadow for Dimensionality -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.65" />
+    </filter>
+  </defs>
+
+  <!-- Base App Squircle Container -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="10" />
+
+  <!-- Inner Ambient Glow -->
+  <circle cx="256" cy="265" r="190" fill="url(#centerGlow)" />
+
+  <g filter="url(#shadow)">
+    <!-- Counter-Clockwise Rewind Arc Track -->
+    <!-- Center (256, 256), Radius 160. From (145, 340) sweeping bottom, right, top to (225, 96) -->
+    <path 
+      d="M 145 340 A 160 160 0 1 0 225 96" 
+      fill="none" 
+      stroke="url(#arrowGrad)" 
+      stroke-width="34" 
+      stroke-linecap="round" 
+    />
+
+    <!-- Rewind Arrow Head (pointing left/backwards at top of arc) -->
+    <polygon 
+      points="160,96 235,54 218,96 235,138" 
+      fill="#00f0ff" 
+    />
+
+    <!-- Green Bullish Candlestick (Left) -->
+    <!-- Wick -->
+    <line x1="205" y1="172" x2="205" y2="355" stroke="#00e676" stroke-width="14" stroke-linecap="round" />
+    <!-- Candle Body -->
+    <rect x="181" y="212" width="48" height="104" rx="8" fill="url(#greenCandle)" stroke="#69f0ae" stroke-width="2" />
+
+    <!-- Red Bearish Candlestick (Right) -->
+    <!-- Wick -->
+    <line x1="307" y1="192" x2="307" y2="375" stroke="#ff5252" stroke-width="14" stroke-linecap="round" />
+    <!-- Candle Body -->
+    <rect x="283" y="242" width="48" height="98" rx="8" fill="url(#redCandle)" stroke="#ff8a80" stroke-width="2" />
+  </g>
+</svg>
