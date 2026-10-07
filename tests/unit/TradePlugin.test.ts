@@ -60,9 +60,21 @@ describe('TradePlugin Unit Tests', () => {
       expect(plugin._series).toBeNull();
     });
 
-    it('triggers update callback when updateAllViews() is called', () => {
+    // This previously asserted the opposite, which pinned a real bug in place.
+    //
+    // LWC calls updateAllViews() from inside its draw path (price-scale recalculation ->
+    // _internal_updateAllSources). `requestUpdate` resolves to
+    // model._internal_fullUpdate() -> invalidate(InvalidateMask.full()), so requesting a
+    // redraw from inside a redraw escalated the light invalidation LWC intended into a
+    // FULL one -- additionally rerunning _private__updateGui() (time axis, price-axis
+    // widgets, layout width) on every price-scale recalculation.
+    //
+    // TradePaneView caches nothing: renderer() calls _getViewData() and recomputes every
+    // coordinate from the live series/chart. So the hook must do nothing. Mirrored in
+    // tests/unit/primitiveUpdateContract.test.ts.
+    it('does NOT trigger the update callback from updateAllViews()', () => {
       plugin.updateAllViews();
-      expect(requestUpdateMock).toHaveBeenCalled();
+      expect(requestUpdateMock).not.toHaveBeenCalled();
     });
   });
 

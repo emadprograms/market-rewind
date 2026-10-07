@@ -155,7 +155,15 @@ export class VolumeProfilePlugin implements ISeriesPrimitive<Time> {
     }
 
     updateAllViews() {
-        this._requestUpdate();
+        // Deliberately empty, for the same reason as TradePlugin.updateAllViews().
+        // VolumeProfilePaneView.renderer() calls _getViewData() and recomputes from the
+        // live scale each draw, so there is no cached view data to refresh here.
+        //
+        // Calling this._requestUpdate() from this hook would resolve to
+        // model._internal_fullUpdate() -> invalidate(InvalidateMask.full()) from inside the
+        // draw path, escalating a light invalidation into a full one (including
+        // _private__updateGui()) on every price-scale recalculation. Cache invalidation
+        // belongs in _invalidateCache(), which is driven by setData/setEnabled/resize.
     }
 
     paneViews(): readonly ISeriesPrimitivePaneView[] {
