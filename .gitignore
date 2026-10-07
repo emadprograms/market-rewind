@@ -42,3 +42,6 @@ tests/regression/fixtures/*.db
 .coverage
 coverage.xml
 htmlcov/
+logs/
+.run/
+*.app/
