@@ -7,6 +7,17 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
+# Safeguard: If invoked inside a temporary git worktree, resolve canonical main repository root
+if git -C "${REPO_ROOT}" rev-parse --git-common-dir >/dev/null 2>&1; then
+  COMMON_DIR="$(git -C "${REPO_ROOT}" rev-parse --git-common-dir)"
+  if [ -n "${COMMON_DIR}" ] && [ -d "${COMMON_DIR}" ]; then
+    CANONICAL_ROOT="$(cd "${COMMON_DIR}/.." && pwd)"
+    if [ -f "${CANONICAL_ROOT}/package.json" ]; then
+      REPO_ROOT="${CANONICAL_ROOT}"
+    fi
+  fi
+fi
+
 # Runtime state directories
 RUN_DIR="${REPO_ROOT}/.run"
 LOG_DIR="${HOME}/Library/Logs/MarketRewind"
