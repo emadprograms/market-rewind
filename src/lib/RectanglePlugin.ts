@@ -120,7 +120,9 @@ export class RectanglePlugin implements ISeriesPrimitive<Time> {
     }
 
     updateAllViews() {
-        this._requestUpdate();
+        // Deliberately empty -- see BoundaryLinePlugin for the full rationale.
+        // LWC calls this from inside its draw path; requesting an update here makes the
+        // chart repaint itself forever. _getViewData() recomputes from the live scale.
     }
 
     paneViews(): readonly ISeriesPrimitivePaneView[] {

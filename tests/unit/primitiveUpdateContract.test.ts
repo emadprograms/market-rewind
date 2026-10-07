@@ -1,30 +1,110 @@
 /**
- * Guards the series-primitive contract that caused a repaint-escalation bug.
+ * Guards the series-primitive contract that caused a permanent repaint loop.
  *
- * Lightweight Charts calls `updateAllViews()` on a primitive *from inside its draw path*
- * (price-scale recalculation -> `_internal_updateAllSources`). The hook exists so a
- * primitive can refresh view data it cached against the current scale.
+ * THE BUG
  *
- * Both plugins here used to implement it as:
+ * Every plugin implemented the LWC primitive hook as:
  *
  *     updateAllViews() { this._requestUpdate(); }
  *
+ * `updateAllViews()` is a *notification from* Lightweight Charts, not a request to it.
+ * LWC calls it from inside its own draw path:
+ *
+ *     drawImpl -> updateGui -> syncGuiWithModel -> adjustSizeImpl
+ *              -> model._internal_setWidth() -> _internal_updateAllSources()
+ *              -> primitive.updateAllViews()
+ *
  * `requestUpdate` resolves to `model._internal_fullUpdate()` ->
  * `invalidate(InvalidateMask.full())`. So asking for a redraw from inside a redraw
- * escalated the light invalidation LWC intended into a FULL one -- which additionally
- * reruns `_private__updateGui()` (time axis, price-axis widgets, layout width) -- every
- * time the price scale was recalculated.
+ * schedules another draw, which calls `updateAllViews()` again. The result is a
+ * permanent repaint loop at display refresh rate with nothing changing on screen.
  *
- * Neither pane view caches anything (`renderer()` recomputes from the live scale each
- * draw), so the correct implementation of the hook is to do nothing.
+ * Measured on the M4 with all charts idle and the simulator PAUSED: every chart canvas
+ * repainted every frame, GPU process ~38%, M4 GPU ~40%, and hiding the chart container
+ * collapsed it to ~22%. Removing the repaint request from all six plugins is what fixes it.
  *
- * The second test in each pair exists so this file cannot pass by the plugins simply
- * being broken: it proves `_requestUpdate` IS still wired up and used for real data
- * changes. Without it, deleting the callback entirely would also "pass".
+ * This mattered because only 2 of the 6 plugins were fixed first, and the loop survived
+ * through the other four -- SessionShadingPlugin is attached to every chart, so the
+ * symptom was visible even with an idle, empty chart.
+ *
+ * WHAT IS TESTED HERE
+ *   1. Behavioural: real LWC + all six real plugins must SETTLE when driven idle.
+ *   2. Non-vacuous: a deliberately looping primitive must NOT settle, proving (1) can fail.
+ *   3. Per-plugin: each plugin's updateAllViews must not invoke its requestUpdate.
+ *   4. Each plugin must still request updates for genuine data changes.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { createChart } from 'lightweight-charts';
 import { TradePlugin } from '../../src/lib/TradePlugin';
 import { VolumeProfilePlugin } from '../../src/lib/VolumeProfilePlugin';
+import { SessionShadingPlugin } from '../../src/lib/SessionShading';
+import { HorizontalRayPlugin } from '../../src/lib/HorizontalRayPlugin';
+import { RectanglePlugin } from '../../src/lib/RectanglePlugin';
+import { BoundaryLinePlugin } from '../../src/lib/BoundaryLinePlugin';
+
+// --------------------------------------------------------------------------- helpers
+
+function makeContainer(w = 800, h = 400) {
+  const el = document.createElement('div');
+  Object.defineProperty(el, 'clientWidth', { value: w, configurable: true });
+  Object.defineProperty(el, 'clientHeight', { value: h, configurable: true });
+  el.getBoundingClientRect = () =>
+    ({ width: w, height: h, top: 0, left: 0, right: w, bottom: h, x: 0, y: 0, toJSON: () => ({}) }) as any;
+  document.body.appendChild(el);
+  return el;
+}
+
+const BARS = Array.from({ length: 120 }, (_, i) => ({
+  time: (1700000000 + i * 300) as any,
+  open: 100 + (i % 20),
+  high: 101 + (i % 20),
+  low: 99 + (i % 20),
+  close: 100.5 + (i % 20),
+}));
+
+/** Replaces rAF with a hand-cranked queue so frames can be driven deterministically. */
+function installRafCounter() {
+  const scheduled: FrameRequestCallback[] = [];
+  let count = 0;
+  (window as any).requestAnimationFrame = (cb: FrameRequestCallback) => {
+    count++;
+    scheduled.push(cb);
+    return count;
+  };
+  (window as any).cancelAnimationFrame = () => {};
+  return { scheduled };
+}
+
+/**
+ * Drains the queue n times, returning how many repaints the chart requested on each
+ * frame. A "1" on every frame means the chart is repainting itself forever.
+ */
+function driveFrames(n: number, scheduled: FrameRequestCallback[]): number[] {
+  const perFrame: number[] = [];
+  for (let f = 0; f < n; f++) {
+    const pending = scheduled.slice();
+    scheduled.length = 0;
+    for (const cb of pending) {
+      try {
+        cb((f + 1) * 16.67);
+      } catch {
+        /* drawing can throw in jsdom edge cases; irrelevant to scheduling */
+      }
+    }
+    perFrame.push(scheduled.length);
+  }
+  return perFrame;
+}
+
+/** Mirrors useChartPlugins: all six attach to every chart. */
+function attachAllPlugins(series: any) {
+  series.attachPrimitive(new SessionShadingPlugin('1H', false));
+  series.attachPrimitive(new VolumeProfilePlugin());
+  series.attachPrimitive(new HorizontalRayPlugin());
+  series.attachPrimitive(new RectanglePlugin());
+  series.attachPrimitive(new TradePlugin());
+  series.attachPrimitive(new BoundaryLinePlugin(null));
+}
 
 /** Minimal stand-ins: `attached` only stores these. */
 function attach(plugin: any, requestUpdate: () => void) {
@@ -35,74 +115,123 @@ function attach(plugin: any, requestUpdate: () => void) {
   } as any);
 }
 
-describe('series primitive updateAllViews contract', () => {
-  describe('TradePlugin', () => {
-    it('does not request an update from updateAllViews (called during the draw path)', () => {
-      const plugin = new TradePlugin();
-      const requestUpdate = vi.fn();
-      attach(plugin, requestUpdate);
+// ------------------------------------------------------------------------ behavioural
 
-      plugin.updateAllViews();
+describe('series primitives must not repaint the chart from inside a draw', () => {
+  it('real chart + all six real plugins settles when idle', () => {
+    const { scheduled } = installRafCounter();
+    const container = makeContainer();
+    const chart = createChart(container, { timeScale: { timeVisible: true } });
+    const series: any = chart.addCandlestickSeries();
+    series.setData(BARS);
+    attachAllPlugins(series);
 
-      expect(requestUpdate).not.toHaveBeenCalled();
-    });
+    const frames = driveFrames(15, scheduled);
 
-    it('still requests an update when its data actually changes', () => {
-      const plugin = new TradePlugin();
-      const requestUpdate = vi.fn();
-      attach(plugin, requestUpdate);
+    // The first frames legitimately draw (initial layout). Anything that is still asking
+    // for a repaint once settled is the loop.
+    expect(frames.slice(-5)).toEqual([0, 0, 0, 0, 0]);
 
-      plugin.setItems([{ id: 'x', price: 100 } as any]);
-
-      expect(requestUpdate).toHaveBeenCalled();
-    });
-
-    it('does not request an update when the hovered id is unchanged', () => {
-      const plugin = new TradePlugin();
-      const requestUpdate = vi.fn();
-      attach(plugin, requestUpdate);
-
-      plugin.setHoveredId('same');
-
-      expect(requestUpdate).toHaveBeenCalledTimes(1);
-      requestUpdate.mockClear();
-
-      plugin.setHoveredId('same');
-      expect(requestUpdate).not.toHaveBeenCalled();
-    });
+    chart.remove();
   });
 
-  describe('VolumeProfilePlugin', () => {
-    it('does not request an update from updateAllViews (called during the draw path)', () => {
-      const plugin = new VolumeProfilePlugin();
-      const requestUpdate = vi.fn();
-      // attached() also registers a window resize listener; jsdom provides window.
-      (globalThis as any).window?.removeEventListener?.('resize', () => {});
-      attach(plugin, requestUpdate);
+  it('a looping primitive does NOT settle — proving the assertion above can fail', () => {
+    const { scheduled } = installRafCounter();
+    const container = makeContainer();
+    const chart = createChart(container, { timeScale: { timeVisible: true } });
+    const series: any = chart.addCandlestickSeries();
+    series.setData(BARS);
 
-      plugin.updateAllViews();
+    // Exactly the shape of the original bug.
+    series.attachPrimitive({
+      _requestUpdate: () => {},
+      attached({ requestUpdate }: any) {
+        this._requestUpdate = requestUpdate;
+      },
+      detached() {},
+      paneViews: () => [{ renderer: () => ({ draw: () => {} }), zOrder: () => 'top' as const }],
+      updateAllViews() {
+        this._requestUpdate();
+      },
+    } as any);
 
-      expect(requestUpdate).not.toHaveBeenCalled();
-    });
+    const frames = driveFrames(15, scheduled);
 
-    it('still requests an update when its data actually changes', () => {
-      const plugin = new VolumeProfilePlugin();
-      const requestUpdate = vi.fn();
-      attach(plugin, requestUpdate);
+    // Every frame requests another repaint: the loop.
+    expect(frames.every((n) => n === 1)).toBe(true);
+    expect(frames.slice(-5)).not.toEqual([0, 0, 0, 0, 0]);
 
-      plugin.setData([{ time: 1, open: 1, high: 2, low: 0, close: 1.5, volume: 10 } as any]);
+    chart.remove();
+  });
+});
 
-      expect(requestUpdate).toHaveBeenCalled();
-    });
+// ------------------------------------------------------------------- per-plugin contract
 
-    it('still requests an update when toggled', () => {
-      const plugin = new VolumeProfilePlugin();
-      const requestUpdate = vi.fn();
-      attach(plugin, requestUpdate);
+describe('each plugin: updateAllViews is inert, real changes still invalidate', () => {
+  it('SessionShadingPlugin', () => {
+    const plugin = new SessionShadingPlugin('1H', false);
+    const requestUpdate = vi.fn();
+    attach(plugin, requestUpdate);
 
-      plugin.setEnabled(true);
+    plugin.updateAllViews();
+    expect(requestUpdate).not.toHaveBeenCalled(); // the loop
+    expect(plugin._cache).toBeNull(); // but the cached projections are still dropped
 
-      expect(requestUpdate).toHaveBeenCalled();
-    });
+    plugin.setConfig('1H', true);
+    expect(requestUpdate).toHaveBeenCalled(); // a real change still repaints
+  });
+
+  it('HorizontalRayPlugin', () => {
+    const plugin = new HorizontalRayPlugin();
+    const requestUpdate = vi.fn();
+    attach(plugin, requestUpdate);
+
+    plugin.updateAllViews();
+    expect(requestUpdate).not.toHaveBeenCalled();
+  });
+
+  it('RectanglePlugin', () => {
+    const plugin = new RectanglePlugin();
+    const requestUpdate = vi.fn();
+    attach(plugin, requestUpdate);
+
+    plugin.updateAllViews();
+    expect(requestUpdate).not.toHaveBeenCalled();
+  });
+
+  it('BoundaryLinePlugin', () => {
+    const plugin = new BoundaryLinePlugin(null);
+    const requestUpdate = vi.fn();
+    attach(plugin, requestUpdate);
+
+    plugin.updateAllViews();
+    expect(requestUpdate).not.toHaveBeenCalled();
+
+    plugin.setBoundaryTime('2026-09-08 14:00:00');
+    expect(requestUpdate).toHaveBeenCalled();
+  });
+
+  it('TradePlugin', () => {
+    const plugin = new TradePlugin();
+    const requestUpdate = vi.fn();
+    attach(plugin, requestUpdate);
+
+    plugin.updateAllViews();
+    expect(requestUpdate).not.toHaveBeenCalled();
+
+    plugin.setItems([{ id: 'x', price: 100 } as any]);
+    expect(requestUpdate).toHaveBeenCalled();
+  });
+
+  it('VolumeProfilePlugin', () => {
+    const plugin = new VolumeProfilePlugin();
+    const requestUpdate = vi.fn();
+    attach(plugin, requestUpdate);
+
+    plugin.updateAllViews();
+    expect(requestUpdate).not.toHaveBeenCalled();
+
+    plugin.setData([{ time: 1, open: 1, high: 2, low: 0, close: 1.5, volume: 10 } as any]);
+    expect(requestUpdate).toHaveBeenCalled();
   });
 });

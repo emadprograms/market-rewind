@@ -54,8 +54,20 @@ describe('BoundaryLinePlugin Unit Tests', () => {
       expect(plugin._series).toBeNull();
     });
 
-    it('triggers update on updateAllViews()', () => {
+    // Previously asserted the opposite, which pinned a repaint loop in place.
+    //
+    // LWC calls updateAllViews() from inside its draw path (drawImpl -> updateGui ->
+    // adjustSizeImpl -> _internal_updateAllSources), so requesting an update from here
+    // schedules another draw, which calls this again -- the chart repaints itself at
+    // display refresh rate forever, even paused. See
+    // tests/unit/primitiveUpdateContract.test.ts for the loop reproduction.
+    it('does NOT trigger update on updateAllViews()', () => {
       plugin.updateAllViews();
+      expect(requestUpdateMock).not.toHaveBeenCalled();
+    });
+
+    it('still triggers update on a real boundary-time change', () => {
+      plugin.setBoundaryTime('2026-09-08 14:00:00');
       expect(requestUpdateMock).toHaveBeenCalled();
     });
   });
