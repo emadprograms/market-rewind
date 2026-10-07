@@ -233,6 +233,10 @@ export function useChartLifecycle({
   const lastDataCountRef = useRef(0);
   const bidPriceLineRef = useRef<IPriceLine | null>(null);
   const askPriceLineRef = useRef<IPriceLine | null>(null);
+  // Last price actually pushed to each line, so the per-frame subscriber can skip
+  // applyOptions() when nothing moved (see updateBidAskPriceLines).
+  const lastBidRef = useRef<number | null>(null);
+  const lastAskRef = useRef<number | null>(null);
 
   const cleanupBidAskPriceLines = () => {
     if (initPriceSeriesRef.current && typeof initPriceSeriesRef.current.removePriceLine === 'function') {
@@ -252,6 +256,9 @@ export function useChartLifecycle({
       bidPriceLineRef.current = null;
       askPriceLineRef.current = null;
     }
+    // The lines are gone, so the cached prices no longer describe anything on the chart.
+    lastBidRef.current = null;
+    lastAskRef.current = null;
   };
 
   const updateBidAskPriceLines = (tick: any | null, fallbackPrice: number | null) => {
@@ -296,13 +303,18 @@ export function useChartLifecycle({
           });
           bidPriceLineRef.current = line || null;
         } catch (_) {}
-      } else {
+      } else if (lastBidRef.current !== bid) {
+        // Only when the value actually changes. applyOptions() marks the chart dirty and
+        // schedules a repaint even when the price is identical, and this runs from the
+        // per-frame store subscriber -- so an unguarded call repainted every chart at
+        // 60fps for the whole replay with nothing moving.
         try {
           if (typeof bidPriceLineRef.current.applyOptions === 'function') {
             bidPriceLineRef.current.applyOptions({ price: bid });
           }
         } catch (_) {}
       }
+      lastBidRef.current = bid;
     } else if (bidPriceLineRef.current) {
       try {
         if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
@@ -310,6 +322,7 @@ export function useChartLifecycle({
         }
       } catch (_) {}
       bidPriceLineRef.current = null;
+      lastBidRef.current = null;
     }
 
     // Ask price line on y-axis
@@ -328,13 +341,15 @@ export function useChartLifecycle({
           });
           askPriceLineRef.current = line || null;
         } catch (_) {}
-      } else {
+      } else if (lastAskRef.current !== ask) {
+        // Guarded for the same reason as the bid line above.
         try {
           if (typeof askPriceLineRef.current.applyOptions === 'function') {
             askPriceLineRef.current.applyOptions({ price: ask });
           }
         } catch (_) {}
       }
+      lastAskRef.current = ask;
     } else if (askPriceLineRef.current) {
       try {
         if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
@@ -342,6 +357,7 @@ export function useChartLifecycle({
         }
       } catch (_) {}
       askPriceLineRef.current = null;
+      lastAskRef.current = null;
     }
   };
 
