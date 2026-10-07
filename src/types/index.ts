@@ -18,6 +18,7 @@ export interface MarketTick {
   ask?: number | null;
   source?: string;
   session?: 'REG' | 'PRE' | 'POST' | string;
+  isSynthesized?: boolean;
 }
 
 export type OrderDirection = 'BUY' | 'SELL';

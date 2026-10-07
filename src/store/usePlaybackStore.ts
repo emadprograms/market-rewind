@@ -542,7 +542,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             source: 'STREAMING',
             isSynthesized: true,
           };
-          updatedLatest[sym] = synthTick;
+          if (synthTick) updatedLatest[sym] = synthTick;
         }
       }
       set({
@@ -573,7 +573,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             source: 'STREAMING',
             isSynthesized: true,
           };
-          updatedLatest[sym] = synthTick;
+          if (synthTick) updatedLatest[sym] = synthTick;
         }
       }
       set({

@@ -241,6 +241,120 @@ export function useChartLifecycle({
 
   const lastDataCountRef = useRef(0);
   const priceLineRef = useRef<IPriceLine | null>(null);
+  const bidPriceLineRef = useRef<IPriceLine | null>(null);
+  const askPriceLineRef = useRef<IPriceLine | null>(null);
+
+  const cleanupBidAskPriceLines = () => {
+    if (initPriceSeriesRef.current && typeof initPriceSeriesRef.current.removePriceLine === 'function') {
+      if (bidPriceLineRef.current) {
+        try {
+          initPriceSeriesRef.current.removePriceLine(bidPriceLineRef.current);
+        } catch (_) {}
+        bidPriceLineRef.current = null;
+      }
+      if (askPriceLineRef.current) {
+        try {
+          initPriceSeriesRef.current.removePriceLine(askPriceLineRef.current);
+        } catch (_) {}
+        askPriceLineRef.current = null;
+      }
+    } else {
+      bidPriceLineRef.current = null;
+      askPriceLineRef.current = null;
+    }
+  };
+
+  const updateBidAskPriceLines = (tick: any | null, fallbackPrice: number | null) => {
+    if (!initPriceSeriesRef.current || typeof initPriceSeriesRef.current.createPriceLine !== 'function') return;
+
+    let bid: number | null = null;
+    let ask: number | null = null;
+
+    if (tick) {
+      if (tick.bid !== undefined && tick.bid !== null && !isNaN(Number(tick.bid)) && Number(tick.bid) > 0) {
+        bid = Number(tick.bid);
+      }
+      if (tick.ask !== undefined && tick.ask !== null && !isNaN(Number(tick.ask)) && Number(tick.ask) > 0) {
+        ask = Number(tick.ask);
+      }
+      const p = tick.price !== undefined && tick.price !== null ? Number(tick.price) : NaN;
+      if (bid === null && !isNaN(p) && p > 0) {
+        bid = ask !== null ? Math.min(ask, Number((p - 0.01).toFixed(2))) : Number((p - 0.01).toFixed(2));
+      }
+      if (ask === null && !isNaN(p) && p > 0) {
+        ask = bid !== null ? Math.max(bid, Number((p + 0.01).toFixed(2))) : Number((p + 0.01).toFixed(2));
+      }
+    } else if (fallbackPrice !== null && !isNaN(Number(fallbackPrice)) && Number(fallbackPrice) > 0) {
+      const fb = Number(fallbackPrice);
+      bid = Number((fb - 0.01).toFixed(2));
+      ask = Number((fb + 0.01).toFixed(2));
+    }
+
+    // Bid price line on y-axis
+    if (bid !== null && bid > 0) {
+      if (!bidPriceLineRef.current) {
+        try {
+          const line = initPriceSeriesRef.current.createPriceLine({
+            price: bid,
+            color: '#2196f3',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: 'Bid',
+            axisLabelColor: '#2196f3',
+            axisLabelTextColor: '#ffffff',
+          });
+          bidPriceLineRef.current = line || null;
+        } catch (_) {}
+      } else {
+        try {
+          if (typeof bidPriceLineRef.current.applyOptions === 'function') {
+            bidPriceLineRef.current.applyOptions({ price: bid });
+          }
+        } catch (_) {}
+      }
+    } else if (bidPriceLineRef.current) {
+      try {
+        if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
+          initPriceSeriesRef.current.removePriceLine(bidPriceLineRef.current);
+        }
+      } catch (_) {}
+      bidPriceLineRef.current = null;
+    }
+
+    // Ask price line on y-axis
+    if (ask !== null && ask > 0) {
+      if (!askPriceLineRef.current) {
+        try {
+          const line = initPriceSeriesRef.current.createPriceLine({
+            price: ask,
+            color: '#ef5350',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: 'Ask',
+            axisLabelColor: '#ef5350',
+            axisLabelTextColor: '#ffffff',
+          });
+          askPriceLineRef.current = line || null;
+        } catch (_) {}
+      } else {
+        try {
+          if (typeof askPriceLineRef.current.applyOptions === 'function') {
+            askPriceLineRef.current.applyOptions({ price: ask });
+          }
+        } catch (_) {}
+      }
+    } else if (askPriceLineRef.current) {
+      try {
+        if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
+          initPriceSeriesRef.current.removePriceLine(askPriceLineRef.current);
+        }
+      } catch (_) {}
+      askPriceLineRef.current = null;
+    }
+  };
+
   const initialPlayback = usePlaybackStore.getState();
   const lastTickerRef = useRef(ticker);
   const lastTfRef = useRef(timeframe);
@@ -266,6 +380,7 @@ export function useChartLifecycle({
   useEffect(() => {
     currentTickerRef.current = ticker;
     setIsHydrated(false);
+    cleanupBidAskPriceLines();
     const playbackState = usePlaybackStore.getState();
     const symUpper = ticker.toUpperCase();
     lastConsumedTimeRef.current = playbackState.currentTime || 0;
@@ -278,6 +393,7 @@ export function useChartLifecycle({
   useEffect(() => {
     setIsHydrated(false);
     hasScrolledToRealTimeRef.current = false;
+    cleanupBidAskPriceLines();
     lastConsumedTimeRef.current = usePlaybackStore.getState().currentTime || 0;
     syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
   }, [timeframe, ticker]);
@@ -490,6 +606,9 @@ export function useChartLifecycle({
       lastConsumedTickRef.current = currentPlayback.latestTickBySymbol?.[symUpper] ||
         (currentPlayback.currentTick?.symbol?.toUpperCase() === symUpper ? currentPlayback.currentTick : null);
 
+      const fallbackClose = lastCandleRef.current?.close ?? (chartData.length > 0 ? chartData[chartData.length - 1].close : null);
+      updateBidAskPriceLines(lastConsumedTickRef.current, fallbackClose);
+
       lastTickerRef.current = ticker;
       lastTfRef.current = timeframe;
       lastEthRef.current = showEth;
@@ -603,6 +722,9 @@ export function useChartLifecycle({
       const latestTick = state.latestTickBySymbol?.[sym] ||
         (state.currentTick?.symbol?.toUpperCase() === sym ? state.currentTick : null);
       if (!latestTick || !latestTick.price || latestTick.price <= 0) return;
+
+      // Update Live Bid & Ask Price Lines on y-axis
+      updateBidAskPriceLines(latestTick, null);
 
       // 1D Extended Hours Live Price Line
       if (timeframe === '1D') {
@@ -909,24 +1031,16 @@ export function useChartLifecycle({
 
     return () => {
       unsubscribe();
+      cleanupBidAskPriceLines();
     };
   }, [ticker, timeframe, showEth, initPriceSeriesRef.current, initVolumeSeriesRef.current]);
 
-  // 7. Static/Paused Price Line for 1D chart (Extended Hours)
+  // 7. Static/Paused Price Line for 1D chart (Extended Hours) & Live Bid/Ask Price Lines
   useEffect(() => {
     if (!initPriceSeriesRef.current) return;
 
     const unsub = usePlaybackStore.subscribe((state) => {
       if (!state.isPaused) return; // handled by direct tick subscriber during playback
-      if (timeframe !== '1D' || !state.currentTime || localMasterData.length === 0) {
-        if (priceLineRef.current && initPriceSeriesRef.current) {
-          try {
-            initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
-            priceLineRef.current = null;
-          } catch (_) {}
-        }
-        return;
-      }
 
       const sym = ticker.toUpperCase();
       const latestTick = state.latestTickBySymbol?.[sym] ||
@@ -936,39 +1050,60 @@ export function useChartLifecycle({
       if (lastPrice === null && localMasterData.length > 0) {
         for (let i = localMasterData.length - 1; i >= 0; i--) {
           const barMs = new Date(localMasterData[i].time.replace(' ', 'T') + (localMasterData[i].time.includes('Z') ? '' : 'Z')).getTime();
-          if (barMs <= state.currentTime) {
+          if (!state.currentTime || barMs <= state.currentTime) {
             lastPrice = localMasterData[i].close;
             break;
           }
         }
       }
 
-      if (lastPrice !== null) {
+      // 1D Extended Hours Live Price Line
+      if (initPriceSeriesRef.current && timeframe === '1D' && state.currentTime && localMasterData.length > 0 && lastPrice !== null) {
         if (!priceLineRef.current) {
-          priceLineRef.current = initPriceSeriesRef.current.createPriceLine({
-            price: lastPrice,
-            color: 'rgba(255, 210, 0, 0.6)',
-            lineWidth: 1,
-            lineStyle: 2,
-            axisLabelVisible: true,
-            title: 'Live',
-          });
+          try {
+            const line = initPriceSeriesRef.current.createPriceLine({
+              price: lastPrice,
+              color: 'rgba(255, 210, 0, 0.6)',
+              lineWidth: 1,
+              lineStyle: 2,
+              axisLabelVisible: true,
+              title: 'Live',
+            });
+            priceLineRef.current = line || null;
+          } catch (_) {}
         } else {
-          priceLineRef.current.applyOptions({ price: lastPrice });
+          try {
+            if (typeof priceLineRef.current.applyOptions === 'function') {
+              priceLineRef.current.applyOptions({ price: lastPrice });
+            }
+          } catch (_) {}
         }
+      } else if (priceLineRef.current && initPriceSeriesRef.current) {
+        try {
+          if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
+            initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
+          }
+        } catch (_) {}
+        priceLineRef.current = null;
       }
+
+      // Update Bid & Ask Price Lines on y-axis when paused or scrubbing
+      updateBidAskPriceLines(latestTick, lastPrice);
     });
 
     return () => {
       unsub();
       if (priceLineRef.current && initPriceSeriesRef.current) {
         try {
-          initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
-          priceLineRef.current = null;
+          if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
+            initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
+          }
         } catch (_) {}
+        priceLineRef.current = null;
       }
+      cleanupBidAskPriceLines();
     };
-  }, [timeframe, localMasterData, initPriceSeriesRef.current]);
+  }, [timeframe, localMasterData, initPriceSeriesRef.current, ticker]);
 
   return {
     volumeSeriesRef: initVolumeSeriesRef,
@@ -979,5 +1114,7 @@ export function useChartLifecycle({
     scrollToRealTime,
     resetView,
     isHydrated,
+    bidPriceLineRef,
+    askPriceLineRef,
   };
 }
