@@ -1,23 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { IChartApi, ISeriesApi, Time, TickMarkType, IPriceLine } from 'lightweight-charts';
 import type { ActiveTrade, ChartBar, DrawType, RawBar, RayDrawing, RectDrawing, RectPoint, TickerDrawings, Timeframe, HistoryPrependState } from '../types';
-import { TF_SECONDS } from '../types';
+
 import { getTzForTicker, isRthTick, isRthBar } from '../lib/timezones';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { useChartInit } from './chart/useChartInit';
 import { useChartPlugins } from './chart/useChartPlugins';
 import { useChartDrawings } from './chart/useChartDrawings';
 import { useChartViewport } from './chart/useChartViewport';
-
-const getBucketTime = (timestampMs: number, tf: Timeframe): number => {
-  const date = new Date(timestampMs);
-  if (tf === '1D') {
-    return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0) / 1000);
-  }
-  const durationSec = TF_SECONDS[tf] || 60;
-  const bucketStartMs = Math.floor(timestampMs / (durationSec * 1000)) * (durationSec * 1000);
-  return Math.floor(bucketStartMs / 1000);
-};
+import { getBucketTime, resolveDailyIndex, type DailyIndex } from '../lib/dailyIndex';
 
 const getTickMs = (t: any): number => {
   if (!t) return 0;
@@ -369,6 +360,9 @@ export function useChartLifecycle({
     bucketTime: -1,
     minutes: new Map(),
   });
+  // Daily bar buckets, rebuilt once per session load instead of rescanned per tick.
+  // See src/lib/dailyIndex.ts for the measurements that motivated this.
+  const dailyIndexRef = useRef<DailyIndex | null>(null);
   
   const isDrawingModeRef = useRef(isDrawingMode);
   const currentTickerRef = useRef(ticker);
@@ -819,11 +813,18 @@ export function useChartLifecycle({
           let foundAny = false;
 
           const evalTimeMs = state.currentTime && state.currentTime > tickTimeMs ? state.currentTime : tickTimeMs;
-          for (const bar of masterData) {
-            if (bar.symbol && bar.symbol.toUpperCase() !== sym) continue;
-            if (!isRthBar(bar, ticker, timeframe)) continue;
-            const barMs = isoToMs(bar.time);
-            if (getBucketTime(barMs, timeframe) === bucketTime && barMs <= evalTimeMs) {
+
+          // Bucket membership and per-bar facts are tick-invariant, so they are computed
+          // once per session load rather than once per bar per tick (see dailyIndex.ts).
+          // The tick-dependent `barMs <= evalTimeMs` test is still applied here.
+          const bucketBars = masterData.length > 0
+            ? (resolveDailyIndex(dailyIndexRef, masterData, sym, ticker, timeframe).byBucket.get(bucketTime) || [])
+            : [];
+
+          for (const entry of bucketBars) {
+            const bar = entry.bar;
+            const barMs = entry.barMs;
+            if (barMs <= evalTimeMs) {
               if (firstBarOpen === undefined) {
                 firstBarOpen = bar.open;
               }
