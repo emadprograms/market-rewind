@@ -438,9 +438,9 @@ describe('Live Review 96ca478 Failure Probes Harness', () => {
   });
 
   // --------------------------------------------------------------------------
-  // PROBE 4: Pausing changes daily "Live" price to different value
+  // PROBE 4: Pausing keeps daily price lines stable at latest trade price
   // --------------------------------------------------------------------------
-  it('PROBE 4: daily Live price line must use latest eligible trade price in both play and pause', async () => {
+  it('PROBE 4: daily Bid and Ask price lines must use latest eligible trade price in both play and pause', async () => {
     // September 22 setup:
     // Historical 1D bar close is 379.15 (yesterday's close or completed day)
     // Latest trade during replay is 373.60
@@ -494,13 +494,17 @@ describe('Live Review 96ca478 Failure Probes Harness', () => {
       await new Promise((r) => setTimeout(r, 60));
     });
 
-    // In playing state, price line is 373.60
+    // In playing state, bid is 373.59 and ask is 373.61 (based on 373.60)
     await act(async () => {
       usePlaybackStore.getState().advanceSimulationTime(ms('2026-09-22 13:35:56.463'));
     });
 
-    const playingLinePrice = mockPriceSeries.priceLines.at(-1)?.options?.price;
-    expect(playingLinePrice).toBe(373.60);
+    const playingBidLine = mockPriceSeries.priceLines.find((l: any) => l.options?.title === 'Bid');
+    const playingAskLine = mockPriceSeries.priceLines.find((l: any) => l.options?.title === 'Ask');
+    const liveLine = mockPriceSeries.priceLines.find((l: any) => l.options?.title === 'Live');
+    expect(liveLine).toBeUndefined();
+    expect(playingBidLine?.options?.price).toBe(373.59);
+    expect(playingAskLine?.options?.price).toBe(373.61);
 
     // Now pause playback
     act(() => {
@@ -511,9 +515,11 @@ describe('Live Review 96ca478 Failure Probes Harness', () => {
       await Promise.resolve();
     });
 
-    const pausedLinePrice = mockPriceSeries.priceLines.at(-1)?.options?.price;
+    const pausedBidLine = mockPriceSeries.priceLines.find((l: any) => l.options?.title === 'Bid');
+    const pausedAskLine = mockPriceSeries.priceLines.find((l: any) => l.options?.title === 'Ask');
 
-    // Must NOT switch to 379.15 (historical close)! Must stay at 373.60 (latest trade price)
-    expect(pausedLinePrice).toBe(373.60);
+    // Must NOT switch to 379.15 (historical close)! Must stay at 373.59 and 373.61
+    expect(pausedBidLine?.options?.price).toBe(373.59);
+    expect(pausedAskLine?.options?.price).toBe(373.61);
   });
 });

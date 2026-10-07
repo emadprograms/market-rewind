@@ -54,7 +54,7 @@ describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
     expect(Number(slider.value)).toBe(time920Ms);
   });
 
-  it('immediately pauses playback when user seeks via timeline slider', async () => {
+  it('does not pause playback when user seeks via timeline slider while playing', async () => {
     // Start playback (playing)
     usePlaybackStore.setState({ isPaused: false });
     expect(usePlaybackStore.getState().isPaused).toBe(false);
@@ -78,8 +78,8 @@ describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
       fireEvent.mouseUp(slider);
     });
 
-    // Playback must be paused immediately on seek
-    expect(usePlaybackStore.getState().isPaused).toBe(true);
+    // Playback must NOT be paused on seek when playing
+    expect(usePlaybackStore.getState().isPaused).toBe(false);
     expect(usePlaybackStore.getState().currentTime).toBe(time1015Ms);
   });
 

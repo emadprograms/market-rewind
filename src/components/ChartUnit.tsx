@@ -124,7 +124,8 @@ export default function ChartUnit({
     chartData: data.chartData, 
     chartContainerRef, 
     priceSeriesRef, 
-    tradePluginRef: chart.tradePluginRef 
+    tradePluginRef: chart.tradePluginRef,
+    ticker: data.ticker,
   });
 
   // Sync PnL to App with equality guard
@@ -209,7 +210,13 @@ export default function ChartUnit({
           activeTrade={trade.activeTrade}
           currentPrice={currentPrice}
           tradeBadgeRef={tradeBadgeRef}
-          onCloseTrade={() => trade.setActiveTrade(null)}
+          onCloseTrade={() => {
+            if (typeof trade.closeTrade === 'function') {
+              trade.closeTrade();
+            } else {
+              trade.setActiveTrade(null);
+            }
+          }}
           isHydrated={chart.isHydrated}
           theme={theme}
         />

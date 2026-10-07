@@ -118,7 +118,6 @@ export function PlaybackBar({
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawVal = parseInt(e.target.value, 10);
     const val = Math.floor(rawVal / 1000) * 1000;
-    setPaused(true);
     seekTickTime(val);
   };
 
@@ -138,7 +137,6 @@ export function PlaybackBar({
       let targetMs = new Date(targetUtcStr.replace(' ', 'T') + 'Z').getTime();
       targetMs += parseInt(ss, 10) * 1000;
       if (!isNaN(targetMs)) {
-        setPaused(true);
         seekTickTime(targetMs);
         setJumpTimeText('');
       }
@@ -322,8 +320,6 @@ export function PlaybackBar({
             step={1000}
             value={sliderValue}
             onChange={handleSliderChange}
-            onMouseUp={() => setPaused(true)}
-            onTouchEnd={() => setPaused(true)}
             title={`Replay Time: ${formatTimeOnly(sliderValue)} (${currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/${totalTicks} ticks)`}
             style={{ width: '100%', accentColor: '#2962ff', cursor: 'pointer' }}
           />

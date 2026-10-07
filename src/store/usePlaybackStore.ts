@@ -422,7 +422,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   stepForward: () => {
-    const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData, latestTickBySymbol } = get();
+    const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData, latestTickBySymbol, isPaused } = get();
 
     if (stepMinutes <= 0) {
       if (bufferedTicks.length > 0) {
@@ -440,7 +440,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             currentTick: nextTick,
             latestTickBySymbol: updatedLatest,
             currentTime: nextTickMs,
-            isPaused: true,
+            isPaused,
           });
         }
       }
@@ -471,7 +471,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   stepBackward: () => {
-    const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
+    const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData, isPaused } = get();
 
     if (stepMinutes <= 0) {
       if (bufferedTicks.length > 0 && currentTickIndex > 0) {
@@ -489,7 +489,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
           currentTick: prevTick,
           latestTickBySymbol: updatedLatest,
           currentTime: isoToMs(prevTick.time),
-          isPaused: true,
+          isPaused,
         });
       }
       return;
@@ -507,7 +507,6 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
 
     if (minMs !== null) {
       if (currentMs <= minMs) {
-        set({ isPaused: true });
         return;
       }
       if (targetMs < minMs) {
@@ -516,7 +515,6 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     }
 
     if (targetMs === currentMs) {
-      set({ isPaused: true });
       return;
     }
 
@@ -524,7 +522,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   },
 
   seekTickIndex: (index) => {
-    const { bufferedTicks } = get();
+    const { bufferedTicks, isPaused } = get();
     if (bufferedTicks.length === 0) return;
     const clampedIndex = Math.max(0, Math.min(index, bufferedTicks.length - 1));
     const targetTick = bufferedTicks[clampedIndex];
@@ -540,13 +538,18 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       currentTick: targetTick,
       latestTickBySymbol: updatedLatest,
       currentTime: isoToMs(targetTick.time),
-      isPaused: true,
+      isPaused,
     });
   },
 
   seekTickTime: (time) => {
-    const { bufferedTicks, ticksBySymbol, masterData } = get();
+    const { bufferedTicks, ticksBySymbol, masterData, isPaused } = get();
     const targetMs = typeof time === 'number' ? time : isoToMs(time);
+    const lastTickMs = bufferedTicks.length > 0 ? isoToMs(bufferedTicks[bufferedTicks.length - 1].time) : null;
+    const lastBarMs = masterData.length > 0 ? isoToMs(masterData[masterData.length - 1].time) + 60000 : null;
+    const maxMs = (lastTickMs !== null && lastBarMs !== null) ? Math.max(lastTickMs, lastBarMs) : (lastTickMs ?? lastBarMs);
+    const reachedEnd = maxMs !== null && targetMs >= maxMs;
+
     if (bufferedTicks.length === 0) {
       let synthTick: MarketTick | null = null;
       let updatedLatest: Record<string, MarketTick> = {};
@@ -572,7 +575,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
         currentTickIndex: -1,
         currentTick: synthTick,
         latestTickBySymbol: updatedLatest,
-        isPaused: true,
+        isPaused: reachedEnd ? true : isPaused,
       });
       return;
     }
@@ -603,7 +606,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
         currentTick: synthTick,
         latestTickBySymbol: updatedLatest,
         currentTime: targetMs,
-        isPaused: true,
+        isPaused,
       });
       return;
     }
@@ -650,7 +653,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
       currentTick: targetTick,
       latestTickBySymbol: updatedLatest,
       currentTime: targetMs,
-      isPaused: true,
+      isPaused: reachedEnd ? true : isPaused,
     });
   },
 
