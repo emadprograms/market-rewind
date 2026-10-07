@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@google/gemini-cli": "^0.44.1",
+    "@opengsd/gsd-core": "^1.16.0",
     "@playwright/test": "^1.60.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
