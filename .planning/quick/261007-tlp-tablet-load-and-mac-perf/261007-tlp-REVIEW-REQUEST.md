@@ -85,6 +85,43 @@ faster, that is important — tell me.
 
 ---
 
+## 1b. NEW — per-frame chart invalidation (`a1c6023`). Test this one first.
+
+**This is the most likely candidate for the missing CPU**, and it is newer code than the
+69% measurement it is being judged against (`main`'s bid/ask work, merged at `4c84258`).
+
+Two unconditional things ran on every animation frame for the whole replay:
+
+1. **`updateBidAskPriceLines()` pushed a value into `applyOptions()` on every call.** That
+   marks the chart dirty and schedules a repaint whether or not the price changed. At 25×
+   with 12 charts: ~24 invalidations/frame, **1,440/second**, for the entire replay.
+   Measured over one full replay: **1,351,032 → 469,512 calls, −65%** (881,520 needless
+   invalidations removed). Each line now caches the last price it pushed.
+2. **`advanceSimulationTime()` rebuilt and republished `latestTickBySymbol` every frame**,
+   so identity-keyed subscribers re-rendered 2.9× more often than there was new data.
+   Now only republished when a tick actually elapses: **100% of frames → 35%**, matching
+   the real tick rate.
+
+### Check D — does this move the CPU?
+
+Same 25× replay, **12-chart grid if you can**, `git checkout a1c6023` vs `7bd01d6`:
+
+| | CPU avg | CPU peak | GPU avg | GPU peak |
+|---|---|---|---|---|
+| before `7bd01d6` | | | | |
+| after `a1c6023` | | | | |
+
+The mechanism predicts CPU drops and GPU drops (fewer invalidations → fewer repaints).
+**If CPU is still flat here, that is the most informative result you can give me** — it
+would mean the core is going somewhere I have not looked, and I would rather know that
+than keep stacking fixes.
+
+Also please note the **chart count** and whether any charts were off-screen or in an
+inactive tab. If off-screen charts keep processing, that is my next target and it would
+explain a flat reading here.
+
+---
+
 ## 2. The 1D bucket index — needs a hardware A/B
 
 **What changed** (`88468a0`). The 1D branch of `useChartLifecycle` rescanned all of
