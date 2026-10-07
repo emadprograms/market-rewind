@@ -424,60 +424,57 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   stepForward: () => {
     const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData, latestTickBySymbol } = get();
 
-    if (bufferedTicks.length > 0) {
-      const firstTickMs = isoToMs(bufferedTicks[0].time);
-      if (currentTime !== null && currentTime < firstTickMs && masterData.length > 0) {
-        const nextBarMs = advanceTimeLogic(currentTime, stepMinutes, masterData);
-        if (nextBarMs) {
-          get().seekTickTime(nextBarMs);
-          return;
+    if (stepMinutes <= 0) {
+      if (bufferedTicks.length > 0) {
+        if (currentTickIndex < bufferedTicks.length - 1) {
+          const nextIndex = currentTickIndex < 0 ? 0 : currentTickIndex + 1;
+          const nextTick = bufferedTicks[nextIndex];
+          const nextTickMs = isoToMs(nextTick.time);
+
+          const updatedLatest = { ...latestTickBySymbol };
+          if (nextTick && nextTick.symbol) {
+            updatedLatest[nextTick.symbol.toUpperCase()] = nextTick;
+          }
+          set({
+            currentTickIndex: nextIndex,
+            currentTick: nextTick,
+            latestTickBySymbol: updatedLatest,
+            currentTime: nextTickMs,
+            isPaused: true,
+          });
         }
       }
-
-      if (currentTickIndex < bufferedTicks.length - 1) {
-        const nextIndex = currentTickIndex < 0 ? 0 : currentTickIndex + 1;
-        const nextTick = bufferedTicks[nextIndex];
-        const nextTickMs = isoToMs(nextTick.time);
-
-        // If masterData provides a closer next step than nextTickMs, advance via bar logic
-        const nextBarMs = advanceTimeLogic(currentTime, stepMinutes, masterData);
-        if (nextBarMs && nextBarMs < nextTickMs) {
-          set({ currentTime: nextBarMs, isPaused: true });
-          return;
-        }
-
-        const updatedLatest = { ...latestTickBySymbol };
-        if (nextTick && nextTick.symbol) {
-          updatedLatest[nextTick.symbol.toUpperCase()] = nextTick;
-        }
-        set({
-          currentTickIndex: nextIndex,
-          currentTick: nextTick,
-          latestTickBySymbol: updatedLatest,
-          currentTime: nextTickMs,
-          isPaused: true,
-        });
-      }
-    } else {
-      const next = advanceTimeLogic(currentTime, stepMinutes, masterData);
-      if (next) set({ currentTime: next, isPaused: true });
+      return;
     }
+
+    const currentMs = currentTime ?? (bufferedTicks[0] ? isoToMs(bufferedTicks[0].time) : (masterData[0] ? isoToMs(masterData[0].time) : null));
+    if (currentMs === null) return;
+
+    const stepMs = stepMinutes * 60000;
+    let targetMs = Math.ceil((currentMs + 1000) / stepMs) * stepMs;
+
+    const lastTickMs = bufferedTicks.length > 0 ? isoToMs(bufferedTicks[bufferedTicks.length - 1].time) : null;
+    const lastBarMs = masterData.length > 0 ? isoToMs(masterData[masterData.length - 1].time) : null;
+    const maxMs = (lastTickMs !== null && lastBarMs !== null) ? Math.max(lastTickMs, lastBarMs) : (lastTickMs ?? lastBarMs);
+
+    if (maxMs !== null) {
+      if (currentMs >= maxMs) {
+        set({ isPaused: true });
+        return;
+      }
+      if (targetMs > maxMs) {
+        targetMs = maxMs;
+      }
+    }
+
+    get().seekTickTime(targetMs);
   },
 
   stepBackward: () => {
     const { bufferedTicks, currentTickIndex, currentTime, stepMinutes, masterData } = get();
 
-    if (bufferedTicks.length > 0) {
-      const firstTickMs = isoToMs(bufferedTicks[0].time);
-      if (currentTime !== null && currentTime <= firstTickMs && masterData.length > 0) {
-        const prevBarMs = rewindTimeLogic(currentTime, stepMinutes, masterData);
-        if (prevBarMs) {
-          get().seekTickTime(prevBarMs);
-          return;
-        }
-      }
-
-      if (currentTickIndex > 0) {
+    if (stepMinutes <= 0) {
+      if (bufferedTicks.length > 0 && currentTickIndex > 0) {
         const prevIndex = currentTickIndex - 1;
         const prevTick = bufferedTicks[prevIndex];
         const updatedLatest: Record<string, MarketTick> = {};
@@ -495,10 +492,35 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
           isPaused: true,
         });
       }
-    } else {
-      const prev = rewindTimeLogic(currentTime, stepMinutes, masterData);
-      if (prev) set({ currentTime: prev, isPaused: true });
+      return;
     }
+
+    const currentMs = currentTime ?? (bufferedTicks[0] ? isoToMs(bufferedTicks[0].time) : (masterData[0] ? isoToMs(masterData[0].time) : null));
+    if (currentMs === null) return;
+
+    const stepMs = stepMinutes * 60000;
+    let targetMs = Math.floor((currentMs - 1000) / stepMs) * stepMs;
+
+    const firstTickMs = bufferedTicks.length > 0 ? isoToMs(bufferedTicks[0].time) : null;
+    const firstBarMs = masterData.length > 0 ? isoToMs(masterData[0].time) : null;
+    const minMs = (firstTickMs !== null && firstBarMs !== null) ? Math.min(firstTickMs, firstBarMs) : (firstTickMs ?? firstBarMs);
+
+    if (minMs !== null) {
+      if (currentMs <= minMs) {
+        set({ isPaused: true });
+        return;
+      }
+      if (targetMs < minMs) {
+        targetMs = minMs;
+      }
+    }
+
+    if (targetMs === currentMs) {
+      set({ isPaused: true });
+      return;
+    }
+
+    get().seekTickTime(targetMs);
   },
 
   seekTickIndex: (index) => {

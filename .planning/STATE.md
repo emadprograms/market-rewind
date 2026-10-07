@@ -57,4 +57,5 @@ Last activity: 2026-10-07 - Completed quick task 261007-jah: remove price from b
 |---|-------------|------|--------|-----------|
 | 261007-dqh | show both the bid price and the ask price on the y-axis | 2026-10-07 | 508792f | [261007-dqh-show-both-the-bid-price-and-the-ask-pric](./quick/261007-dqh-show-both-the-bid-price-and-the-ask-pric/) |
 | 261007-jah | remove price from bottom playback bar | 2026-10-07 | 5e32456 | [261007-jah-remove-price-from-bottom-playback-bar](./quick/261007-jah-remove-price-from-bottom-playback-bar/) |
+| 261007-msp | minute-based playback stepping controls with step selector (1m, 5m, 10m, 15m) | 2026-10-07 | pending | [261007-msp-minute-step-playback](./quick/261007-msp-minute-step-playback/) |
 

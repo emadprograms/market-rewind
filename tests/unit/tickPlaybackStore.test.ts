@@ -26,6 +26,7 @@ describe('Tick Playback Store Unit Tests', () => {
   });
 
   it('should step forward by single tick and update currentTick', () => {
+    usePlaybackStore.getState().setStepMinutes(0);
     usePlaybackStore.getState().setBufferedTicks(sampleTicks);
 
     usePlaybackStore.getState().stepForward();
@@ -41,6 +42,7 @@ describe('Tick Playback Store Unit Tests', () => {
   });
 
   it('should step backward by single tick', () => {
+    usePlaybackStore.getState().setStepMinutes(0);
     usePlaybackStore.getState().setBufferedTicks(sampleTicks);
 
     usePlaybackStore.getState().seekTickIndex(2);

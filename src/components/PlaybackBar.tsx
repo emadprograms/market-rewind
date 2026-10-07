@@ -39,6 +39,8 @@ export function PlaybackBar({
   const setPlaybackSpeed = usePlaybackStore((state) => state.setPlaybackSpeed);
   const stepForward = usePlaybackStore((state) => state.stepForward);
   const stepBackward = usePlaybackStore((state) => state.stepBackward);
+  const stepMinutes = usePlaybackStore((state) => state.stepMinutes);
+  const setStepMinutes = usePlaybackStore((state) => state.setStepMinutes);
   const seekTickIndex = usePlaybackStore((state) => state.seekTickIndex);
   const seekTickTime = usePlaybackStore((state) => state.seekTickTime);
 
@@ -251,7 +253,9 @@ export function PlaybackBar({
         <button 
           className="btn-icon" 
           onClick={stepBackward} 
-          title="Step 1 Tick Backward"
+          data-testid="step-backward-btn"
+          title={stepMinutes === 0 ? "Step 1 Tick Backward" : `Step ${stepMinutes}m Backward`}
+          aria-label={stepMinutes === 0 ? "Step 1 Tick Backward" : `Step ${stepMinutes}m Backward`}
         >
           <SkipBack size={18} />
         </button>
@@ -268,11 +272,42 @@ export function PlaybackBar({
         <button 
           className="btn-icon" 
           onClick={stepForward} 
-          title="Step 1 Tick Forward"
+          data-testid="step-forward-btn"
+          title={stepMinutes === 0 ? "Step 1 Tick Forward" : `Step ${stepMinutes}m Forward`}
+          aria-label={stepMinutes === 0 ? "Step 1 Tick Forward" : `Step ${stepMinutes}m Forward`}
         >
           <SkipForward size={18} />
         </button>
         <button className="btn-icon" onClick={onResetToOpen} title="Reset to Start"><RotateCcw size={18} /></button>
+
+        {/* Step Size Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }}>
+          <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>STEP</span>
+          <select 
+            data-testid="playback-step-select"
+            aria-label="Playback step size"
+            value={stepMinutes} 
+            onChange={(e) => setStepMinutes(parseFloat(e.target.value))}
+            style={{
+              width: 'auto',
+              padding: '2px 4px',
+              fontSize: '11px',
+              fontFamily: 'JetBrains Mono, monospace',
+              background: 'rgba(0,0,0,0.2)',
+              border: '1px solid #2a2e39',
+              borderRadius: '3px',
+              color: '#d1d4dc',
+              cursor: 'pointer'
+            }}
+          >
+            <option value={1}>1m</option>
+            <option value={5}>5m</option>
+            <option value={10}>10m</option>
+            <option value={15}>15m</option>
+            <option value={30}>30m</option>
+            <option value={0}>1 tick</option>
+          </select>
+        </div>
       </div>
 
       {/* Time-based scrubber slider */}

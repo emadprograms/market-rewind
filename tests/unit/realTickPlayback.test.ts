@@ -44,6 +44,7 @@ describe('TEST-04: Genuine Tick Replay & Anti-Capping', () => {
   });
 
   it('should advance tick-by-tick without skipping when stepping', () => {
+    usePlaybackStore.getState().setStepMinutes(0);
     const sampleTicks = [
       { time: '2026-09-25 13:30:00.100', price: 340.50, volume: 10, symbol: 'AAPL', session: 'REG' },
       { time: '2026-09-25 13:30:00.150', price: 340.52, volume: 5, symbol: 'AAPL', session: 'REG' },
