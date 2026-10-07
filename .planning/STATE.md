@@ -49,11 +49,12 @@ Plan: 39-01 — COMPLETED (80/80 Phase 39 tests green)
               with 97% line coverage; build clean; Playwright journey env-blocked in sandbox —
               no browser obtainable, see 42-VERIFICATION.md §4)
 Status: Milestone v5.0 COMPLETE — all 13 requirements verified (LAKE-READ/ RESAMPLE/ API / VERIFY)
-Last activity: 2026-10-07 - Completed quick task 261007-dqh: show both the bid price and the ask price on the y-axis
+Last activity: 2026-10-07 - Completed quick task 261007-jah: remove price from bottom playback bar
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 261007-dqh | show both the bid price and the ask price on the y-axis | 2026-10-07 | 508792f | [261007-dqh-show-both-the-bid-price-and-the-ask-pric](./quick/261007-dqh-show-both-the-bid-price-and-the-ask-pric/) |
+| 261007-jah | remove price from bottom playback bar | 2026-10-07 | 5e32456 | [261007-jah-remove-price-from-bottom-playback-bar](./quick/261007-jah-remove-price-from-bottom-playback-bar/) |
 
