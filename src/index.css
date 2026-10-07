@@ -38,8 +38,11 @@ body {
 .sidebar {
   width: 48px;
   flex-shrink: 0;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: var(--glass-blur);
+  /* Was rgba(0,0,0,0.8) + blur. This persistent full-height rail sits beside continuously
+     repainting charts; over a near-black page the blur was not perceptible, so the alpha
+     is raised slightly to match the previous appearance and the blur is dropped.
+     Keep backdrop-filter off this element. */
+  background: rgba(0, 0, 0, 0.92);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -259,7 +262,11 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  backdrop-filter: var(--glass-blur);
+  /* No backdrop-filter here, deliberately. --bg-card is #000000 (fully opaque), so a
+     blur of the backdrop is completely hidden by the element's own background: it costs
+     compositor work every frame and renders nothing. It is also the worst possible place
+     for it — each card is a composited ancestor of the live chart canvases, so a 2v grid
+     stacks two such layers over content that repaints continuously. */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -577,8 +584,12 @@ input:focus {
 
 .playback-bar {
   height: 40px;
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: var(--glass-blur);
+  /* Was rgba(0,0,0,0.9) + blur. The bar re-renders on every playback frame and sits at
+     z-index 10000 over the chart area, so its backdrop changes 60x/second and forced a
+     re-blur each frame. At 0.9 alpha the blur contributed almost nothing visually; the
+     alpha is raised to compensate so the bar reads the same.
+     Keep this free of backdrop-filter. */
+  background: rgba(0, 0, 0, 0.96);
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -810,8 +821,10 @@ input:focus {
   left: 50%;
   transform: translateX(-50%) translateY(10px);
   z-index: 100;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(8px);
+  /* Sits directly on top of a live chart canvas, so its backdrop is invalidated on every
+     frame — the most expensive possible placement for a blur. Alpha raised from 0.1 to
+     compensate for the removed blur. Keep backdrop-filter off this element. */
+  background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: #fff;
   width: 32px;
