@@ -11,11 +11,19 @@ echo -e "${BOLD}${CYAN}======================================================${N
 echo -e "${BOLD}${CYAN}   Starting Market Rewind Services on macOS           ${NC}"
 echo -e "${BOLD}${CYAN}======================================================${NC}"
 
-# 1. Start Backend Streaming Service
-"${SCRIPT_DIR}/start-backend.sh"
+# Prefer launchd supervision if LaunchAgents are installed
+if [ -f "${BACKEND_PLIST}" ] && [ -f "${FRONTEND_PLIST}" ]; then
+  log_info "Activating persistent LaunchAgents with launchd..."
+  launchctl load -w "${BACKEND_PLIST}" 2>/dev/null || true
+  launchctl load -w "${FRONTEND_PLIST}" 2>/dev/null || true
+  sleep 2
+else
+  # 1. Start Backend Streaming Service
+  "${SCRIPT_DIR}/start-backend.sh"
 
-# 2. Start Frontend Web Server
-"${SCRIPT_DIR}/start-frontend.sh"
+  # 2. Start Frontend Web Server
+  "${SCRIPT_DIR}/start-frontend.sh"
+fi
 
 LOCAL_IP="$(get_local_ip)"
 TAILSCALE_IP="$(get_tailscale_ip)"

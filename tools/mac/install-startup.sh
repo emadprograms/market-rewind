@@ -18,7 +18,9 @@ FRONTEND_LABEL="com.marketrewind.frontend"
 BACKEND_PLIST="${LAUNCH_AGENTS_DIR}/${BACKEND_LABEL}.plist"
 FRONTEND_PLIST="${LAUNCH_AGENTS_DIR}/${FRONTEND_LABEL}.plist"
 
-NODE_DIR="$(dirname "$(resolve_node)")"
+PYTHON_BIN="$(resolve_python)"
+NODE_BIN="$(resolve_node)"
+NODE_DIR="$(dirname "${NODE_BIN}")"
 SYSTEM_PATH="${NODE_DIR}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 echo -e "${BOLD}${CYAN}======================================================${NC}"
@@ -26,7 +28,7 @@ echo -e "${BOLD}${CYAN}   Installing Market Rewind Auto-Startup on macOS     ${N
 echo -e "${BOLD}${CYAN}======================================================${NC}"
 
 # ------------------------------------------------------------------------------
-# 1. Compile Native macOS Background Launcher Applet
+# 1. Compile Native macOS Background Launcher Applet (Fallback Login Item)
 # ------------------------------------------------------------------------------
 log_info "Building native macOS background launcher: ${APP_PATH}..."
 rm -rf "${APP_PATH}"
@@ -42,7 +44,7 @@ osascript -e "tell application \"System Events\" to make login item at end with 
 log_success "Market Rewind registered in macOS Login Items!"
 
 # ------------------------------------------------------------------------------
-# 3. Create LaunchAgent plist files as well (for launchd reference)
+# 3. Create LaunchAgent plist files (24/7 Supervised & Persistent via launchd)
 # ------------------------------------------------------------------------------
 log_info "Writing LaunchAgent templates to ~/Library/LaunchAgents/..."
 cat <<EOF > "${BACKEND_PLIST}"
@@ -54,22 +56,27 @@ cat <<EOF > "${BACKEND_PLIST}"
     <string>${BACKEND_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
-        <string>${SCRIPT_DIR}/start-backend.sh</string>
-        <string>--foreground</string>
+        <string>${PYTHON_BIN}</string>
+        <string>${REPO_ROOT}/backend/streaming_service/server.py</string>
+        <string>--host</string>
+        <string>0.0.0.0</string>
+        <string>--port</string>
+        <string>${BACKEND_PORT}</string>
     </array>
     <key>WorkingDirectory</key>
     <string>${REPO_ROOT}</string>
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
     <key>KeepAlive</key>
-    <false/>
+    <true/>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>${SYSTEM_PATH}</string>
         <key>PYTHONPATH</key>
         <string>${REPO_ROOT}</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
     </dict>
     <key>StandardOutPath</key>
     <string>${LOG_DIR}/backend.log</string>
@@ -88,16 +95,19 @@ cat <<EOF > "${FRONTEND_PLIST}"
     <string>${FRONTEND_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
-        <string>${SCRIPT_DIR}/start-frontend.sh</string>
-        <string>--foreground</string>
+        <string>${NODE_BIN}</string>
+        <string>${REPO_ROOT}/node_modules/vite/bin/vite.js</string>
+        <string>--host</string>
+        <string>0.0.0.0</string>
+        <string>--port</string>
+        <string>${FRONTEND_PORT}</string>
     </array>
     <key>WorkingDirectory</key>
     <string>${REPO_ROOT}</string>
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
     <key>KeepAlive</key>
-    <false/>
+    <true/>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
@@ -113,11 +123,28 @@ EOF
 chmod 644 "${BACKEND_PLIST}" "${FRONTEND_PLIST}"
 
 # ------------------------------------------------------------------------------
-# 4. Start Services Now
+# 4. Load LaunchAgents into launchd (24/7 Persistent & Auto-Restarting)
 # ------------------------------------------------------------------------------
-log_info "Starting Market Rewind services now..."
-"${SCRIPT_DIR}/start-services.sh"
+log_info "Registering and loading persistent LaunchAgents into launchd..."
+launchctl unload -w "${BACKEND_PLIST}" 2>/dev/null || true
+launchctl unload -w "${FRONTEND_PLIST}" 2>/dev/null || true
+launchctl load -w "${BACKEND_PLIST}"
+launchctl load -w "${FRONTEND_PLIST}"
+
+log_info "Waiting for services to become active under launchd supervision..."
+sleep 2
+
+LOCAL_IP="$(get_local_ip)"
+TAILSCALE_IP="$(get_tailscale_ip)"
 
 echo ""
-log_success "Market Rewind will now start automatically whenever your Mac opens or logs in!"
+log_success "Market Rewind is now configured as a persistent 24/7 service via launchd!"
+log_info "Both backend and frontend will run continuously and automatically revive if terminated."
+echo -e "  ${BOLD}Local Machine:${NC}      ${CYAN}http://localhost:3000${NC}"
+if [ -n "${LOCAL_IP}" ] && [ "${LOCAL_IP}" != "localhost" ]; then
+  echo -e "  ${BOLD}Home Wi-Fi (Tablet):${NC} ${CYAN}http://${LOCAL_IP}:3000${NC}"
+fi
+if [ -n "${TAILSCALE_IP}" ]; then
+  echo -e "  ${BOLD}Tailscale (Remote):${NC}  ${CYAN}http://${TAILSCALE_IP}:3000${NC}"
+fi
 echo ""

@@ -11,21 +11,26 @@ echo -e "${BOLD}${CYAN}======================================================${N
 echo -e "${BOLD}${CYAN}       Market Rewind Service Status on macOS          ${NC}"
 echo -e "${BOLD}${CYAN}======================================================${NC}"
 
-# Check Auto-Startup (Login Items & LaunchAgents)
-BACKEND_PLIST="${HOME}/Library/LaunchAgents/com.marketrewind.backend.plist"
-LOGIN_ITEM_REGISTERED=false
-if osascript -e 'tell application "System Events" to get the name of every login item' 2>/dev/null | grep -Eiq "Market Rewind|MarketRewind"; then
-  LOGIN_ITEM_REGISTERED=true
+# Check Auto-Startup & launchd Supervision
+BACKEND_LOADED=false
+FRONTEND_LOADED=false
+if launchctl list 2>/dev/null | grep -q "com.marketrewind.backend"; then
+  BACKEND_LOADED=true
+fi
+if launchctl list 2>/dev/null | grep -q "com.marketrewind.frontend"; then
+  FRONTEND_LOADED=true
 fi
 
-echo -e "${BOLD}[Automatic Startup at Login/Boot]${NC}"
-if [ "${LOGIN_ITEM_REGISTERED}" = true ]; then
-  echo -e "  macOS Login Item: ${GREEN}ACTIVE${NC} (Starts automatically when you log in / Mac opens)"
+echo -e "${BOLD}[System Supervision & Auto-Startup (launchd)]${NC}"
+if [ "${BACKEND_LOADED}" = true ]; then
+  echo -e "  Backend Daemon:   ${GREEN}ACTIVE${NC} (KeepAlive: enabled, 24/7 persistent)"
 else
-  echo -e "  macOS Login Item: ${YELLOW}NOT REGISTERED${NC} (Run ./tools/mac/install-startup.sh to enable)"
+  echo -e "  Backend Daemon:   ${YELLOW}NOT LOADED${NC} (Run ./tools/mac/install-startup.sh to enable)"
 fi
-if [ -f "${BACKEND_PLIST}" ]; then
-  echo -e "  LaunchAgent Plist: ${CYAN}PRESENT${NC} (~/Library/LaunchAgents/com.marketrewind.*.plist)"
+if [ "${FRONTEND_LOADED}" = true ]; then
+  echo -e "  Frontend Daemon:  ${GREEN}ACTIVE${NC} (KeepAlive: enabled, 24/7 persistent)"
+else
+  echo -e "  Frontend Daemon:  ${YELLOW}NOT LOADED${NC} (Run ./tools/mac/install-startup.sh to enable)"
 fi
 echo ""
 

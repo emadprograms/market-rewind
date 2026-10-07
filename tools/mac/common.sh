@@ -18,6 +18,10 @@ mkdir -p "${RUN_DIR}" "${LOG_DIR}" "${PROJECT_LOG_DIR}"
 BACKEND_PID_FILE="${RUN_DIR}/backend.pid"
 FRONTEND_PID_FILE="${RUN_DIR}/frontend.pid"
 
+# LaunchAgent Plist paths
+BACKEND_PLIST="${HOME}/Library/LaunchAgents/com.marketrewind.backend.plist"
+FRONTEND_PLIST="${HOME}/Library/LaunchAgents/com.marketrewind.frontend.plist"
+
 # Default ports
 BACKEND_PORT=8765
 FRONTEND_PORT=3000

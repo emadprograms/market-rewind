@@ -15,7 +15,11 @@ fi
 # Check if already running on port
 if lsof -ti :${FRONTEND_PORT} >/dev/null 2>&1; then
   EXISTING_PID=$(lsof -ti :${FRONTEND_PORT} | head -n 1)
-  if check_frontend_health "${FRONTEND_PORT}"; then
+  if [ "${FOREGROUND}" = true ]; then
+    log_warn "Port ${FRONTEND_PORT} occupied by PID ${EXISTING_PID}. Terminating old process so foreground runner can bind..."
+    kill -9 "${EXISTING_PID}" 2>/dev/null || true
+    sleep 1
+  elif check_frontend_health "${FRONTEND_PORT}"; then
     log_warn "Frontend is already running on port ${FRONTEND_PORT} (PID ${EXISTING_PID})."
     echo "${EXISTING_PID}" > "${FRONTEND_PID_FILE}"
     exit 0
@@ -41,6 +45,7 @@ if [ ! -f "${VITE_BIN}" ]; then
 fi
 
 if [ "${FOREGROUND}" = true ]; then
+  echo "$$" > "${FRONTEND_PID_FILE}"
   log_info "Starting Market Rewind Frontend in foreground on port ${FRONTEND_PORT}..."
   exec "${NODE_BIN}" "${VITE_BIN}" --host 0.0.0.0 --port "${FRONTEND_PORT}"
 else

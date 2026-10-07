@@ -9,6 +9,12 @@ source "${SCRIPT_DIR}/common.sh"
 
 STOPPED=false
 
+# If managed by launchd, unload first to prevent automatic restart
+if launchctl list | grep -q "com.marketrewind.backend"; then
+  log_info "Unloading backend LaunchAgent from launchctl..."
+  launchctl unload "${BACKEND_PLIST}" 2>/dev/null || true
+fi
+
 # Try from PID file first
 if [ -f "${BACKEND_PID_FILE}" ]; then
   PID=$(cat "${BACKEND_PID_FILE}" 2>/dev/null || echo "")
