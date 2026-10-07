@@ -86,12 +86,19 @@ cat <<EOF > "${BACKEND_PLIST}"
 </plist>
 EOF
 
-# The frontend job deliberately runs start-frontend.sh rather than node_modules/vite
-# directly: invoking vite.js straight would always launch the *dev* server, silently
-# bypassing SERVE_MODE and reinstating the per-module request waterfall over Wi-Fi that
-# makes the tablet's cold load slow. The script builds and serves the bundled output by
-# default (--dev opts out), and its --foreground path execs vite so launchd keeps
-# supervising a single PID.
+# The frontend job runs `node vite.js preview` directly rather than through a shell script.
+#
+# Why not start-frontend.sh: macOS TCC blocks a launchd-spawned /bin/bash from reaching a
+# script under ~/Documents, so the agent dies immediately with
+#   shell-init: error retrieving current directory: getcwd: ... Operation not permitted
+#   /bin/bash: .../start-frontend.sh: Operation not permitted
+# (reported on macOS 15, Mac mini M4, repo under ~/Documents). Executing node directly
+# avoids the shell entirely, and is how this agent worked before.
+#
+# The trade: the agent cannot build, so dist/ must already be current. install-startup.sh
+# and start-services.sh therefore both call build_frontend() BEFORE loading this agent.
+# `preview` is what makes it serve the bundle -- drop it and the tablet is back on the
+# unbundled dev server.
 cat <<EOF > "${FRONTEND_PLIST}"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -101,9 +108,13 @@ cat <<EOF > "${FRONTEND_PLIST}"
     <string>${FRONTEND_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
-        <string>${SCRIPT_DIR}/start-frontend.sh</string>
-        <string>--foreground</string>
+        <string>${NODE_BIN}</string>
+        <string>${REPO_ROOT}/node_modules/vite/bin/vite.js</string>
+        <string>preview</string>
+        <string>--host</string>
+        <string>0.0.0.0</string>
+        <string>--port</string>
+        <string>${FRONTEND_PORT}</string>
     </array>
     <key>WorkingDirectory</key>
     <string>${REPO_ROOT}</string>
@@ -131,6 +142,15 @@ chmod 644 "${BACKEND_PLIST}" "${FRONTEND_PLIST}"
 log_info "Registering and loading persistent LaunchAgents into launchd..."
 launchctl unload -w "${BACKEND_PLIST}" 2>/dev/null || true
 launchctl unload -w "${FRONTEND_PLIST}" 2>/dev/null || true
+
+# Must happen before the frontend agent loads: the agent serves dist/ with `vite preview`
+# and never builds, so an empty or stale dist/ means the tablet gets 404s or old code.
+if ! build_frontend; then
+  log_error "Refusing to load the frontend agent without a valid bundle."
+  log_error "Fix the build error above, then re-run this script."
+  exit 1
+fi
+
 launchctl load -w "${BACKEND_PLIST}"
 launchctl load -w "${FRONTEND_PLIST}"
 

@@ -14,6 +14,13 @@ echo -e "${BOLD}${CYAN}======================================================${N
 # Prefer launchd supervision if LaunchAgents are installed
 if [ -f "${BACKEND_PLIST}" ] && [ -f "${FRONTEND_PLIST}" ]; then
   log_info "Activating persistent LaunchAgents with launchd..."
+  # The frontend agent serves dist/ and does not build (see install-startup.sh for why),
+  # so refresh the bundle before handing over to launchd. This is also what makes
+  # ./tools/mac/restart-services.sh pick up code changes.
+  if ! build_frontend; then
+    log_error "Production build failed; not loading the frontend agent."
+    exit 1
+  fi
   launchctl load -w "${BACKEND_PLIST}" 2>/dev/null || true
   launchctl load -w "${FRONTEND_PLIST}" 2>/dev/null || true
   sleep 2

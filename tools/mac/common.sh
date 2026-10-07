@@ -52,6 +52,37 @@ log_error() {
   echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Build the production bundle into dist/.
+#
+# Kept out of the LaunchAgent on purpose: launchd runs the frontend as a direct binary
+# (see install-startup.sh) because macOS TCC refuses to let a launchd-spawned /bin/bash
+# run a script that lives under ~/Documents ("Operation not permitted"). So the bundle is
+# built HERE, by a script the user runs in their own session, and the agent only serves it.
+#
+# Callers: install-startup.sh (before loading the agent) and start-services.sh.
+build_frontend() {
+  local node_bin vite_bin
+  node_bin="$(resolve_node)"
+  vite_bin="${REPO_ROOT}/node_modules/vite/bin/vite.js"
+  if [ ! -f "${vite_bin}" ]; then
+    vite_bin="${REPO_ROOT}/node_modules/.bin/vite"
+  fi
+  if [ ! -e "${vite_bin}" ]; then
+    log_error "Vite not found (looked for node_modules/vite/bin/vite.js and node_modules/.bin/vite)."
+    log_error "Run 'npm install' in ${REPO_ROOT} first."
+    return 1
+  fi
+
+  log_info "Building production bundle..."
+  if ! (cd "${REPO_ROOT}" && "${node_bin}" "${vite_bin}" build >"${LOG_DIR}/frontend.build.log" 2>&1); then
+    log_error "Production build failed. See ${LOG_DIR}/frontend.build.log"
+    tail -n 15 "${LOG_DIR}/frontend.build.log"
+    return 1
+  fi
+  log_success "Production bundle built."
+  return 0
+}
+
 # Resolve Python executable with DuckDB & aiohttp support
 resolve_python() {
   if [ -x "${REPO_ROOT}/.venv/bin/python" ]; then
