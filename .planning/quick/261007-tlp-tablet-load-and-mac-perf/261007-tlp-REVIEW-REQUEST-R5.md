@@ -1,6 +1,9 @@
 # Round 5 — correctness of the fix, not more speed
 
-**Head:** `8c0ab6e` · **PR:** [#4](https://github.com/emadprograms/market-rewind/pull/4)
+**Head:** `0ee45cf` · **PR:** [#4](https://github.com/emadprograms/market-rewind/pull/4)
+
+**STATUS: COMPLETE — all of Run 1 passed, Run 2 clean, Run 3 skipped. See
+`261007-tlp-VERIFICATION-R5.md`. Nothing further is queued for review.**
 
 Round 4 settled the performance question: the repaint loop was the paused floor, and it is
 gone. **I do not need those numbers again.** What I want now is the one thing I have *not*
