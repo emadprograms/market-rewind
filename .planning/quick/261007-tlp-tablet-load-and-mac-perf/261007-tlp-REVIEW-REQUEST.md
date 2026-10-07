@@ -9,7 +9,173 @@ measurement says one thing and your machine may say another.
 
 ---
 
-# Test matrix — run these, in this order
+# Round 2 — revised plan
+
+Round 1 answered three questions decisively. Thank you — the paused/speed/chart axes were exactly
+what was needed, and two of my assumptions died in the process.
+
+**What your data settled:**
+
+- **DPR capping is dead.** Your Run 4 shows ~2% GPU difference for a real sharpness cost on M4.
+  Not doing it. Good call recommending against it.
+- **The 1D index is not a CPU lever.** Run 5: 44.1% vs 44.0% between 1D and 1m. It stays as
+  correctness-neutral insurance (it removes a genuine O(ticks × bars) blow-up that would bite on
+  larger datasets), but I will stop counting it as a win.
+- **The invalidation fix was real and is confirmed**: GPU peak 84% → 40% (4 charts), 66% → 35%
+  (2v). That is a large, unambiguous win and I am not going to talk it down.
+
+**Two corrections I owe you, one of them to your own conclusion:**
+
+- **Chart-visibility culling is not the lever — I do not want you to build it.** The UI caps at 4
+  charts and all 4 were visible on your 1440×900 viewport, so there is nothing off-screen to cull.
+  Linear scaling in chart count means *per-chart per-frame work* is the cost, which is a different
+  problem: reduce the work each chart does, not skip charts.
+- **Run 5 answered the question that mattered most**: the 69.3% → 69.0% baseline was the default
+  2v grid running 5m *and* 1D together. So the 1D index was applicable to that measurement — it
+  simply is not where the CPU is.
+
+---
+
+## Round 2, question 1 (do this first): were the perf runs on a production build?
+
+**This may invalidate runs 1–5, and it is a 2-minute check.**
+
+Run 6 reported `Serving: DEV` for the LaunchAgent *before* the fix. If runs 1–5 were measured
+against that agent, or against `npm run dev`, then every number was taken on a **development
+build** — unminified React and Lightweight Charts, with dev-mode assertions and prop checking
+active. That bundle is routinely 2–5× slower in React reconciliation, and crucially it would
+produce *exactly* the signature you measured:
+
+- flat across replay speeds (dev-mode render overhead is per-frame, not per-tick), and
+- linear in chart count (each chart's render/commit path is proportionally more expensive).
+
+That signature has another explanation too — so this is the first thing to rule out.
+
+### Check R1 — confirm what was actually served
+
+```bash
+./tools/mac/status-services.sh          # expect: Serving: PRODUCTION bundle
+curl -s http://127.0.0.1:3000/ | grep -c '@vite/client'    # expect: 0
+```
+
+Then open the app and confirm in DevTools → Console:
+
+```js
+// React dev builds expose these; production builds do not.
+typeof window.__REACT_DEVTOOLS_GLOBAL_HOOK__ !== 'undefined' &&
+  document.querySelector('script[src*="/assets/"]') !== null
+```
+
+Simplest reliable tell: **View Source and look for `/assets/index-*.js` vs `src/main.tsx`.**
+
+### Check R2 — if runs 1–5 were on a dev build, re-run the two headline comparisons
+
+Apply the launchd fix first (section 1), which now serves production properly, then:
+
+| run | config | CPU avg | CPU peak | GPU avg | GPU peak | FPS | dropped |
+|---|---|---|---|---|---|---|---|
+| 1 chart | `de7eb03`, production | | | | | | |
+| 4 charts | `de7eb03`, production | | | | | | |
+
+That single pair tells me whether the remaining CPU is real or a build artifact. **If 4 charts on
+a production build comes in near ~40% instead of 65%, the performance work is essentially done**
+and what is left is the per-frame architecture below.
+
+---
+
+## Round 2, question 2: isolate where the per-frame CPU actually is
+
+If production-vs-dev is not the explanation, these two measurements pin it. Both are quick.
+
+### Check R3 — paused vs playing (the decisive one)
+
+Same 4-chart layout, loaded and hydrated, then **pause and let it sit for 30 seconds**:
+
+| state | CPU avg | GPU avg | notes |
+|---|---|---|---|
+| 4 charts, **paused** | | | rAF loop stopped, no tick processing |
+| 4 charts, **playing 25×** | | | |
+
+- **Paused ≈ 0%** → the entire cost is in the playback loop. Then the per-frame work is
+  `advanceSimulationTime` + subscribers + chart updates, and I will instrument those directly.
+- **Paused ≈ 40%+** → the cost is not the playback loop at all. It would be chart rendering,
+  an interval, or the websocket path — and I have been looking in the wrong place entirely.
+- **Paused scales with chart count** (try 1 vs 4 paused) → per-chart static rendering/repaint cost.
+
+### Check R4 — Chrome's own Task Manager, not `ps`
+
+`ps -eo %cpu` sums an uneven set of Chrome processes and made the breakdown unknowable. Chrome
+ships a better instrument: **Shift+Esc** in the browser window. Report the CPU column for:
+
+| Process | CPU |
+|---|---|
+| Browser | |
+| GPU Process | |
+| Tab: Market Rewind (renderer) | |
+| any Utility/other | |
+
+The **GPU Process** line is the one that distinguishes "our JS is slow" from "the compositor is
+rasterising constantly". Those have completely different fixes, and `ps` cannot tell them apart.
+
+---
+
+## Round 2, question 3: the launchd fix is rewritten — please retest
+
+You were right, and my previous attempt was wrong. `/bin/bash` under launchd cannot reach a script
+in `~/Documents`, so `a29f632` turned a working dev-server agent into a crash loop. That is a bug I
+introduced and it is reverted in `e6d1975`.
+
+The plist is back to **direct binary execution**, which is not subject to the shell restriction —
+with the one token that was actually missing:
+
+```xml
+<string>${NODE_BIN}</string>
+<string>${REPO_ROOT}/node_modules/vite/bin/vite.js</string>
+<string>preview</string>
+<string>--host</string>
+<string>0.0.0.0</string>
+<string>--port</string>
+<string>${FRONTEND_PORT}</string>
+```
+
+Because the agent cannot build, the bundle is now built before the agent loads — `build_frontend()`
+in `common.sh`, called by `install-startup.sh` (which **refuses to load the agent** if the build
+fails) and by `start-services.sh` (so `restart-services.sh` picks up code changes).
+
+```bash
+./tools/mac/uninstall-startup.sh
+./tools/mac/install-startup.sh      # builds, then loads; fails loudly if the build fails
+./tools/mac/status-services.sh      # expect: Serving: PRODUCTION bundle (/assets/index-*.js)
+```
+
+**Watch for:** any respawn loop (that was the TCC symptom — `getcwd ... Operation not permitted`
+in `~/Library/Logs/MarketRewind/frontend.error.log`), and whether a **stale bundle** is served
+after you edit code without re-running an install/start script. That staleness is the one real
+cost of this design, and I would rather hear about it than have you work around it.
+
+**Note the trade:** `--dev` is no longer reachable through the agent. For dev-server work, unload
+the agent and run `./tools/mac/start-frontend.sh --dev` directly. Tell me if you would rather have
+a plist that reads a mode file, and I will build that instead.
+
+---
+
+## Round 1 findings I am acting on (for the record)
+
+- **Run 2 (linear in charts) + Run 3 (flat across speeds)** = the cost is per-frame and per-chart,
+  and tick volume is nearly free. That redirects the whole effort away from tick processing.
+- **The GPU peak reduction is the confirmed win of this round.** 84% → 40% is a real, large,
+  reproducible improvement, and it came from a 65% cut in `applyOptions()` calls.
+
+---
+
+# Appendix — round 1 matrix (COMPLETED, do not re-run)
+
+Everything from here down was the round 1 request. **You already ran it** — it is kept only so the
+round-2 checks above can refer back to specific runs and tables. The only parts still live are:
+
+- **section 1** (auto-start) — superseded by Round 2, question 3 above, which has the corrected fix.
+- **section 3** (`benchmark.sh`) — still worth re-running if you have a moment.
+- **section 4** report template — reuse it for the round-2 checks if that is easier than prose.
 
 Five perf runs plus two checks. The whole set is maybe 30–40 minutes. **Tier 1 is the
 priority** — if you only do three things, do runs 1, 2 and 6.
@@ -318,19 +484,21 @@ interesting part. If something looks wrong, tell me rather than investigating it
 
 ## What I will do with the numbers
 
-So you know it is going somewhere:
+Revised after round 1 — see the Round 2 section at the top for what is current.
 
-- **Run 2 linear →** implement chart-visibility culling (skip tick processing and repaints
-  for charts not in the viewport). That would dwarf the rest of this PR.
-- **Run 2 flat →** stop looking at per-chart cost; the remaining cost is global.
-- **Run 3 flat across speeds →** confirm the frame-bound theory; keep reducing per-frame work.
-- **Run 3 scaling with speed →** I have been optimising the wrong term; switch to per-tick.
-- **Run 1 still flat →** the invalidation fix is not the CPU. That would be the most useful
-  negative result available, and it sends me to a profiler rather than more guessing.
-- **Run 4 shows a large DPR delta →** bring you a Performance Mode proposal with the trade
-  quantified, for you to decide rather than me.
-- **Run 5 confirms 1D is not your workload →** the 1D index stays as correctness-neutral
-  insurance and I stop counting it as a CPU win.
+- **Production build is the explanation →** the remaining CPU is largely a build artifact; the
+  perf work is effectively complete and I move to the architectural items below.
+- **Check R3 paused ≈ 0% →** instrument the playback loop directly (per-frame timing around
+  `advanceSimulationTime`, the subscribers, and each chart's update path) and fix what the
+  numbers point at.
+- **Check R3 paused is high →** I have been looking in the wrong place; go to the compositor /
+  websocket / interval paths and start over with evidence.
+- **Check R4 GPU Process dominates →** the fix is in what we invalidate and how often, not in JS.
+- **Chart count still linear on a production build →** attack per-chart per-frame work. Note this
+  is *not* culling: the UI caps at 4 charts and all were visible, so there is nothing off-screen
+  to skip. The target is making each chart's per-frame work cheaper.
+- **Run 1 still flat, all checks clean →** go to a profiler rather than ship another speculative
+  fix. I would rather tell you "I do not know yet" than stack a fourth guess.
 
 ---
 
