@@ -14,10 +14,10 @@ echo -e "${BOLD}${CYAN}======================================================${N
 # Check Auto-Startup & launchd Supervision
 BACKEND_LOADED=false
 FRONTEND_LOADED=false
-if launchctl list 2>/dev/null | grep -q "com.marketrewind.backend"; then
+if launchctl list 2>/dev/null | grep "com.marketrewind.backend" >/dev/null 2>&1; then
   BACKEND_LOADED=true
 fi
-if launchctl list 2>/dev/null | grep -q "com.marketrewind.frontend"; then
+if launchctl list 2>/dev/null | grep "com.marketrewind.frontend" >/dev/null 2>&1; then
   FRONTEND_LOADED=true
 fi
 
