@@ -232,10 +232,17 @@ describe('Phase 20: Viewport Interaction & Playback Stabilization', () => {
       });
     });
 
-    // Price line was created and/or updated
+    // Price lines were created and/or updated without 'Live' line
     expect(mockPriceSeries.createPriceLine).toHaveBeenCalledWith(
-      expect.objectContaining({ price: 155.25, title: 'Live' })
+      expect.objectContaining({ title: 'Bid' })
     );
+    expect(mockPriceSeries.createPriceLine).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Ask' })
+    );
+    expect(mockPriceSeries.createPriceLine).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Live' })
+    );
+    expect(mockPriceLine.applyOptions).toHaveBeenCalled();
 
     // ZERO additional lifecycle renders occurred!
     expect(lifecycleRenderCount).toBe(initialRenderCount);

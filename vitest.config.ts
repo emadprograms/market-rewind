@@ -8,7 +8,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './tests/setup.ts',
-    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', '**/*.spec.ts'],
+    include: ['tests/**/*.test.{ts,tsx}'],
+    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', '**/*.spec.ts', '.arena-worktree/**'],
     fileParallelism: false,
   },
 })

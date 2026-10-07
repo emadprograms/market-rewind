@@ -64,3 +64,35 @@ describe('TDD: Daily Timestamp & UTC Offset Recognition in isRthBar', () => {
     expect(isRthBar(purePreBar, 'TSLA')).toBe(false);
   });
 });
+
+describe('getYesterdayDate utility', () => {
+  it('returns yesterday relative to a given reference date', async () => {
+    const { getYesterdayDate } = await import('../../src/lib/timezones');
+    const ref = new Date('2026-10-07T14:30:00Z');
+    expect(getYesterdayDate('America/New_York', ref)).toBe('2026-10-06');
+  });
+
+  it('correctly steps across month boundaries', async () => {
+    const { getYesterdayDate } = await import('../../src/lib/timezones');
+    const ref = new Date('2026-10-01T14:30:00Z');
+    expect(getYesterdayDate('America/New_York', ref)).toBe('2026-09-30');
+  });
+
+  it('correctly steps across year boundaries', async () => {
+    const { getYesterdayDate } = await import('../../src/lib/timezones');
+    const ref = new Date('2027-01-01T14:30:00Z');
+    expect(getYesterdayDate('America/New_York', ref)).toBe('2026-12-31');
+  });
+
+  it('correctly handles leap year leap day (Feb 29)', async () => {
+    const { getYesterdayDate } = await import('../../src/lib/timezones');
+    const ref = new Date('2024-03-01T14:30:00Z');
+    expect(getYesterdayDate('America/New_York', ref)).toBe('2024-02-29');
+  });
+
+  it('defaults to America/New_York when no timezone is supplied', async () => {
+    const { getYesterdayDate } = await import('../../src/lib/timezones');
+    const ref = new Date('2026-09-26T14:00:00Z');
+    expect(getYesterdayDate(undefined, ref)).toBe('2026-09-25');
+  });
+});

@@ -9,6 +9,12 @@ source "${SCRIPT_DIR}/common.sh"
 
 STOPPED=false
 
+# If managed by launchd, unload first to prevent automatic restart
+if launchctl list | grep -q "com.marketrewind.frontend"; then
+  log_info "Unloading frontend LaunchAgent from launchctl..."
+  launchctl unload "${FRONTEND_PLIST}" 2>/dev/null || true
+fi
+
 # Try from PID file first
 if [ -f "${FRONTEND_PID_FILE}" ]; then
   PID=$(cat "${FRONTEND_PID_FILE}" 2>/dev/null || echo "")

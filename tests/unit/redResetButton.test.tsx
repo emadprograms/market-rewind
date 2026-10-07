@@ -23,6 +23,7 @@ import { useSession } from '../../src/hooks/useSession';
 import { usePlaybackStore } from '../../src/store/usePlaybackStore';
 import App from '../../src/App';
 import { streamingClient } from '../../src/lib/streamingClient';
+import { getYesterdayDate } from '../../src/lib/timezones';
 
 vi.mock('../../src/hooks/useDatabase', () => ({
   useDatabase: () => ({
@@ -90,8 +91,6 @@ describe('Red Reset Button - Stale Closure Fix', () => {
   beforeEach(() => {
     localStorage.clear();
     usePlaybackStore.getState().reset();
-    // Default to 2026-09-25 so we can test picking earlier date
-    localStorage.setItem('lastUsedDate', '2026-09-25');
     vi.clearAllMocks();
     mockCandidates.mockResolvedValue([]);
     mockTicks.mockResolvedValue([]);
@@ -100,10 +99,11 @@ describe('Red Reset Button - Stale Closure Fix', () => {
   it('PROBE: rapid date change + Initialize must use NEW date, not stale OLD date', async () => {
     const { result } = renderHook(() => useSession(['AAPL']));
 
-    // Initially 2026-09-25
-    expect(result.current.selectedDate).toBe('2026-09-25');
+    // Initially yesterday's date
+    const initialDate = getYesterdayDate();
+    expect(result.current.selectedDate).toBe(initialDate);
     // Anchor at old date
-    const oldMs = etToMs('2026-09-25', '09:20');
+    const oldMs = etToMs(initialDate, '09:20');
     // useSession's effect seeds currentTime to old date on mount
     await act(async () => {
       await Promise.resolve();
@@ -117,12 +117,12 @@ describe('Red Reset Button - Stale Closure Fix', () => {
     });
 
     // Immediately call the OLD closure (race condition - before React re-render creates new closure)
-    // If bug exists, this will revert to 2026-09-25
+    // If bug exists, this will revert to old initial date
     act(() => {
       staleStartSession();
     });
 
-    // After fix, currentTime should be 2026-09-22 09:20, not 2026-09-25
+    // After fix, currentTime should be 2026-09-22 09:20, not initial date
     const curMs = usePlaybackStore.getState().currentTime!;
     const expectedMs = etToMs('2026-09-22', '09:20');
     expect(curMs).toBe(expectedMs);
@@ -137,7 +137,8 @@ describe('Red Reset Button - Stale Closure Fix', () => {
   it('handleSetSelectedDate updates currentTime to NEW date synchronously', async () => {
     const { result } = renderHook(() => useSession(['AAPL']));
     await act(async () => await Promise.resolve());
-    const beforeMs = etToMs('2026-09-25', '09:20');
+    const initialDate = getYesterdayDate();
+    const beforeMs = etToMs(initialDate, '09:20');
     // Simulate picking an earlier date
     act(() => {
       result.current.setSelectedDate('2026-09-20');
@@ -193,7 +194,6 @@ describe('Red Reset Button - Stale Closure Fix', () => {
 describe('App Reset Flow - Ticks bounded to selectedDate', () => {
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem('lastUsedDate', '2026-09-25');
     localStorage.setItem('lastUsedTicker', 'AAPL');
     usePlaybackStore.getState().reset();
     vi.clearAllMocks();

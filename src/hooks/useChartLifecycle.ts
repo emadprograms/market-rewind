@@ -231,7 +231,6 @@ export function useChartLifecycle({
   }, [theme, initChartRef.current, initPriceSeriesRef.current, initVolumeSeriesRef.current]);
 
   const lastDataCountRef = useRef(0);
-  const priceLineRef = useRef<IPriceLine | null>(null);
   const bidPriceLineRef = useRef<IPriceLine | null>(null);
   const askPriceLineRef = useRef<IPriceLine | null>(null);
 
@@ -720,22 +719,8 @@ export function useChartLifecycle({
       // Update Live Bid & Ask Price Lines on y-axis
       updateBidAskPriceLines(latestTick, null);
 
-      // 1D Extended Hours Live Price Line
+      // Daily completed bars strictly use RTH ticks
       if (timeframe === '1D') {
-        if (!priceLineRef.current) {
-          priceLineRef.current = initPriceSeriesRef.current.createPriceLine({
-            price: latestTick.price,
-            color: 'rgba(255, 210, 0, 0.6)',
-            lineWidth: 1,
-            lineStyle: 2,
-            axisLabelVisible: true,
-            title: 'Live',
-          });
-        } else {
-          priceLineRef.current.applyOptions({ price: latestTick.price });
-        }
-
-        // Daily completed bars strictly use RTH ticks
         if (!isRthTick(latestTick, ticker)) return;
       }
 
@@ -1058,50 +1043,12 @@ export function useChartLifecycle({
         }
       }
 
-      // 1D Extended Hours Live Price Line
-      if (initPriceSeriesRef.current && timeframe === '1D' && state.currentTime && localMasterData.length > 0 && lastPrice !== null) {
-        if (!priceLineRef.current) {
-          try {
-            const line = initPriceSeriesRef.current.createPriceLine({
-              price: lastPrice,
-              color: 'rgba(255, 210, 0, 0.6)',
-              lineWidth: 1,
-              lineStyle: 2,
-              axisLabelVisible: true,
-              title: 'Live',
-            });
-            priceLineRef.current = line || null;
-          } catch (_) {}
-        } else {
-          try {
-            if (typeof priceLineRef.current.applyOptions === 'function') {
-              priceLineRef.current.applyOptions({ price: lastPrice });
-            }
-          } catch (_) {}
-        }
-      } else if (priceLineRef.current && initPriceSeriesRef.current) {
-        try {
-          if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
-            initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
-          }
-        } catch (_) {}
-        priceLineRef.current = null;
-      }
-
       // Update Bid & Ask Price Lines on y-axis when paused or scrubbing
       updateBidAskPriceLines(latestTick, lastPrice);
     });
 
     return () => {
       unsub();
-      if (priceLineRef.current && initPriceSeriesRef.current) {
-        try {
-          if (typeof initPriceSeriesRef.current.removePriceLine === 'function') {
-            initPriceSeriesRef.current.removePriceLine(priceLineRef.current);
-          }
-        } catch (_) {}
-        priceLineRef.current = null;
-      }
       cleanupBidAskPriceLines();
     };
   }, [timeframe, localMasterData, initPriceSeriesRef.current, ticker]);

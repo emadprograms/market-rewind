@@ -26,7 +26,11 @@ done
 # Check if already running on port
 if lsof -ti :${FRONTEND_PORT} >/dev/null 2>&1; then
   EXISTING_PID=$(lsof -ti :${FRONTEND_PORT} | head -n 1)
-  if check_frontend_health "${FRONTEND_PORT}"; then
+  if [ "${FOREGROUND}" = true ]; then
+    log_warn "Port ${FRONTEND_PORT} occupied by PID ${EXISTING_PID}. Terminating old process so foreground runner can bind..."
+    kill -9 "${EXISTING_PID}" 2>/dev/null || true
+    sleep 1
+  elif check_frontend_health "${FRONTEND_PORT}"; then
     log_warn "Frontend is already running on port ${FRONTEND_PORT} (PID ${EXISTING_PID})."
     # Health is a bare TCP/HTTP probe, so a dev server satisfies it too. Say so rather
     # than letting the operator believe production mode took effect.
@@ -71,7 +75,12 @@ else
   VITE_ARGS=(--host 0.0.0.0 --port "${FRONTEND_PORT}")
 fi
 
+# Foreground mode is used by the launchd LaunchAgents, which track the process by PID
+# file. Record it before exec: exec preserves the PID, so the value stays correct after
+# the shell is replaced by vite. SERVE_MODE is still honoured here, so a foreground
+# launch serves the built bundle (preview) rather than the dev server by default.
 if [ "${FOREGROUND}" = true ]; then
+  echo "$$" > "${FRONTEND_PID_FILE}"
   log_info "Starting Market Rewind Frontend (${SERVE_MODE}) in foreground on port ${FRONTEND_PORT}..."
   exec "${NODE_BIN}" "${VITE_BIN}" "${VITE_ARGS[@]}"
 else

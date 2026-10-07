@@ -15,7 +15,11 @@ fi
 # Check if already running on port
 if lsof -ti :${BACKEND_PORT} >/dev/null 2>&1; then
   EXISTING_PID=$(lsof -ti :${BACKEND_PORT} | head -n 1)
-  if check_backend_health; then
+  if [ "${FOREGROUND}" = true ]; then
+    log_warn "Port ${BACKEND_PORT} occupied by PID ${EXISTING_PID}. Terminating old process so foreground runner can bind..."
+    kill -9 "${EXISTING_PID}" 2>/dev/null || true
+    sleep 1
+  elif check_backend_health; then
     log_warn "Backend is already running on port ${BACKEND_PORT} (PID ${EXISTING_PID})."
     echo "${EXISTING_PID}" > "${BACKEND_PID_FILE}"
     exit 0
@@ -42,6 +46,7 @@ LOG_ERR="${LOG_DIR}/backend.error.log"
 export PYTHONPATH="${REPO_ROOT}"
 
 if [ "${FOREGROUND}" = true ]; then
+  echo "$$" > "${BACKEND_PID_FILE}"
   log_info "Starting Market Rewind Streaming Backend in foreground on port ${BACKEND_PORT}..."
   exec "${PYTHON_BIN}" "${REPO_ROOT}/backend/streaming_service/server.py" --host 0.0.0.0 --port "${BACKEND_PORT}"
 else

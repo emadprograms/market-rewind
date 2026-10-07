@@ -54,7 +54,7 @@ describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
     expect(Number(slider.value)).toBe(time920Ms);
   });
 
-  it('immediately pauses playback when user seeks via timeline slider', async () => {
+  it('does not pause playback when user seeks via timeline slider while playing', async () => {
     // Start playback (playing)
     usePlaybackStore.setState({ isPaused: false });
     expect(usePlaybackStore.getState().isPaused).toBe(false);
@@ -78,8 +78,8 @@ describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
       fireEvent.mouseUp(slider);
     });
 
-    // Playback must be paused immediately on seek
-    expect(usePlaybackStore.getState().isPaused).toBe(true);
+    // Playback must NOT be paused on seek when playing
+    expect(usePlaybackStore.getState().isPaused).toBe(false);
     expect(usePlaybackStore.getState().currentTime).toBe(time1015Ms);
   });
 
@@ -154,5 +154,26 @@ describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
 
     expect(usePlaybackStore.getState().currentTime).toBe(time1015Ms);
     expect(usePlaybackStore.getState().isPaused).toBe(true);
+  });
+
+  it('does not render price or spread badge in playback bar to keep transport controls stable', () => {
+    const { queryByText, container } = render(
+      <PlaybackBar
+        totalRealized={0}
+        totalUnrealized={0}
+        isDbLoaded={true}
+        sessionTicker="TSLA"
+        onResetToOpen={vi.fn()}
+        minStepMinutes={1}
+      />
+    );
+
+    // Verify tick price is not displayed in the bottom bar
+    expect(queryByText('$350.00')).toBeNull();
+    expect(queryByText('350.00')).toBeNull();
+
+    // Verify transport controls (play/pause button) are still rendered and stable
+    const playBtn = container.querySelector('.playback-controls .btn-primary');
+    expect(playBtn).not.toBeNull();
   });
 });

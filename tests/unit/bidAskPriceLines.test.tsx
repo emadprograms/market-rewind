@@ -155,6 +155,13 @@ describe('Bid and Ask Price Lines on Chart Y-Axis', () => {
         axisLabelTextColor: '#ffffff',
       })
     );
+
+    // Verify Live price line is NOT created
+    expect(mockPriceSeries.createPriceLine).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Live',
+      })
+    );
   });
 
   it('updates Bid and Ask price lines on active playback ticks with exact bid/ask quotes', async () => {
@@ -347,5 +354,73 @@ describe('Bid and Ask Price Lines on Chart Y-Axis', () => {
 
     // removePriceLine should be called for old lines
     expect(mockPriceSeries.removePriceLine).toHaveBeenCalled();
+  });
+
+  it('does not create a "Live" price line during 1D timeframe playback or pause', async () => {
+    const chartContainerRef = { current: document.createElement('div') };
+    const chartRef = { current: chartInstance as any };
+    const priceSeriesRef = { current: mockPriceSeries as any };
+    const pendingHistoryPrependRef = { current: null };
+
+    renderHook(() =>
+      useChartLifecycle({
+        chartContainerRef,
+        ticker: 'AAPL',
+        timeframe: '1D',
+        showEth: false,
+        showVP: false,
+        chartData: baseBars,
+        localMasterData: baseBars,
+        isLoadingHistory: false,
+        pendingHistoryPrependRef,
+        drawings: {},
+        isDrawingMode: false,
+        chartRef,
+        priceSeriesRef,
+      })
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    // Start playback and send tick
+    act(() => {
+      usePlaybackStore.setState({ isPaused: false });
+    });
+
+    act(() => {
+      const tick: MarketTick = {
+        time: '2026-09-01 13:35:00',
+        symbol: 'AAPL',
+        price: 155.25,
+        bid: 155.20,
+        ask: 155.30,
+        volume: 100,
+        session: 'REG',
+      };
+      usePlaybackStore.setState({
+        currentTime: new Date('2026-09-01T13:35:00Z').getTime(),
+        currentTick: tick,
+        latestTickBySymbol: { AAPL: tick },
+      });
+    });
+
+    // Pause playback
+    act(() => {
+      usePlaybackStore.setState({ isPaused: true });
+    });
+
+    // Verify 'Live' line was never created
+    expect(mockPriceSeries.createPriceLine).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Live' })
+    );
+    // Only Bid and Ask lines exist
+    expect(mockPriceSeries.createPriceLine).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Bid' })
+    );
+    expect(mockPriceSeries.createPriceLine).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Ask' })
+    );
   });
 });

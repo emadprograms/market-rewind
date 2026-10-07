@@ -237,14 +237,14 @@ describe('Milestone v3.0 Tick Replay, Date Reset & Temporal Isolation Regression
 
       // Mode toggle buttons must NOT exist
       expect(screen.queryByText('BAR')).not.toBeInTheDocument();
-      expect(screen.queryByText('STEP')).not.toBeInTheDocument();
 
       // Controls must exist
       expect(screen.getByText('PLAY')).toBeInTheDocument();
-      expect(screen.getByTitle('Step 1 Tick Forward')).toBeInTheDocument();
-      expect(screen.getByTitle('Step 1 Tick Backward')).toBeInTheDocument();
+      expect(screen.getByTestId('step-forward-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('step-backward-btn')).toBeInTheDocument();
       expect(screen.getByText('SPEED')).toBeInTheDocument();
-      expect(screen.getByText('$218.00')).toBeInTheDocument();
+      expect(screen.getByTestId('playback-step-select')).toBeInTheDocument();
+      expect(screen.queryByText('$218.00')).not.toBeInTheDocument();
     });
   });
 });

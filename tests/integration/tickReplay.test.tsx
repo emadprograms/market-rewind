@@ -30,10 +30,11 @@ describe('Tick Replay Integration Tests', () => {
     );
 
     expect(screen.queryByText('BAR')).not.toBeInTheDocument();
-    expect(screen.getByText('$180.00')).toBeInTheDocument();
+    expect(screen.queryByText('$180.00')).not.toBeInTheDocument();
   });
 
   it('should step forward on clicking step forward button in tick mode', () => {
+    usePlaybackStore.getState().setStepMinutes(0);
     render(
       <PlaybackBar
         totalRealized={0}
@@ -45,7 +46,7 @@ describe('Tick Replay Integration Tests', () => {
       />
     );
 
-    const stepForwardBtn = screen.getByTitle('Step 1 Tick Forward');
+    const stepForwardBtn = screen.getByTestId('step-forward-btn');
     fireEvent.click(stepForwardBtn);
 
     expect(usePlaybackStore.getState().currentTickIndex).toBe(1);
@@ -53,6 +54,7 @@ describe('Tick Replay Integration Tests', () => {
   });
 
   it('should step backward on clicking step backward button', () => {
+    usePlaybackStore.getState().setStepMinutes(0);
     usePlaybackStore.getState().seekTickIndex(2);
 
     render(
@@ -66,7 +68,7 @@ describe('Tick Replay Integration Tests', () => {
       />
     );
 
-    const stepBackwardBtn = screen.getByTitle('Step 1 Tick Backward');
+    const stepBackwardBtn = screen.getByTestId('step-backward-btn');
     fireEvent.click(stepBackwardBtn);
 
     expect(usePlaybackStore.getState().currentTickIndex).toBe(1);

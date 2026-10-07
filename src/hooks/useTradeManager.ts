@@ -1,13 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ISeriesApi } from 'lightweight-charts';
-import type { ActiveTrade, ChartBar, TradeType } from '../types';
+import type { ActiveTrade, ChartBar, TradeType, MarketTick } from '../types';
 import type { TradePlugin } from '../lib/TradePlugin';
+import { usePlaybackStore } from '../store/usePlaybackStore';
+
+export function getAskPrice(tick: MarketTick | null | undefined, fallbackPrice: number): number {
+  if (tick && tick.ask != null && Number(tick.ask) > 0) {
+    return Number(tick.ask);
+  }
+  if (tick && tick.price != null && Number(tick.price) > 0) {
+    return Number((Number(tick.price) + 0.01).toFixed(2));
+  }
+  return fallbackPrice;
+}
+
+export function getBidPrice(tick: MarketTick | null | undefined, fallbackPrice: number): number {
+  if (tick && tick.bid != null && Number(tick.bid) > 0) {
+    return Number(tick.bid);
+  }
+  if (tick && tick.price != null && Number(tick.price) > 0) {
+    return Number((Number(tick.price) - 0.01).toFixed(2));
+  }
+  return fallbackPrice;
+}
 
 interface UseTradeManagerParams {
   chartData: ChartBar[];
   chartContainerRef: React.RefObject<HTMLDivElement | null>;
   priceSeriesRef: React.MutableRefObject<ISeriesApi<'Candlestick'> | null>;
   tradePluginRef: React.MutableRefObject<TradePlugin | null>;
+  ticker?: string;
 }
 
 export function useTradeManager({
@@ -15,6 +37,7 @@ export function useTradeManager({
   chartContainerRef,
   priceSeriesRef,
   tradePluginRef,
+  ticker,
 }: UseTradeManagerParams) {
   const [activeTrade, setActiveTrade] = useState<ActiveTrade | null>(null);
   const [realizedPnL, setRealizedPnL] = useState(0);
@@ -22,30 +45,63 @@ export function useTradeManager({
   const [dragTarget, setDragTarget] = useState<'sl' | 'tp' | null>(null);
   const tradeBadgeRef = useRef<HTMLDivElement>(null);
 
-  // Calculate Unrealized PnL based on current price
+  const currentTick = usePlaybackStore((state) => {
+    if (ticker) {
+      const sym = ticker.toUpperCase();
+      return (
+        state.latestTickBySymbol?.[sym] ||
+        (state.currentTick?.symbol?.toUpperCase() === sym ? state.currentTick : null) ||
+        state.currentTick
+      );
+    }
+    return state.currentTick;
+  });
+
+  const getActiveTick = useCallback((): MarketTick | null => {
+    const state = usePlaybackStore.getState();
+    if (ticker) {
+      const sym = ticker.toUpperCase();
+      return (
+        state.latestTickBySymbol?.[sym] ||
+        (state.currentTick?.symbol?.toUpperCase() === sym ? state.currentTick : null) ||
+        state.currentTick
+      );
+    }
+    return state.currentTick;
+  }, [ticker]);
+
+  // Calculate Unrealized PnL based on current Bid for long and Ask for short
   const unrealizedPnL = React.useMemo(() => {
     if (!activeTrade || !chartData || chartData.length === 0) return 0;
-    const currentPrice = chartData[chartData.length - 1].close;
+    const fallbackPrice = chartData[chartData.length - 1].close;
+    const askPrice = getAskPrice(currentTick, fallbackPrice);
+    const bidPrice = getBidPrice(currentTick, fallbackPrice);
+
     const pnlPerUnit = activeTrade.type === 'long' 
-      ? currentPrice - activeTrade.entryPrice 
-      : activeTrade.entryPrice - currentPrice;
+      ? bidPrice - activeTrade.entryPrice 
+      : activeTrade.entryPrice - askPrice;
     return pnlPerUnit * activeTrade.size;
-  }, [activeTrade, chartData]);
+  }, [activeTrade, chartData, currentTick]);
 
   const placeOrder = useCallback((type: TradeType) => {
     try {
       if (!chartData || chartData.length === 0) return;
       const lastBar = chartData[chartData.length - 1];
-      const currentPrice = lastBar.close;
-      const offset = currentPrice * 0.01;
+      const fallbackPrice = lastBar.close;
+      const activeTick = getActiveTick();
+
+      const askPrice = getAskPrice(activeTick, fallbackPrice);
+      const bidPrice = getBidPrice(activeTick, fallbackPrice);
+      const executionPrice = type === 'long' ? askPrice : bidPrice;
+      const offset = executionPrice * 0.01;
 
       setActiveTrade(prevTrade => {
         if (!prevTrade) {
           return {
             type,
-            entryPrice: currentPrice,
-            slPrice: type === 'long' ? currentPrice - offset : currentPrice + offset,
-            tpPrice: type === 'long' ? currentPrice + offset : currentPrice - offset,
+            entryPrice: executionPrice,
+            slPrice: type === 'long' ? executionPrice - offset : executionPrice + offset,
+            tpPrice: type === 'long' ? executionPrice + offset : executionPrice - offset,
             size: tradeSize,
             entryTime: lastBar.time,
           };
@@ -53,21 +109,24 @@ export function useTradeManager({
 
         if (prevTrade.type === type) {
           const newSize = prevTrade.size + tradeSize;
-          const newEntryPrice = ((prevTrade.entryPrice * prevTrade.size) + (currentPrice * tradeSize)) / newSize;
+          const newEntryPrice = ((prevTrade.entryPrice * prevTrade.size) + (executionPrice * tradeSize)) / newSize;
+          const newOffset = newEntryPrice * 0.01;
           
           return {
             ...prevTrade,
             entryPrice: newEntryPrice,
-            slPrice: type === 'long' ? newEntryPrice - offset : newEntryPrice + offset,
-            tpPrice: type === 'long' ? newEntryPrice + offset : newEntryPrice - offset,
+            slPrice: type === 'long' ? newEntryPrice - newOffset : newEntryPrice + newOffset,
+            tpPrice: type === 'long' ? newEntryPrice + newOffset : newEntryPrice - newOffset,
             size: newSize,
           };
         } else {
           // Calculate PnL for the amount being closed
+          // Closing a long means selling at Bid price (executionPrice for short order)
+          // Closing a short means buying back at Ask price (executionPrice for long order)
           const closedSize = Math.min(prevTrade.size, tradeSize);
           const pnlPerUnit = prevTrade.type === 'long' 
-            ? currentPrice - prevTrade.entryPrice 
-            : prevTrade.entryPrice - currentPrice;
+            ? executionPrice - prevTrade.entryPrice 
+            : prevTrade.entryPrice - executionPrice;
           const closedPnL = pnlPerUnit * closedSize;
           
           setRealizedPnL(prev => prev + closedPnL);
@@ -84,12 +143,13 @@ export function useTradeManager({
           } else {
             const flippedSize = Math.abs(netSize);
             const flippedType = type;
+            const flippedOffset = executionPrice * 0.01;
             
             return {
               type: flippedType,
-              entryPrice: currentPrice,
-              slPrice: flippedType === 'long' ? currentPrice - offset : currentPrice + offset,
-              tpPrice: flippedType === 'long' ? currentPrice + offset : currentPrice - offset,
+              entryPrice: executionPrice,
+              slPrice: flippedType === 'long' ? executionPrice - flippedOffset : executionPrice + flippedOffset,
+              tpPrice: flippedType === 'long' ? executionPrice + flippedOffset : executionPrice - flippedOffset,
               size: flippedSize,
               entryTime: lastBar.time,
             };
@@ -99,7 +159,26 @@ export function useTradeManager({
     } catch(err) {
       console.error('placeOrder error:', err);
     }
-  }, [chartData, tradeSize]);
+  }, [chartData, tradeSize, getActiveTick]);
+
+  const closeTrade = useCallback(() => {
+    setActiveTrade(prevTrade => {
+      if (!prevTrade) return null;
+      const activeTick = getActiveTick();
+      const fallbackPrice = chartData && chartData.length > 0 ? chartData[chartData.length - 1].close : prevTrade.entryPrice;
+      const askPrice = getAskPrice(activeTick, fallbackPrice);
+      const bidPrice = getBidPrice(activeTick, fallbackPrice);
+
+      const exitPrice = prevTrade.type === 'long' ? bidPrice : askPrice;
+      const pnlPerUnit = prevTrade.type === 'long'
+        ? exitPrice - prevTrade.entryPrice
+        : prevTrade.entryPrice - exitPrice;
+      const closedPnL = pnlPerUnit * prevTrade.size;
+
+      setRealizedPnL(prev => prev + closedPnL);
+      return null;
+    });
+  }, [chartData, getActiveTick]);
 
   useEffect(() => {
     if (tradePluginRef.current) {
@@ -177,6 +256,7 @@ export function useTradeManager({
     setTradeSize,
     tradeBadgeRef,
     placeOrder,
+    closeTrade,
     realizedPnL,
     unrealizedPnL,
   };

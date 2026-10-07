@@ -33,13 +33,14 @@ export function PlaybackBar({
   const isLoadingTicks = usePlaybackStore((state) => state.isLoadingTicks);
   const bufferedTicks = usePlaybackStore((state) => state.bufferedTicks);
   const currentTickIndex = usePlaybackStore((state) => state.currentTickIndex);
-  const currentTick = usePlaybackStore((state) => state.currentTick);
   const totalTicks = usePlaybackStore((state) => state.totalTicks);
 
   const setPaused = usePlaybackStore((state) => state.setPaused);
   const setPlaybackSpeed = usePlaybackStore((state) => state.setPlaybackSpeed);
   const stepForward = usePlaybackStore((state) => state.stepForward);
   const stepBackward = usePlaybackStore((state) => state.stepBackward);
+  const stepMinutes = usePlaybackStore((state) => state.stepMinutes);
+  const setStepMinutes = usePlaybackStore((state) => state.setStepMinutes);
   const seekTickIndex = usePlaybackStore((state) => state.seekTickIndex);
   const seekTickTime = usePlaybackStore((state) => state.seekTickTime);
 
@@ -117,7 +118,6 @@ export function PlaybackBar({
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawVal = parseInt(e.target.value, 10);
     const val = Math.floor(rawVal / 1000) * 1000;
-    setPaused(true);
     seekTickTime(val);
   };
 
@@ -137,7 +137,6 @@ export function PlaybackBar({
       let targetMs = new Date(targetUtcStr.replace(' ', 'T') + 'Z').getTime();
       targetMs += parseInt(ss, 10) * 1000;
       if (!isNaN(targetMs)) {
-        setPaused(true);
         seekTickTime(targetMs);
         setJumpTimeText('');
       }
@@ -247,34 +246,14 @@ export function PlaybackBar({
         </div>
       )}
 
-      {/* Price & Spread Badge */}
-      {currentTick && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          fontFamily: 'JetBrains Mono, monospace',
-          fontSize: '11px',
-          padding: '2px 8px',
-          backgroundColor: 'rgba(41, 98, 255, 0.1)',
-          borderRadius: '4px',
-          border: '1px solid rgba(41, 98, 255, 0.2)',
-        }}>
-          <span style={{ color: '#2962ff', fontWeight: 700 }}>${currentTick.price.toFixed(2)}</span>
-          {currentTick.bid && currentTick.ask && (
-            <span style={{ color: '#787b86', fontSize: '10px' }}>
-              ({currentTick.bid.toFixed(2)} / {currentTick.ask.toFixed(2)})
-            </span>
-          )}
-        </div>
-      )}
-
       {/* Playback Transport Controls */}
       <div className="playback-controls" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
         <button 
           className="btn-icon" 
           onClick={stepBackward} 
-          title="Step 1 Tick Backward"
+          data-testid="step-backward-btn"
+          title={stepMinutes === 0 ? "Step 1 Tick Backward" : `Step ${stepMinutes}m Backward`}
+          aria-label={stepMinutes === 0 ? "Step 1 Tick Backward" : `Step ${stepMinutes}m Backward`}
         >
           <SkipBack size={18} />
         </button>
@@ -291,11 +270,42 @@ export function PlaybackBar({
         <button 
           className="btn-icon" 
           onClick={stepForward} 
-          title="Step 1 Tick Forward"
+          data-testid="step-forward-btn"
+          title={stepMinutes === 0 ? "Step 1 Tick Forward" : `Step ${stepMinutes}m Forward`}
+          aria-label={stepMinutes === 0 ? "Step 1 Tick Forward" : `Step ${stepMinutes}m Forward`}
         >
           <SkipForward size={18} />
         </button>
         <button className="btn-icon" onClick={onResetToOpen} title="Reset to Start"><RotateCcw size={18} /></button>
+
+        {/* Step Size Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }}>
+          <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>STEP</span>
+          <select 
+            data-testid="playback-step-select"
+            aria-label="Playback step size"
+            value={stepMinutes} 
+            onChange={(e) => setStepMinutes(parseFloat(e.target.value))}
+            style={{
+              width: 'auto',
+              padding: '2px 4px',
+              fontSize: '11px',
+              fontFamily: 'JetBrains Mono, monospace',
+              background: 'rgba(0,0,0,0.2)',
+              border: '1px solid #2a2e39',
+              borderRadius: '3px',
+              color: '#d1d4dc',
+              cursor: 'pointer'
+            }}
+          >
+            <option value={1}>1m</option>
+            <option value={5}>5m</option>
+            <option value={10}>10m</option>
+            <option value={15}>15m</option>
+            <option value={30}>30m</option>
+            <option value={0}>1 tick</option>
+          </select>
+        </div>
       </div>
 
       {/* Time-based scrubber slider */}
@@ -310,8 +320,6 @@ export function PlaybackBar({
             step={1000}
             value={sliderValue}
             onChange={handleSliderChange}
-            onMouseUp={() => setPaused(true)}
-            onTouchEnd={() => setPaused(true)}
             title={`Replay Time: ${formatTimeOnly(sliderValue)} (${currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/${totalTicks} ticks)`}
             style={{ width: '100%', accentColor: '#2962ff', cursor: 'pointer' }}
           />
