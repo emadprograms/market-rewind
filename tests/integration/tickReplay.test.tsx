@@ -30,7 +30,7 @@ describe('Tick Replay Integration Tests', () => {
     );
 
     expect(screen.queryByText('BAR')).not.toBeInTheDocument();
-    expect(screen.getByText('$180.00')).toBeInTheDocument();
+    expect(screen.queryByText('$180.00')).not.toBeInTheDocument();
   });
 
   it('should step forward on clicking step forward button in tick mode', () => {

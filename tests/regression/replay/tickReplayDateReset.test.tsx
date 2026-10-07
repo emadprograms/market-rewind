@@ -244,7 +244,7 @@ describe('Milestone v3.0 Tick Replay, Date Reset & Temporal Isolation Regression
       expect(screen.getByTitle('Step 1 Tick Forward')).toBeInTheDocument();
       expect(screen.getByTitle('Step 1 Tick Backward')).toBeInTheDocument();
       expect(screen.getByText('SPEED')).toBeInTheDocument();
-      expect(screen.getByText('$218.00')).toBeInTheDocument();
+      expect(screen.queryByText('$218.00')).not.toBeInTheDocument();
     });
   });
 });

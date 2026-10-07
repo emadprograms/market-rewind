@@ -33,7 +33,6 @@ export function PlaybackBar({
   const isLoadingTicks = usePlaybackStore((state) => state.isLoadingTicks);
   const bufferedTicks = usePlaybackStore((state) => state.bufferedTicks);
   const currentTickIndex = usePlaybackStore((state) => state.currentTickIndex);
-  const currentTick = usePlaybackStore((state) => state.currentTick);
   const totalTicks = usePlaybackStore((state) => state.totalTicks);
 
   const setPaused = usePlaybackStore((state) => state.setPaused);
@@ -244,28 +243,6 @@ export function PlaybackBar({
           whiteSpace: 'nowrap'
         }}>
           Market Closed / No Data
-        </div>
-      )}
-
-      {/* Price & Spread Badge */}
-      {currentTick && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          fontFamily: 'JetBrains Mono, monospace',
-          fontSize: '11px',
-          padding: '2px 8px',
-          backgroundColor: 'rgba(41, 98, 255, 0.1)',
-          borderRadius: '4px',
-          border: '1px solid rgba(41, 98, 255, 0.2)',
-        }}>
-          <span style={{ color: '#2962ff', fontWeight: 700 }}>${currentTick.price.toFixed(2)}</span>
-          {currentTick.bid && currentTick.ask && (
-            <span style={{ color: '#787b86', fontSize: '10px' }}>
-              ({currentTick.bid.toFixed(2)} / {currentTick.ask.toFixed(2)})
-            </span>
-          )}
         </div>
       )}
 

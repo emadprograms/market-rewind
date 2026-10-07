@@ -155,4 +155,25 @@ describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
     expect(usePlaybackStore.getState().currentTime).toBe(time1015Ms);
     expect(usePlaybackStore.getState().isPaused).toBe(true);
   });
+
+  it('does not render price or spread badge in playback bar to keep transport controls stable', () => {
+    const { queryByText, container } = render(
+      <PlaybackBar
+        totalRealized={0}
+        totalUnrealized={0}
+        isDbLoaded={true}
+        sessionTicker="TSLA"
+        onResetToOpen={vi.fn()}
+        minStepMinutes={1}
+      />
+    );
+
+    // Verify tick price is not displayed in the bottom bar
+    expect(queryByText('$350.00')).toBeNull();
+    expect(queryByText('350.00')).toBeNull();
+
+    // Verify transport controls (play/pause button) are still rendered and stable
+    const playBtn = container.querySelector('.playback-controls .btn-primary');
+    expect(playBtn).not.toBeNull();
+  });
 });
