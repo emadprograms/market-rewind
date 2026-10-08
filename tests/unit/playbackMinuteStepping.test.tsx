@@ -240,4 +240,23 @@ describe('Minute-Based Playback Stepping Controls', () => {
 
     expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:35:00.000'));
   });
+
+  it('defaults to 3m step and is not overwritten by chart workspace timeframe', () => {
+    usePlaybackStore.setState({ stepMinutes: 3 });
+    render(
+      <PlaybackBar
+        totalRealized={0}
+        totalUnrealized={0}
+        isDbLoaded={true}
+        sessionTicker="SPY"
+        onResetToOpen={vi.fn()}
+        minStepMinutes={5}
+      />
+    );
+
+    const stepSelect = screen.getByTestId('playback-step-select') as HTMLSelectElement;
+    expect(stepSelect.value).toBe('3');
+    expect(usePlaybackStore.getState().stepMinutes).toBe(3);
+  });
 });
+

@@ -57,7 +57,6 @@ export default function App() {
     chartGroups,
     workspaceRef,
     minStepMinutes,
-    activeStepMinutes,
     handlePointerDown,
     handlePointerMove,
     handlePointerEnd,
@@ -96,14 +95,9 @@ export default function App() {
     getUtcTimeFromEt
   );
 
-  const setStepMinutes = usePlaybackStore((state) => state.setStepMinutes);
   const setBufferedTicks = usePlaybackStore((state) => state.setBufferedTicks);
 
   const [isTapeOpen, setIsTapeOpen] = useState(false);
-
-  useEffect(() => {
-    setStepMinutes(activeStepMinutes);
-  }, [activeStepMinutes, setStepMinutes]);
 
   const sessionGenRef = useRef(0);
   // Keep latest selectedDate/entryTime in refs to avoid stale closure when

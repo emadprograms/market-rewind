@@ -9,7 +9,6 @@ export function useWorkspace() {
   const [maximizedId, setMaximizedId] = useState<number | null>(null);
   const [activeGutter, setActiveGutter] = useState<number | null>(null);
   const [chartTimeframes, setChartTimeframes] = useState<Record<number, Timeframe>>({}); 
-  const [manualStepMinutes, setManualStepMinutes] = useState<number | null>(null);
   
   const [panelSizes, setPanelSizes] = useState<Record<string, number[]>>({
     '2v': [50, 50],
@@ -39,8 +38,6 @@ export function useWorkspace() {
       ? tfs.reduce((min, tf) => Math.min(min, TF_MINUTES[tf] || 1), 1440)
       : 1;
   }, [chartTimeframes]);
-
-  const activeStepMinutes = manualStepMinutes || minStepMinutes;
 
   const handlePointerDown = useCallback((mode: 'v' | 'h', index: number, e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -126,14 +123,12 @@ export function useWorkspace() {
     selectedChartId,
     workspaceRef,
     minStepMinutes,
-    activeStepMinutes,
     handlePointerDown,
     handlePointerMove,
     handlePointerEnd,
     handleTickerChange,
     handleGroupChange,
     handleTimeframeChange,
-    handleSelectChart,
-    setManualStepMinutes
+    handleSelectChart
   };
 }
