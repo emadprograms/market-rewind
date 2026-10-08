@@ -8,6 +8,7 @@
 #   bash tools/verify-seek-freeze-fix.sh --ab       # also A/B the probe against main
 #   bash tools/verify-seek-freeze-fix.sh --quick    # skip the long full-regression run
 #   bash tools/verify-seek-freeze-fix.sh --soak=600000   # add the 10-minute soak
+#   bash tools/verify-seek-freeze-fix.sh --journey       # add all 74 mocked journey tests
 #
 # Env: SEEK_SYMBOL / SEEK_DATE / SEEK_ENTRY pick the tape (default AAPL / SEED_DATE / 09:30).
 #      TICK_LAKE_ROOT overrides where the tick lake is expected.
@@ -28,14 +29,16 @@ mkdir -p "$LOGDIR"
 
 DO_AB=0
 DO_QUICK=0
+DO_JOURNEY=0
 SOAK_MS=0
 for arg in "$@"; do
   case "$arg" in
     --ab) DO_AB=1 ;;
     --quick) DO_QUICK=1 ;;
+    --journey) DO_JOURNEY=1 ;;
     --soak) SOAK_MS=600000 ;;
     --soak=*) SOAK_MS="${arg#--soak=}" ;;
-    -h|--help) sed -n '2,16p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -152,10 +155,15 @@ note ""
 # can pin one with SEEK_SYMBOL / SEEK_DATE / SEEK_ENTRY.
 TAPE_ENV="$OUTDIR/tape.env"
 : > "$TAPE_ENV"
+DENSE_SYMBOL=""
+# The session date comes from the repo's own E2E convention, not from the lake: /api/symbols
+# aggregates over every session, so its first_tick is the lake's oldest partition, not a dense day.
+SEED_DATE="$(sed -n "s/^export const SEED_DATE = '\([0-9-]*\)'.*/\1/p" "$REPO_ROOT/tests/regression/e2e-utils.ts" | head -1)"
+SEED_DATE="${SEED_DATE:-2026-09-25}"
 if [ "$BACKEND_UP" = "up" ]; then
   if [ -n "${SEEK_SYMBOL:-}" ] || [ -n "${SEEK_DATE:-}" ]; then
-    note "--- tape pinned by caller: ${SEEK_SYMBOL:-<default>} ${SEEK_DATE:-<default>} ${SEEK_ENTRY:-<default>} ---"
-    curl -fsS --max-time 120 "http://localhost:8765/api/symbols" > "$LOGDIR/00-symbols.log" 2>&1 \
+    note "--- tape pinned by caller: ${SEEK_SYMBOL:-<spec default>} ${SEEK_DATE:-<spec default>} ${SEEK_ENTRY:-<spec default>} ---"
+    curl -fsS --max-time 180 "http://localhost:8765/api/symbols" > "$LOGDIR/00-symbols.log" 2>&1 \
       || note "    could not fetch /api/symbols; see $LOGDIR/00-symbols.log"
   else
     python3 "$REPO_ROOT/tools/pick-densest-tape.py" --out "$TAPE_ENV" --report "$REPORT" \
@@ -163,9 +171,12 @@ if [ "$BACKEND_UP" = "up" ]; then
     if [ -s "$TAPE_ENV" ]; then
       # shellcheck disable=SC1090
       . "$TAPE_ENV"
-      export SEEK_SYMBOL SEEK_DATE SEEK_ENTRY
+    fi
+    note "    probe tape 1 (primary): spec default AAPL $SEED_DATE 09:30 — the date the live regression suite already proves works"
+    if [ -n "${DENSE_SYMBOL:-}" ] && [ "$DENSE_SYMBOL" != "AAPL" ]; then
+      note "    probe tape 2 (denser):  $DENSE_SYMBOL $SEED_DATE 09:30"
     else
-      note "    tape picker chose nothing; probe uses its built-in defaults (see $LOGDIR/00-pick-tape.log)"
+      note "    probe tape 2 (denser):  skipped — densest symbol is the default, or none was found"
     fi
   fi
 else
@@ -190,7 +201,7 @@ elif [ "$BACKEND_UP" = "down" ]; then
   E2E_POSSIBLE="journey-only (backend down; real-tape specs need it)"
 fi
 note "e2e capability: $E2E_POSSIBLE"
-note "tape: ${SEEK_SYMBOL:-AAPL} ${SEEK_DATE:-<SEED_DATE>} ${SEEK_ENTRY:-09:30}   speed runs: default + 25x + 100x   soak: ${SOAK_MS}ms"
+note "tape: ${SEEK_SYMBOL:-AAPL} ${SEEK_DATE:-$SEED_DATE} ${SEEK_ENTRY:-09:30}   densest symbol: ${DENSE_SYMBOL:-<none>}   speed runs: default + 25x + 100x   soak: ${SOAK_MS}ms   journey: $([ "$DO_JOURNEY" -eq 1 ] && echo full || echo 01-boot only)"
 note ""
 
 # ---------------------------------------------------------------- 1. static gates
@@ -236,19 +247,34 @@ if [ "$BROWSER_OK" = "no" ]; then
   skip_step "8 full regression suite" "no chromium binary"
   skip_step "9 A/B against main" "no chromium binary"
 else
-  # Journey suite is fully mocked: needs a browser, not the DuckDB service.
-  run_step "5 journey e2e (mocked)" "05-journey" npm run test:journey
-  note "5 journey: $(pwsummary "$LOGDIR/05-journey.log")"
+  # The journey suite is fully mocked (browser only, no DuckDB). By default just 01-boot: it
+  # carries the session-anchor expectations, and all 74 tests ran 500s+ last time and were still
+  # going when the run was terminated.
+  run_step "5 journey 01-boot (mocked anchor check)" "05-journey-boot" \
+    npx playwright test -c playwright.journey.config.ts tests/regression/journey/01-boot.spec.ts
+  note "5 journey 01-boot: $(pwsummary "$LOGDIR/05-journey-boot.log")"
+  if [ "$DO_JOURNEY" -eq 1 ]; then
+    run_step "5b journey full suite (mocked)" "05b-journey-full" npm run test:journey
+    note "5b journey full: $(pwsummary "$LOGDIR/05b-journey-full.log")"
+  else
+    skip_step "5b journey full suite" "opt-in: re-run with --journey (74 tests, ~8 min or more)"
+  fi
+  note "    context: the app has defaulted the entry time to 09:10 since e57efe8 (already on main),"
+  note "    while 11 journey specs and the marketSimulator mock still expect the 09:20 anchor, so"
+  note "    failures here are expected to be PRE-EXISTING. --ab runs 01-boot on the baseline too."
   note ""
 
   if [ "$BACKEND_UP" = "up" ]; then
-    run_step "6 freeze probe (tape: ${SEEK_SYMBOL:-default} ${SEEK_DATE:-default})" "06-freeze-picked" \
+    run_step "6 freeze probe (primary tape)" "06-freeze-primary" \
       npx playwright test "$PROBE_SPEC"
 
-    # Cross-check on the spec's built-in default tape, so the report carries both a dense session
-    # and the thin one regardless of what the lake happened to contain.
-    run_step "6b freeze probe (built-in default tape)" "06b-freeze-default" \
-      env -u SEEK_SYMBOL -u SEEK_DATE -u SEEK_ENTRY npx playwright test "$PROBE_SPEC"
+    if [ -n "${DENSE_SYMBOL:-}" ] && [ "$DENSE_SYMBOL" != "AAPL" ]; then
+      run_step "6b freeze probe (densest tape: $DENSE_SYMBOL $SEED_DATE)" "06b-freeze-dense" \
+        env SEEK_SYMBOL="$DENSE_SYMBOL" SEEK_DATE="$SEED_DATE" SEEK_ENTRY="09:30" \
+        npx playwright test "$PROBE_SPEC"
+    else
+      skip_step "6b freeze probe (densest tape)" "no distinct densest symbol to compare against"
+    fi
 
     # The freeze cost scales with how many ticks elapse per unit of real time, so the same probe
     # runs at high speed multipliers too. SEEK_SOAK_MS stays unset here => the soak test skips.
@@ -306,6 +332,10 @@ if [ "$DO_AB" -eq 1 ] && [ "$BROWSER_OK" = "yes" ] && [ "$BACKEND_UP" = "up" ]; 
       note "9 A/B baseline: $(git rev-parse --short HEAD) + probe spec copied from $FIX_BRANCH @ $FIX_SHA"
       note "    source fix present on baseline? $(git diff --quiet "$BASELINE_REF" -- src/store/usePlaybackStore.ts src/hooks/useChartData.ts src/hooks/useChartLifecycle.ts && echo NO || echo YES-UNEXPECTED)"
       ab_probe "9a probe on main (expect FAIL)" "09a-ab-main"
+      run_step "9c journey 01-boot on baseline" "09c-ab-journey-baseline" \
+        npx playwright test -c playwright.journey.config.ts tests/regression/journey/01-boot.spec.ts
+      note "9c journey 01-boot on baseline: $(pwsummary "$LOGDIR/09c-ab-journey-baseline.log")"
+      note "    compare with step 5 above: same failures on both sides => pre-existing, not this fix"
       rm -f "$PROBE_SPEC"
       git checkout -q "$ORIG_REF"
       note "9 A/B fix: $FIX_BRANCH @ $(git rev-parse --short HEAD)"

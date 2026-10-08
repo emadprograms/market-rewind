@@ -1,5 +1,15 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { startSession, chartCard, collectPageErrors, SEED_DATE } from '../e2e-utils';
+import {
+  heapUsedBytes,
+  installFreezeProbe,
+  isPlaying,
+  measureStoreSeekBy,
+  measureStoreSeekTo,
+  readFreezeProbe,
+  seekToMs,
+  seriesBarTimes,
+} from './freezeProbeInPage';
 
 /**
  * E2E guard for the seek-while-playing freeze.
@@ -55,120 +65,23 @@ const STALL_BUDGET_MS = 1500;
 /** Default layout is 5min + 1D, so a 3-minute step spans at most a couple of buckets. */
 const WRITES_PER_SEEK_BUDGET = 12;
 
-/** Installs the heartbeat, the long-task observer and per-chart primitive counters. */
-async function installProbe(page: import('@playwright/test').Page) {
-  await page.evaluate(() => {
-    const w = window as any;
-    w.__freezeProbe = {
-      heartbeatMaxGapMs: 0,
-      longTasks: { count: 0, totalMs: 0, maxMs: 0, supported: true },
-      charts: [] as any[],
-    };
-
-    let last = performance.now();
-    const beat = () => {
-      const now = performance.now();
-      const gap = now - last;
-      last = now;
-      if (gap > w.__freezeProbe.heartbeatMaxGapMs) w.__freezeProbe.heartbeatMaxGapMs = gap;
-      requestAnimationFrame(beat);
-    };
-    requestAnimationFrame(beat);
-
-    try {
-      const po = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries() as any[]) {
-          const lt = w.__freezeProbe.longTasks;
-          lt.count += 1;
-          lt.totalMs += entry.duration;
-          if (entry.duration > lt.maxMs) lt.maxMs = entry.duration;
-        }
-      });
-      po.observe({ entryTypes: ['longtask'] });
-    } catch {
-      w.__freezeProbe.longTasks.supported = false;
-    }
-
-    document.querySelectorAll('[data-testid="chart-container"]').forEach((el, index) => {
-      const series = (el as any).__priceSeries;
-      if (!series) return;
-      const rec = { index, updateCalls: 0, setDataCalls: 0, barsWritten: 0 };
-      w.__freezeProbe.charts.push(rec);
-      const origUpdate = series.update.bind(series);
-      series.update = (...args: any[]) => {
-        rec.updateCalls += 1;
-        rec.barsWritten += 1;
-        return origUpdate(...args);
-      };
-      const origSetData = series.setData.bind(series);
-      series.setData = (...args: any[]) => {
-        rec.setDataCalls += 1;
-        rec.barsWritten += (args[0] || []).length;
-        return origSetData(...args);
-      };
-    });
-  });
+/**
+ * Thin Playwright wrappers. The code that actually runs in the page lives in ./freezeProbeInPage
+ * and is self-contained by requirement -- see that file's header for the serialization rule that
+ * a closed-over variable breaks.
+ */
+async function installProbe(page: Page) {
+  await page.evaluate(installFreezeProbe);
 }
 
 /** Reads (and optionally resets) the probe, plus the tape/playhead context for the report. */
-async function readProbe(page: import('@playwright/test').Page, reset = false) {
-  const report = await page.evaluate(() => {
-    const w = window as any;
-    const store = w.usePlaybackStore?.getState();
-    const buffered = store?.bufferedTicks || [];
-    const parse = (t: any) =>
-      typeof t === 'number'
-        ? t < 1e11 ? t * 1000 : t
-        : new Date(String(t).replace(' ', 'T') + (String(t).includes('Z') ? '' : 'Z')).getTime();
-    const snapshot = {
-      probe: w.__freezeProbe
-        ? {
-            heartbeatMaxGapMs: Math.round(w.__freezeProbe.heartbeatMaxGapMs),
-            longTasks: {
-              count: w.__freezeProbe.longTasks.count,
-              totalMs: Math.round(w.__freezeProbe.longTasks.totalMs),
-              maxMs: Math.round(w.__freezeProbe.longTasks.maxMs),
-              supported: w.__freezeProbe.longTasks.supported,
-            },
-            charts: w.__freezeProbe.charts.map((c: any) => ({ ...c })),
-          }
-        : null,
-      context: {
-        totalTicks: store?.totalTicks ?? 0,
-        isPaused: store?.isPaused ?? null,
-        playbackSpeed: store?.playbackSpeed ?? null,
-        stepMinutes: store?.stepMinutes ?? null,
-        currentTime: store?.currentTime ?? null,
-        firstTickMs: buffered.length ? parse(buffered[0].time) : null,
-        lastTickMs: buffered.length ? parse(buffered[buffered.length - 1].time) : null,
-        masterDataBars: store?.masterData?.length ?? 0,
-      },
-    };
-    if (reset && w.__freezeProbe) {
-      w.__freezeProbe.heartbeatMaxGapMs = 0;
-      w.__freezeProbe.longTasks.count = 0;
-      w.__freezeProbe.longTasks.totalMs = 0;
-      w.__freezeProbe.longTasks.maxMs = 0;
-      for (const c of w.__freezeProbe.charts) {
-        c.updateCalls = 0;
-        c.setDataCalls = 0;
-        c.barsWritten = 0;
-      }
-    }
-    return snapshot;
-  });
-  return report;
+async function readProbe(page: Page, reset = false) {
+  return page.evaluate(readFreezeProbe, reset);
 }
 
 /** Series bar times (UNIX seconds) for chart `index`, as lightweight-charts holds them. */
-async function seriesTimes(page: import('@playwright/test').Page, index = 0): Promise<number[]> {
-  return page.evaluate((i) => {
-    const el = document.querySelectorAll('[data-testid="chart-container"]')[i] as any;
-    const data = el?.__priceSeries?.data?.() || [];
-    return data
-      .map((d: any) => (typeof d.time === 'number' ? d.time : Date.parse(String(d.time)) / 1000))
-      .filter((t: number) => Number.isFinite(t));
-  }, index);
+async function seriesTimes(page: Page, index = 0): Promise<number[]> {
+  return page.evaluate(seriesBarTimes, index);
 }
 
 /** Drives the real SPEED <select> (same handler the user drives) and confirms the store took it. */
@@ -198,13 +111,13 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
     const { firstTickMs, lastTickMs, totalTicks } = before.context;
     if (totalTicks > 500 && firstTickMs !== null && lastTickMs !== null) {
       const parkAt = firstTickMs + Math.floor((lastTickMs - firstTickMs) * 0.1);
-      await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), parkAt);
+      await page.evaluate(seekToMs, parkAt);
       await page.waitForTimeout(300);
     }
 
     await applySpeed(page);
     await page.getByRole('button', { name: /PLAY/i }).click();
-    await page.waitForFunction(() => (window as any).usePlaybackStore.getState().isPaused === false, {
+    await page.waitForFunction(isPlaying, null, {
       timeout: 10000,
     });
     await page.waitForTimeout(1000);
@@ -308,10 +221,10 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
       `tape too thin to exercise the seek catch-up (totalTicks=${totalTicks}); re-run with SEEK_SYMBOL/SEEK_DATE pointing at a dense session`
     );
 
-    await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), firstTickMs!);
+    await page.evaluate(seekToMs, firstTickMs!);
     await applySpeed(page);
     await page.getByRole('button', { name: /PLAY/i }).click();
-    await page.waitForFunction(() => (window as any).usePlaybackStore.getState().isPaused === false, {
+    await page.waitForFunction(isPlaying, null, {
       timeout: 10000,
     });
     await page.waitForTimeout(500);
@@ -323,7 +236,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
     const started = Date.now();
     for (let i = 1; i <= 30; i++) {
       const target = firstTickMs! + Math.floor((span * i) / 31);
-      await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), target);
+      await page.evaluate(seekToMs, target);
     }
     await page.evaluate(() => undefined);
     const wallMs = Date.now() - started;
@@ -374,9 +287,9 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
     const forwardTarget = firstTickMs! + Math.floor(span * 0.7);
     const backwardTarget = firstTickMs! + Math.floor(span * 0.2);
 
-    await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), forwardTarget);
+    await page.evaluate(seekToMs, forwardTarget);
     await page.getByRole('button', { name: /PLAY/i }).click();
-    await page.waitForFunction(() => (window as any).usePlaybackStore.getState().isPaused === false, {
+    await page.waitForFunction(isPlaying, null, {
       timeout: 10000,
     });
     await page.waitForTimeout(1200);
@@ -384,7 +297,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
     const forwardTimes = await seriesTimes(page, 0);
     expect(forwardTimes.length).toBeGreaterThan(0);
 
-    await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), backwardTarget);
+    await page.evaluate(seekToMs, backwardTarget);
     await page.waitForTimeout(800);
 
     const rewoundTimes = await seriesTimes(page, 0);
@@ -450,9 +363,9 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
     const span = lastTickMs! - firstTickMs!;
     await applySpeed(page);
     // Park at 70% so a 60-minute rewind stays inside the tape.
-    await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), firstTickMs! + Math.floor(span * 0.7));
+    await page.evaluate(seekToMs, firstTickMs! + Math.floor(span * 0.7));
     await page.getByRole('button', { name: /PLAY/i }).click();
-    await page.waitForFunction(() => (window as any).usePlaybackStore.getState().isPaused === false, { timeout: 10000 });
+    await page.waitForFunction(isPlaying, null, { timeout: 10000 });
     await page.waitForTimeout(800);
 
     const shapes = [
@@ -464,17 +377,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
     for (const shape of shapes) {
       await readProbe(page, true);
       const t0 = Date.now();
-      const m = await page.evaluate((off) => {
-        const store = (window as any).usePlaybackStore.getState();
-        const target = store.currentTime + off;
-        const start = performance.now();
-        store.seekTickTime(target);
-        return {
-          storeSeekMs: Math.round((performance.now() - start) * 100) / 100,
-          targetMs: target,
-          bufferedTicks: store.totalTicks ?? 0,
-        };
-      }, shape.offsetMs);
+      const m = await page.evaluate(measureStoreSeekBy, shape.offsetMs);
       await page.evaluate(() => undefined);
       const dispatchLatencyMs = Date.now() - t0;
       await page.waitForTimeout(600);
@@ -492,17 +395,8 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
 
     // Full-tape jump last: reaching the end of the session auto-pauses by design (261007-nsp).
     await readProbe(page, true);
-    const full = await page.evaluate((lastMs) => {
-      const store = (window as any).usePlaybackStore.getState();
-      const start = performance.now();
-      store.seekTickTime(lastMs - 1);
-      // Re-read the store: zustand's set() produced a new state object, so the snapshot above
-      // cannot tell us whether the seek auto-paused at end-of-session.
-      return {
-        storeSeekMs: Math.round((performance.now() - start) * 100) / 100,
-        isPaused: (window as any).usePlaybackStore.getState().isPaused,
-      };
-    }, lastTickMs!);
+    // -1ms: seeking onto exactly the last buffered tick reports reachedEnd and auto-pauses.
+    const full = await page.evaluate(measureStoreSeekTo, lastTickMs! - 1);
     await page.waitForTimeout(600);
     const afterFull = await readProbe(page);
     measurements.push({
@@ -512,7 +406,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
       heartbeatMaxGapMs: afterFull.probe?.heartbeatMaxGapMs,
       longTaskMaxMs: afterFull.probe?.longTasks.maxMs,
       writes: afterFull.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
-      isPaused: afterFull.isPaused,
+      isPaused: afterFull.context.isPaused,
     });
 
     const storeSeekValues = measurements.map((m) => m.storeSeekMs);
@@ -564,12 +458,9 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
 
     await applySpeed(page);
     await page.getByRole('button', { name: /PLAY/i }).click();
-    await page.waitForFunction(() => (window as any).usePlaybackStore.getState().isPaused === false, { timeout: 10000 });
+    await page.waitForFunction(isPlaying, null, { timeout: 10000 });
 
-    const heap = () =>
-      page.evaluate(() => ({
-        usedJSHeapSize: (performance as any).memory?.usedJSHeapSize ?? null,
-      }));
+    const heap = async () => ({ usedJSHeapSize: await page.evaluate(heapUsedBytes) });
 
     const startHeap = await heap();
     const span = lastTickMs! - firstTickMs!;
@@ -584,7 +475,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
       const frac = i % 2 === 0 ? 0.25 + ((i / 4) % 0.5) : 0.75 - ((i / 4) % 0.5);
       const target = firstTickMs! + Math.floor(span * Math.min(0.95, Math.max(0.05, frac)));
       await readProbe(page, true);
-      await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), target);
+      await page.evaluate(seekToMs, target);
       await page.waitForTimeout(2000);
       const after = await readProbe(page);
       const h = await heap();

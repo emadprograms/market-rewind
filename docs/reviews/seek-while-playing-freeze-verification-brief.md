@@ -53,7 +53,9 @@ If `npm run backend` cannot find the tick lake (`../data-harvester/data/tick_lak
 git fetch origin && git checkout arena/22112ce1-market-rewind && git pull --ff-only
 npm install && npx playwright install chromium
 npm run backend &                                  # another terminal; wait for :8765
-bash tools/verify-seek-freeze-fix.sh --ab          # ~15-30 min; add --quick to skip the long suite
+bash tools/verify-seek-freeze-fix.sh --ab          # add --quick to skip the long suite
+                                                   # add --journey for all 74 mocked journey tests
+                                                   # add --soak=600000 for the 10-minute soak
 ```
 
 It prints the report to stdout and writes it to `/tmp/market-rewind-verify-<stamp>/report.txt`,
@@ -93,14 +95,24 @@ npm run backend:test
 
 Expected: all passed (the fix touches no Python).
 
-## 4. Journey suite (fully mocked, no backend needed)
+## 4. Journey suite (fully mocked, no browser backend needed)
 
 ```bash
-npx playwright test -c playwright.journey.config.ts
+npx playwright test -c playwright.journey.config.ts tests/regression/journey/01-boot.spec.ts   # fast
+npm run test:journey                                                                         # all 74, ~8 min+
 ```
 
-Expected: all passed. Report per-spec results, especially `05-playback-transport`,
-`06-live-replay`, `12-replay-convergence`.
+**Known pre-existing breakage — read before treating a failure as a regression.** The app has
+defaulted the session entry time to **09:10** since `e57efe8` (`src/hooks/useSession.ts:15`,
+`src/App.tsx:126`), and `e57efe8` is already on `main`. Eleven journey specs and
+`tests/regression/mocks/marketSimulator.ts` still expect the old **09:20** anchor, so the mock
+serves nothing for a 09:10 request and those tests time out (~41 s each). A previous run spent
+502 s on this suite and was terminated before finishing.
+
+So the harness runs only `01-boot` by default (the file that carries the anchor expectation) and
+the full suite behind `--journey`. With `--ab` it also runs `01-boot` on the baseline: **the same
+failures on both sides prove the breakage pre-dates this fix.** Report both sides. This is a
+separate defect from the seek freeze and is not fixed here.
 
 ## 5. The defect-specific E2E probe (needs backend + browser)
 
@@ -133,22 +145,31 @@ reported, not asserted (GC timing makes them flaky).
 Each test always prints a `FREEZE-REPORT {...}` JSON block to stdout. **Copy every
 `FREEZE-REPORT` block into the report, pass or fail.**
 
-**Which tape runs is discovered, not guessed.** The harness asks the backend for its inventory
-(`GET /api/symbols`, already sorted by tick count descending), prints the top 10 into the report
-with their tick counts and time ranges, and runs the probe on the densest usable session — the
-entry time is clamped to 09:30 for premarket tapes and set to the tape's own first tick when the
-session starts mid-afternoon. It then re-runs on the spec's built-in default tape as a
-cross-check. Paste the inventory table back: it says what is actually in the lake.
+**Two tapes run, in this order.** `/api/symbols` aggregates over the *whole lake*, not per
+session — a real lake reports `NVDA 16,896,676 ticks, 2025-03-21 → 2026-10-08`, i.e. 19 months
+rolled into one row. So the inventory identifies the densest **symbol**, and says nothing about
+which **day** is dense. An earlier version of the picker derived the date from `first_tick` and
+therefore selected the lake's oldest partial day (13:00 on the first partition), which is the
+worst possible tape for this probe.
 
-To pin a tape instead, set the env before running (the harness then skips auto-pick but still
-prints the inventory):
+1. **Primary** — the spec's built-in tape, `AAPL` on `SEED_DATE` (read from
+   `tests/regression/e2e-utils.ts`, currently `2026-09-25`) at 09:30. This date is proven: the
+   live regression suite (`chartShaking`, `realtimePlayback`, `sync/`) all pass on it.
+2. **Denser** — the lake's densest symbol on that same proven date. Skipped when the densest
+   symbol is already `AAPL`.
+
+The inventory table is printed into the report either way. Paste it back: it says what is
+actually in the lake, which is useful well beyond this defect.
+
+To pin one tape instead, set the env before running (auto-pick is then skipped, the inventory is
+still printed):
 
 ```bash
-SEEK_SYMBOL=SPY SEEK_DATE=2026-09-24 SEEK_ENTRY=09:30 bash tools/verify-seek-freeze-fix.sh --ab
+SEEK_SYMBOL=NVDA SEEK_DATE=2026-09-25 SEEK_ENTRY=09:30 bash tools/verify-seek-freeze-fix.sh --ab
 ```
 
-If a test skips with `tape too thin`, the inventory table shows why — report `totalTicks` from
-the `FREEZE-REPORT` so the numbers can be interpreted.
+If a test skips with `tape too thin`, report `totalTicks` from the `FREEZE-REPORT` so the numbers
+can be interpreted.
 
 ## 6. Pre-existing E2E regressions most related to seeking
 
@@ -239,8 +260,9 @@ BACKEND: up|down   TICK_LAKE_ROOT: <path>   TAPE: <symbol> <date> totalTicks=<n>
 2b seek guards:        passed=<n> failed=<n>
 3  build:              PASS|FAIL  <bundle size / time>
 4  backend pytest:     passed=<n> failed=<n>
-5  journey e2e:        passed=<n> failed=<n>  failures: <spec › test + error>
-6  freeze probe (fix): passed=<n> failed=<n> skipped=<n>   [@default, @25x, @100x separately]
+5  journey 01-boot:    passed=<n> failed=<n>  failures: <spec › test + error>
+5b journey full (if run): passed=<n> failed=<n>
+6  freeze probe (fix): passed=<n> failed=<n> skipped=<n>   [primary tape, densest tape, @25x, @100x separately]
                        FREEZE-REPORT blocks: <paste all, verbatim>
 6b store-seek diagnostic: storeSeekMs backward60m=<n> forward3m=<n> forward60m=<n> fullTape=<n>
                           spreadRatio=<n>   bufferedTicks=<n>
