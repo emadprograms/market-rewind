@@ -201,4 +201,89 @@ describe('Timeline Seeking Integration Tests', () => {
     expect(todayBarsInChart.length).toBe(10);
     expect(result.current.chartData.length).toBe(40);
   });
+  // SEEK-REBUILD-01 (debug session seek-while-playing-freeze)
+  //
+  // Since 261007-nsp a seek no longer pauses playback, so a seek can land while
+  // `isPaused === false`. `useChartData` deliberately does NOT recompute React state on every
+  // playback frame (PERF-01), and before this fix its refresh condition was
+  // `isPaused || ticksChanged` -- neither of which a seek changes. The candle snapshot was
+  // therefore never rebuilt for a seek-while-playing, leaving the per-tick catch-up in
+  // `useChartLifecycle` as the only path that could move the chart (O(elapsed ticks) primitive
+  // writes -> frozen tab), and on a rewind nothing moved at all, so candles from *after* the
+  // playhead stayed on screen.
+  //
+  // This is the real-hook guard for the `seekEpoch` refresh; the write-count guard lives in
+  // tests/unit/seekWhilePlayingFreeze.test.ts.
+  it('rebuilds the candle snapshot for a forward seek AND a rewind while playing', async () => {
+    const chartRef = { current: null };
+    const priceSeriesRef = { current: null };
+
+    const { result } = renderHook(() =>
+      useChartData({
+        initialTicker: 'TSLA',
+        initialTf: '5min',
+        initialEth: false,
+        selectedDate,
+        isReplayMode: true,
+        groupColor: 'none',
+        tickers: ['TSLA'],
+        chartRef: chartRef as any,
+        priceSeriesRef: priceSeriesRef as any,
+        id: 0,
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Paused at 9:20 AM: today's session has not started, only history is rendered.
+    expect(result.current.chartData.length).toBe(30);
+
+    // Arm playback, then seek forward WITHOUT pausing (the 261007-nsp behaviour).
+    // One millisecond short of the last buffered tick: seeking onto exactly the final tick is
+    // end-of-session and auto-pauses by design, which would leave the state under test. The
+    // forming 5-minute bucket is 10:15 either way.
+    act(() => {
+      usePlaybackStore.getState().setPaused(false);
+    });
+    act(() => {
+      usePlaybackStore.getState().seekTickTime(time1015Ms - 1);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Seeking must not pause, and the snapshot must have caught up to the playhead: the
+    // forming 5-minute bucket at 10:14:59.999 is 10:10, so 30 historical + 8 completed today
+    // (9:30..10:05) + 1 forming (10:10) = 39 bars.
+    expect(usePlaybackStore.getState().isPaused).toBe(false);
+    expect(result.current.chartData.length).toBe(39);
+    const forwardToday = result.current.chartData.filter(b => b.time.startsWith('2026-09-08'));
+    expect(forwardToday.length).toBe(9);
+    expect(forwardToday[forwardToday.length - 1].time).toBe('2026-09-08 14:10:00');
+
+    // Rewind to 9:30 AM, still playing: the future candles must disappear.
+    act(() => {
+      usePlaybackStore.getState().seekTickTime(time930Ms);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(usePlaybackStore.getState().isPaused).toBe(false);
+    const rewoundToday = result.current.chartData.filter(b => b.time.startsWith('2026-09-08'));
+    expect(rewoundToday.length).toBe(1);
+    expect(rewoundToday[0].time).toBe('2026-09-08 13:30:00');
+    // Zero future data leakage: nothing newer than the playhead survives the rewind.
+    const maxTime = result.current.chartData
+      .map(b => parseAppTimeMs(String(b.time)))
+      .reduce((a, b) => Math.max(a, b), 0);
+    expect(maxTime).toBeLessThanOrEqual(time930Ms);
+  });
 });

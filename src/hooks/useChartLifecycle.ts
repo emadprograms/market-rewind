@@ -705,6 +705,14 @@ export function useChartLifecycle({
     const sym = ticker.toUpperCase();
 
     const unsubscribe = usePlaybackStore.subscribe((state) => {
+      // SEEK-REBUILD-01: An explicit playhead move (seek, step, scrub, time jump) is a
+      // temporal *discontinuity*, not elapsed playback. Subscriber 6 cannot render a rewind
+      // at all -- the monotonic `bucketTime < lastCandle.time` guard below drops every rewound
+      // tick, leaving candles from *after* the playhead on the series -- so `useChartData`
+      // now refreshes React state on `seekEpoch` and effect 3 rebuilds the series in bulk
+      // from the authoritative snapshot. The catch-up below still runs (coalesced to one
+      // write per bucket by INGEST-06) so a forward jump is never left unrendered if that
+      // rebuild is suppressed.
       // REV-SYNC-02 & REV-SYNC-03: Temporal discontinuity detection (rewind during pause or playback)
       if (state.currentTime !== null && state.currentTime !== undefined) {
         if (lastConsumedTimeRef.current > state.currentTime) {
@@ -795,6 +803,31 @@ export function useChartLifecycle({
       if (state.currentTime) {
         lastConsumedTimeRef.current = state.currentTime;
       }
+
+      // INGEST-06: Coalesce chart-primitive writes per candle bucket. Every branch below
+      // merges the tick into its bucket's candle and then rewrites that candle, so a tape at
+      // 20+ prints/second -- or any high speed multiplier, where one frame elapses seconds of
+      // tape -- issues one candlestick write plus one volume write per tick for intermediate
+      // states that are never visible. Queueing the write and flushing when the bucket changes
+      // (or when the batch ends) produces identical final series content with O(buckets)
+      // writes instead of O(ticks), which is what keeps a frame inside its 16ms budget.
+      let queuedPrice: any = null;
+      let queuedVolume: any = null;
+      const queueUpdate = (bar: any, vol: any) => {
+        if (queuedPrice !== null && queuedPrice.time !== bar.time) {
+          initPriceSeriesRef.current!.update(queuedPrice);
+          initVolumeSeriesRef.current!.update(queuedVolume);
+        }
+        queuedPrice = bar;
+        queuedVolume = vol;
+      };
+      const flushQueuedUpdates = () => {
+        if (queuedPrice === null) return;
+        initPriceSeriesRef.current!.update(queuedPrice);
+        initVolumeSeriesRef.current!.update(queuedVolume);
+        queuedPrice = null;
+        queuedVolume = null;
+      };
 
       // Process newly elapsed ticks in order
       for (const tick of newlyElapsedTicks) {
@@ -893,21 +926,22 @@ export function useChartLifecycle({
           }
           lastCandleRef.current = newCandle;
 
-          initPriceSeriesRef.current.update({
-            time: bucketTime as any,
-            open: newCandle.open,
-            high: newCandle.high,
-            low: newCandle.low,
-            close: newCandle.close,
-          });
-
-          initVolumeSeriesRef.current.update({
-            time: bucketTime as any,
-            value: newCandle.volume,
-            color: newCandle.close >= newCandle.open
-              ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
-              : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
-          });
+          queueUpdate(
+            {
+              time: bucketTime as any,
+              open: newCandle.open,
+              high: newCandle.high,
+              low: newCandle.low,
+              close: newCandle.close,
+            },
+            {
+              time: bucketTime as any,
+              value: newCandle.volume,
+              color: newCandle.close >= newCandle.open
+                ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+                : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+            }
+          );
           continue;
         }
 
@@ -931,19 +965,20 @@ export function useChartLifecycle({
           };
           lastCandleRef.current = firstCandle;
 
-          initPriceSeriesRef.current.update({
-            time: bucketTime as any,
-            open: firstCandle.open,
-            high: firstCandle.high,
-            low: firstCandle.low,
-            close: firstCandle.close,
-          });
-
-          initVolumeSeriesRef.current.update({
-            time: bucketTime as any,
-            value: firstCandle.volume,
-            color: themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a',
-          });
+          queueUpdate(
+            {
+              time: bucketTime as any,
+              open: firstCandle.open,
+              high: firstCandle.high,
+              low: firstCandle.low,
+              close: firstCandle.close,
+            },
+            {
+              time: bucketTime as any,
+              value: firstCandle.volume,
+              color: themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a',
+            }
+          );
           continue;
         }
 
@@ -972,21 +1007,22 @@ export function useChartLifecycle({
             lastCandle.volume = Number((lastCandle.volume + tickVol).toFixed(4));
           }
 
-          initPriceSeriesRef.current.update({
-            time: bucketTime as any,
-            open: lastCandle.open,
-            high: lastCandle.high,
-            low: lastCandle.low,
-            close: lastCandle.close,
-          });
-
-          initVolumeSeriesRef.current.update({
-            time: bucketTime as any,
-            value: lastCandle.volume,
-            color: lastCandle.close >= lastCandle.open
-              ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
-              : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
-          });
+          queueUpdate(
+            {
+              time: bucketTime as any,
+              open: lastCandle.open,
+              high: lastCandle.high,
+              low: lastCandle.low,
+              close: lastCandle.close,
+            },
+            {
+              time: bucketTime as any,
+              value: lastCandle.volume,
+              color: lastCandle.close >= lastCandle.open
+                ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+                : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+            }
+          );
         } else {
           // New candle bucket!
           let initVol = tickVol;
@@ -1014,21 +1050,24 @@ export function useChartLifecycle({
             cardEl.setAttribute('data-last-bar-time', isoTime);
           }
 
-          initPriceSeriesRef.current.update({
-            time: bucketTime as any,
-            open: newCandle.open,
-            high: newCandle.high,
-            low: newCandle.low,
-            close: newCandle.close,
-          });
-
-          initVolumeSeriesRef.current.update({
-            time: bucketTime as any,
-            value: newCandle.volume,
-            color: themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a',
-          });
+          queueUpdate(
+            {
+              time: bucketTime as any,
+              open: newCandle.open,
+              high: newCandle.high,
+              low: newCandle.low,
+              close: newCandle.close,
+            },
+            {
+              time: bucketTime as any,
+              value: newCandle.volume,
+              color: themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a',
+            }
+          );
         }
       }
+
+      flushQueuedUpdates();
     });
 
     return () => {
