@@ -9,6 +9,23 @@ machine that has the real environment (tick lake + DuckDB backend + a Chromium b
 the sandbox that produced the fix does not have. **Do not fix anything you find — report it.**
 Raw, verbatim output is more useful than a summary.
 
+### Instructions to the agent receiving this brief
+
+You are a **test executor**, not an author. Read this once, then:
+
+1. **Execute** the commands. Do not restate, reformat, paraphrase or "continue" this document —
+   a reply containing this text and no command output is a failed hand-off.
+2. **One shot:** `bash tools/verify-seek-freeze-fix.sh --ab` runs steps 0–8 below for you,
+   keeps going after failures, and writes a single report file. Paste that file back.
+   Sections 1–8 exist so you can run any step by hand, or explain why one could not run.
+3. **Report measurements, not impressions.** Every claim needs the number or the verbatim
+   error line that produced it.
+4. **Blocked ≠ passed.** If a step cannot run (no browser, no backend, no tick lake), record
+   `BLOCKED: <exact reason>` — never omit it and never mark it green.
+5. **Do not modify source.** Only the report/logs are yours to write. If you believe the fix is
+   wrong, say so with the failing assertion attached.
+6. Section 9 (manual UAT) needs a human at a real browser — flag it as such if you are headless.
+
 ---
 
 ## 0. Setup
@@ -29,6 +46,22 @@ If `npm run backend` cannot find the tick lake (`../data-harvester/data/tick_lak
 `TICK_LAKE_ROOT` and retry. **Record the answer to this in the report** — steps 5–8 depend on it.
 
 ---
+
+## Preferred path: the harness
+
+```bash
+git fetch origin && git checkout arena/22112ce1-market-rewind && git pull --ff-only
+npm install && npx playwright install chromium
+npm run backend &                                  # another terminal; wait for :8765
+bash tools/verify-seek-freeze-fix.sh --ab          # ~15-30 min; add --quick to skip the long suite
+```
+
+It prints the report to stdout and writes it to `/tmp/market-rewind-verify-<stamp>/report.txt`,
+with every step's raw output in `/tmp/market-rewind-verify-<stamp>/logs/`. Paste back the
+`=== PASTE THIS BACK ===` section plus the `FREEZE-REPORT` blocks. If it exits before finishing,
+paste whatever it printed and say which step it stopped on.
+
+Everything below is what the harness runs, spelled out for manual or partial execution.
 
 ## 1. Static gates (no backend needed)
 
