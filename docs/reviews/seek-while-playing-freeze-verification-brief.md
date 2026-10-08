@@ -153,7 +153,7 @@ therefore selected the lake's oldest partial day (13:00 on the first partition),
 worst possible tape for this probe.
 
 1. **Primary** — the spec's built-in tape, `AAPL` on `SEED_DATE` (read from
-   `tests/regression/e2e-utils.ts`, currently `2026-09-25`) at 09:30. This date is proven: the
+   `tests/regression/e2e-utils.ts`, currently `2026-10-07`) at 09:30. This date is proven: the
    live regression suite (`chartShaking`, `realtimePlayback`, `sync/`) all pass on it.
 2. **Denser** — the lake's densest symbol on that same proven date. Skipped when the densest
    symbol is already `AAPL`.
@@ -165,7 +165,7 @@ To pin one tape instead, set the env before running (auto-pick is then skipped, 
 still printed):
 
 ```bash
-SEEK_SYMBOL=NVDA SEEK_DATE=2026-09-25 SEEK_ENTRY=09:30 bash tools/verify-seek-freeze-fix.sh --ab
+SEEK_SYMBOL=NVDA SEEK_DATE=2026-10-07 SEEK_ENTRY=09:30 bash tools/verify-seek-freeze-fix.sh --ab
 ```
 
 If a test skips with `tape too thin`, report `totalTicks` from the `FREEZE-REPORT` so the numbers

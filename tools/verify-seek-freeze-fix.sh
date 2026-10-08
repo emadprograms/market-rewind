@@ -172,7 +172,7 @@ DENSE_SYMBOL=""
 # The session date comes from the repo's own E2E convention, not from the lake: /api/symbols
 # aggregates over every session, so its first_tick is the lake's oldest partition, not a dense day.
 SEED_DATE="$(sed -n "s/^export const SEED_DATE = '\([0-9-]*\)'.*/\1/p" "$REPO_ROOT/tests/regression/e2e-utils.ts" | head -1)"
-SEED_DATE="${SEED_DATE:-2026-09-25}"
+SEED_DATE="${SEED_DATE:-2026-10-07}"
 if [ "$BACKEND_UP" = "up" ]; then
   if [ -n "${SEEK_SYMBOL:-}" ] || [ -n "${SEEK_DATE:-}" ]; then
     note "--- tape pinned by caller: ${SEEK_SYMBOL:-<spec default>} ${SEEK_DATE:-<spec default>} ${SEEK_ENTRY:-<spec default>} ---"
