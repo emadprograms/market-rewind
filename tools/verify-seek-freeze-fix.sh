@@ -128,6 +128,32 @@ else
 fi
 note ""
 
+# Which tape is "dense" depends entirely on what the local lake holds, so it is discovered
+# through GET /api/symbols (already sorted by tick_count desc) rather than hard-coded. A caller
+# can pin one with SEEK_SYMBOL / SEEK_DATE / SEEK_ENTRY.
+TAPE_ENV="$OUTDIR/tape.env"
+: > "$TAPE_ENV"
+if [ "$BACKEND_UP" = "up" ]; then
+  if [ -n "${SEEK_SYMBOL:-}" ] || [ -n "${SEEK_DATE:-}" ]; then
+    note "--- tape pinned by caller: ${SEEK_SYMBOL:-<default>} ${SEEK_DATE:-<default>} ${SEEK_ENTRY:-<default>} ---"
+    curl -fsS --max-time 120 "http://localhost:8765/api/symbols" > "$LOGDIR/00-symbols.log" 2>&1 \
+      || note "    could not fetch /api/symbols; see $LOGDIR/00-symbols.log"
+  else
+    python3 "$REPO_ROOT/tools/pick-densest-tape.py" --out "$TAPE_ENV" --report "$REPORT" \
+      > "$LOGDIR/00-pick-tape.log" 2>&1
+    if [ -s "$TAPE_ENV" ]; then
+      # shellcheck disable=SC1090
+      . "$TAPE_ENV"
+      export SEEK_SYMBOL SEEK_DATE SEEK_ENTRY
+    else
+      note "    tape picker chose nothing; probe uses its built-in defaults (see $LOGDIR/00-pick-tape.log)"
+    fi
+  fi
+else
+  note "--- tape: backend down, lake inventory unavailable; probe uses built-in defaults ---"
+fi
+note ""
+
 BROWSER_OK="yes"
 PW_CACHE="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
 if ls "$PW_CACHE"/chromium* > /dev/null 2>&1; then
@@ -197,15 +223,13 @@ else
   note ""
 
   if [ "$BACKEND_UP" = "up" ]; then
-    run_step "6 freeze probe (default tape AAPL)" "06-freeze-default" \
+    run_step "6 freeze probe (tape: ${SEEK_SYMBOL:-default} ${SEEK_DATE:-default})" "06-freeze-picked" \
       npx playwright test "$PROBE_SPEC"
 
-    # The default tape may be thin; re-run on a denser session if one is configured.
-    if [ -n "${SEEK_SYMBOL:-}" ] && [ -n "${SEEK_DATE:-}" ]; then
-      run_step "6b freeze probe (SEEK_SYMBOL=$SEEK_SYMBOL SEEK_DATE=$SEEK_DATE)" "06b-freeze-alt" \
-        env SEEK_SYMBOL="$SEEK_SYMBOL" SEEK_DATE="$SEEK_DATE" SEEK_ENTRY="${SEEK_ENTRY:-09:30}" \
-        npx playwright test "$PROBE_SPEC"
-    fi
+    # Cross-check on the spec's built-in default tape, so the report carries both a dense session
+    # and the thin one regardless of what the lake happened to contain.
+    run_step "6b freeze probe (built-in default tape)" "06b-freeze-default" \
+      env -u SEEK_SYMBOL -u SEEK_DATE -u SEEK_ENTRY npx playwright test "$PROBE_SPEC"
 
     # The freeze cost scales with how many ticks elapse per unit of real time, so the same probe
     # runs at high speed multipliers too. SEEK_SOAK_MS stays unset here => the soak test skips.
@@ -298,6 +322,7 @@ note ""
 note "=== PASTE THIS BACK ==="
 note "BRANCH: $FIX_BRANCH @ $FIX_SHA"
 note "BACKEND: $BACKEND_UP   TICK_LAKE: $([ -d "$TICK_LAKE" ] && echo present || echo absent) ($TICK_LAKE)   CHROMIUM: $([ "$BROWSER_OK" = yes ] && echo installed || echo missing)"
+note "TAPE: ${SEEK_SYMBOL:-<spec default AAPL>} ${SEEK_DATE:-<spec default SEED_DATE>} entry ${SEEK_ENTRY:-<spec default 09:30>}   (auto-picked densest unless pinned)"
 for row in "${STEP_RESULTS[@]}"; do
   note "  $row"
 done

@@ -133,16 +133,22 @@ reported, not asserted (GC timing makes them flaky).
 Each test always prints a `FREEZE-REPORT {...}` JSON block to stdout. **Copy every
 `FREEZE-REPORT` block into the report, pass or fail.**
 
-The default tape is `AAPL` on `2026-09-25`. On that date raw ticks start mid-afternoon, so if a
-test skips with `tape too thin`, re-run against a denser session and report both:
+**Which tape runs is discovered, not guessed.** The harness asks the backend for its inventory
+(`GET /api/symbols`, already sorted by tick count descending), prints the top 10 into the report
+with their tick counts and time ranges, and runs the probe on the densest usable session — the
+entry time is clamped to 09:30 for premarket tapes and set to the tape's own first tick when the
+session starts mid-afternoon. It then re-runs on the spec's built-in default tape as a
+cross-check. Paste the inventory table back: it says what is actually in the lake.
+
+To pin a tape instead, set the env before running (the harness then skips auto-pick but still
+prints the inventory):
 
 ```bash
-SEEK_SYMBOL=SPY SEEK_DATE=2026-09-24 SEEK_ENTRY=09:30 \
-  npx playwright test tests/regression/chart/seekWhilePlayingFreeze.spec.ts
+SEEK_SYMBOL=SPY SEEK_DATE=2026-09-24 SEEK_ENTRY=09:30 bash tools/verify-seek-freeze-fix.sh --ab
 ```
 
-(Use whichever symbol/date has the densest tape locally; report `totalTicks` from the
-`FREEZE-REPORT` so the numbers can be interpreted.)
+If a test skips with `tape too thin`, the inventory table shows why — report `totalTicks` from
+the `FREEZE-REPORT` so the numbers can be interpreted.
 
 ## 6. Pre-existing E2E regressions most related to seeking
 
