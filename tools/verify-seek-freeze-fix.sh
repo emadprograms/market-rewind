@@ -364,7 +364,9 @@ ab_run() {  # <dir> <ref> <label> <logslug> <command...>
 
 ab_probe() {
   local dir="$1" ref="$2" label="$3" logslug="$4"
-  ab_run "$dir" "$ref" "$label" "$logslug" npx playwright test "$PROBE_SPEC"
+  # Pass the tape date explicitly. The baseline worktree has its own e2e-utils (an older SEED_DATE),
+  # so without this the two sides would probe different days and the A/B would not be a fair comparison.
+  ab_run "$dir" "$ref" "$label" "$logslug" env SEEK_DATE="$SEED_DATE" npx playwright test "$PROBE_SPEC"
   grep -h 'FREEZE-REPORT' "$LOGDIR/$logslug.log" 2>/dev/null | sed "s/^/[$label] /" >> "$REPORT"
 }
 
