@@ -19,6 +19,120 @@ const getTickMs = (t: any): number => {
   return new Date(str.replace(' ', 'T') + (str.includes('Z') ? '' : 'Z')).getTime();
 };
 
+/**
+ * Tick-independent part of the 1D bucket aggregation.
+ *
+ * Previously this ran once per catch-up tick. For a 60-minute forward seek on a dense session that
+ * is ~9,000 ticks into 12 daily-bucket updates, and the forming-minute scan started at the END of
+ * the full buffered tape, walking past every future tick on each call. Both are functions of
+ * (bucket, evaluation time), so they are computed once and memoised by the caller.
+ *
+ * `lastBarClose` is null when no bar or forming tick set it, so the caller can fall back to the
+ * current tick exactly as the original code did.
+ */
+export type DailyBucketAggregate = {
+  completedVol: number;
+  maxHigh: number;
+  minLow: number;
+  lastBarClose: number | null;
+  firstBarOpen: number | undefined;
+  foundAny: boolean;
+  formingMinuteVol: number;
+};
+
+/**
+ * The per-tick part of the 1D aggregation: O(1), and the only place a tick's own price or volume
+ * enters the bucket values. Shared by subscriber 6 and by the tests, so there is one
+ * implementation to verify rather than a copy in the test that can drift from the hook.
+ */
+export const applyDailyTickFallback = (
+  agg: DailyBucketAggregate,
+  tick: { price: number },
+  tickVol: number,
+  symbolTicks: any[] | undefined,
+  isSynthetic: boolean,
+): { maxHigh: number; minLow: number; lastBarClose: number; formingMinuteVol: number } => {
+  let maxHigh = agg.maxHigh;
+  let minLow = agg.minLow;
+  let formingMinuteVol = agg.formingMinuteVol;
+  // null means no bar or forming tick set it, so it falls back to this tick, as before.
+  let lastBarClose = agg.lastBarClose ?? tick.price;
+  // Only when there are no buffered ticks for this symbol.
+  if (!isSynthetic && !(symbolTicks && symbolTicks.length > 0) && tick.price) {
+    lastBarClose = tick.price;
+    maxHigh = Math.max(maxHigh, tick.price);
+    minLow = Math.min(minLow, tick.price);
+    formingMinuteVol = tickVol;
+  }
+  return { maxHigh, minLow, lastBarClose, formingMinuteVol };
+};
+
+export const aggregateDailyBucket = (
+  dailyIndexRef: any,
+  masterData: any[],
+  sym: string,
+  ticker: string,
+  bucketTime: number,
+  evalTimeMs: number,
+  isSynthetic: boolean,
+  symbolTicks: any[] | undefined,
+): DailyBucketAggregate => {
+  let completedVol = 0;
+  let maxHigh = -Infinity;
+  let minLow = Infinity;
+  let lastBarClose: number | null = null;
+  let firstBarOpen: number | undefined = undefined;
+  let foundAny = false;
+
+  const bucketBars = masterData.length > 0
+    ? (resolveDailyIndex(dailyIndexRef, masterData, sym, ticker, '1D').byBucket.get(bucketTime) || [])
+    : [];
+
+  for (const entry of bucketBars) {
+    const bar = entry.bar;
+    const barMs = entry.barMs;
+    if (barMs <= evalTimeMs) {
+      if (firstBarOpen === undefined) {
+        firstBarOpen = bar.open;
+      }
+      foundAny = true;
+      const isForming = barMs + 60000 > evalTimeMs;
+      if (isForming) {
+        maxHigh = Math.max(maxHigh, bar.open);
+        minLow = Math.min(minLow, bar.open);
+        lastBarClose = bar.open;
+      } else {
+        completedVol += (bar.volume || 0);
+        maxHigh = Math.max(maxHigh, bar.high);
+        minLow = Math.min(minLow, bar.low);
+        lastBarClose = bar.close;
+      }
+    }
+  }
+
+  // Forming minute from buffered real ticks. Scan backwards from the last tick at or before the
+  // evaluation time, not from the end of the tape: the tape includes every future tick, and the
+  // old start point walked all of them on every call.
+  let formingMinuteVol = 0;
+  if (!isSynthetic && symbolTicks && symbolTicks.length > 0) {
+    const currentMinuteStartMs = Math.floor(evalTimeMs / 60000) * 60000;
+    const lastElapsedIdx = findFirstTickAfter(symbolTicks, evalTimeMs) - 1;
+    for (let i = lastElapsedIdx; i >= 0; i--) {
+      const t = symbolTicks[i];
+      const tMs = getTickMs(t);
+      if (tMs < currentMinuteStartMs) break;
+      if (tMs <= evalTimeMs && isRthTick(t, ticker)) {
+        formingMinuteVol += (t.volume !== undefined && t.volume !== null ? t.volume : 1.0);
+        maxHigh = Math.max(maxHigh, t.price);
+        minLow = Math.min(minLow, t.price);
+        lastBarClose = t.price;
+      }
+    }
+  }
+
+  return { completedVol, maxHigh, minLow, lastBarClose, firstBarOpen, foundAny, formingMinuteVol };
+};
+
 const findFirstTickAfter = (ticks: any[], targetMs: number): number => {
   let low = 0;
   let high = ticks.length - 1;
@@ -829,6 +943,11 @@ export function useChartLifecycle({
         queuedVolume = null;
       };
 
+      // SEEK-COST-01: memo for the daily-bucket aggregate. It depends on the bucket and the
+      // evaluation time, not on the individual tick, so it is computed once per distinct pair.
+      let dailyAggKey: string | null = null;
+      let dailyAgg: DailyBucketAggregate | null = null;
+
       // Process newly elapsed ticks in order
       for (const tick of newlyElapsedTicks) {
         const tickTimeMs = getTickMs(tick);
@@ -838,66 +957,18 @@ export function useChartLifecycle({
 
         if (timeframe === '1D') {
           // LIVE-VOL-01: Unified daily chart policy for both real ticks and synthetic fallback
-          const masterData = state.masterData || [];
-          let completedVol = 0;
-          let maxHigh = -Infinity;
-          let minLow = Infinity;
-          let lastBarClose = tick.price;
-          let firstBarOpen = undefined;
-          let foundAny = false;
-
           const evalTimeMs = state.currentTime && state.currentTime > tickTimeMs ? state.currentTime : tickTimeMs;
-
-          // Bucket membership and per-bar facts are tick-invariant, so they are computed
-          // once per session load rather than once per bar per tick (see dailyIndex.ts).
-          // The tick-dependent `barMs <= evalTimeMs` test is still applied here.
-          const bucketBars = masterData.length > 0
-            ? (resolveDailyIndex(dailyIndexRef, masterData, sym, ticker, timeframe).byBucket.get(bucketTime) || [])
-            : [];
-
-          for (const entry of bucketBars) {
-            const bar = entry.bar;
-            const barMs = entry.barMs;
-            if (barMs <= evalTimeMs) {
-              if (firstBarOpen === undefined) {
-                firstBarOpen = bar.open;
-              }
-              foundAny = true;
-              const isForming = barMs + 60000 > evalTimeMs;
-              if (isForming) {
-                maxHigh = Math.max(maxHigh, bar.open);
-                minLow = Math.min(minLow, bar.open);
-                lastBarClose = bar.open;
-              } else {
-                completedVol += (bar.volume || 0);
-                maxHigh = Math.max(maxHigh, bar.high);
-                minLow = Math.min(minLow, bar.low);
-                lastBarClose = bar.close;
-              }
-            }
+          const aggKey = `${bucketTime}|${evalTimeMs}|${isSynthetic ? 1 : 0}`;
+          if (dailyAgg === null || dailyAggKey !== aggKey) {
+            dailyAgg = aggregateDailyBucket(
+              dailyIndexRef, state.masterData || [], sym, ticker, bucketTime, evalTimeMs, isSynthetic, symbolTicks,
+            );
+            dailyAggKey = aggKey;
           }
-
-          // Incorporate elapsed trades from forming minute for real ticks
-          let formingMinuteVol = 0;
-          if (!isSynthetic && symbolTicks && symbolTicks.length > 0) {
-            const currentMinuteStartMs = Math.floor(evalTimeMs / 60000) * 60000;
-            for (let i = symbolTicks.length - 1; i >= 0; i--) {
-              const t = symbolTicks[i];
-              const tMs = getTickMs(t);
-              if (tMs < currentMinuteStartMs) break;
-              if (tMs <= evalTimeMs && isRthTick(t, ticker)) {
-                formingMinuteVol += (t.volume !== undefined && t.volume !== null ? t.volume : 1.0);
-                maxHigh = Math.max(maxHigh, t.price);
-                minLow = Math.min(minLow, t.price);
-                lastBarClose = t.price;
-              }
-            }
-          } else if (!isSynthetic && tick.price) {
-            lastBarClose = tick.price;
-            maxHigh = Math.max(maxHigh, tick.price);
-            minLow = Math.min(minLow, tick.price);
-            formingMinuteVol = tickVol;
-          }
+          const agg: DailyBucketAggregate = dailyAgg;
+          const { completedVol, firstBarOpen, foundAny } = agg;
+          const { maxHigh, minLow, lastBarClose, formingMinuteVol } =
+            applyDailyTickFallback(agg, tick, tickVol, symbolTicks, isSynthetic);
 
           const fallbackOpen = foundAny ? firstBarOpen! : tick.price;
           const totalVol = foundAny
