@@ -57,6 +57,11 @@ fi
 # The A/B step switches branches in somebody else's working copy. Always put it back, even if
 # the harness is interrupted mid-run.
 restore_ref() {
+  if [ -n "${AB_DIR:-}" ] && [ -d "${AB_DIR:-}" ]; then
+    rm -f "$AB_DIR/node_modules" 2> /dev/null || true
+    git worktree remove --force "$AB_DIR" 2> /dev/null || true
+    git worktree prune 2> /dev/null || true
+  fi
   git rev-parse --verify -q HEAD > /dev/null 2>&1 || return 0
   [ "$(git rev-parse HEAD)" = "$FIX_FULL_SHA" ] && return 0
   git checkout -q "$ORIG_REF" 2> /dev/null || true
@@ -64,9 +69,14 @@ restore_ref() {
 trap restore_ref EXIT INT TERM
 BASELINE_REF="e57efe8"   # main @ branch point
 PROBE_SPEC="tests/regression/chart/seekWhilePlayingFreeze.spec.ts"
+PROBE_MODULE="tests/regression/chart/freezeProbeInPage.ts"
+# Specs that failed in the full regression run for reasons not yet attributed. The A/B runs them on
+# both sides so "pre-existing" is measured rather than assumed.
+SUSPECT_SPECS="tests/regression/chart/chartIntegrity.spec.ts tests/regression/chart/randomDayReplay.spec.ts tests/regression/replay/dateReset.spec.ts"
 
 # ---------------------------------------------------------------- result tracking
 STEP_RESULTS=()
+RUN_STEP_CWD=""
 note() { printf '%s\n' "$*" >> "$REPORT"; }
 say()  { printf '%s\n' "$*"; }
 
@@ -86,7 +96,11 @@ run_step() {
   say "    log: $log"
   local started ended rc
   started=$(date +%s)
-  "$@" > "$log" 2>&1
+  if [ -n "${RUN_STEP_CWD:-}" ]; then
+    ( cd "$RUN_STEP_CWD" && "$@" ) > "$log" 2>&1
+  else
+    "$@" > "$log" 2>&1
+  fi
   rc=$?
   ended=$(date +%s)
   local secs=$(( ended - started ))
@@ -293,10 +307,15 @@ else
     run_step "7c sync/" "07c-sync" npx playwright test tests/regression/sync/
 
     if [ "$DO_QUICK" -eq 0 ]; then
-      run_step "8 full regression suite" "08-full-regression" npm run test:regression
-      note "8 full regression: $(pwsummary "$LOGDIR/08-full-regression.log")"
+      # journey/ is deliberately excluded: it is written for playwright.journey.config.ts, where its
+      # network mocks apply. Run under the live-backend config it produced 73 failures in 48.9 min,
+      # almost all of them the pre-existing 09:20-vs-09:10 anchor staleness. Step 5 covers it.
+      run_step "8 regression suite (chart/replay/sync/viewport)" "08-full-regression" \
+        npx playwright test tests/regression/chart tests/regression/replay tests/regression/sync tests/regression/viewport
+      note "8 regression: $(pwsummary "$LOGDIR/08-full-regression.log")"
+      note "    journey/ excluded on purpose (own config, see step 5); run 'npm run test:regression' for everything"
     else
-      skip_step "8 full regression suite" "--quick"
+      skip_step "8 regression suite" "--quick"
     fi
   else
     skip_step "6 freeze probe" "backend down — real tape unavailable"
@@ -307,44 +326,68 @@ else
 fi
 
 # ---------------------------------------------------------------- A/B against main
+# run_in <dir> <label> <slug> <command...> — run_step with a working directory. The cd happens
+# inside run_step, around the command only, so the result is still recorded in the parent shell.
+run_in() {
+  local dir="$1" label="$2" slug="$3"; shift 3
+  RUN_STEP_CWD="$dir"
+  run_step "$label" "$slug" "$@"
+  RUN_STEP_CWD=""
+}
+
 ab_probe() {
-  local label="$1" logslug="$2"
-  run_step "$label" "$logslug" npx playwright test "$PROBE_SPEC"
+  local dir="$1" label="$2" logslug="$3"
+  run_in "$dir" "$label" "$logslug" npx playwright test "$PROBE_SPEC"
   grep -h 'FREEZE-REPORT' "$LOGDIR/$logslug.log" | sed "s/^/[$label] /" >> "$REPORT"
 }
 
 if [ "$DO_AB" -eq 1 ] && [ "$BROWSER_OK" = "yes" ] && [ "$BACKEND_UP" = "up" ]; then
   note "--- A/B: unfixed baseline vs fix ---"
-  if [ "$DIRTY" = "yes" ]; then
-    skip_step "9 A/B against main" "working tree is dirty; refusing to switch branches. Commit or stash first, then re-run with --ab"
+  # A separate worktree, so this never touches the caller's checkout. The previous version switched
+  # branches in place and then could not find the probe: it copied only the spec, not the module the
+  # spec imports, so both sides errored with "Cannot find module freezeProbeInPage" / "No tests found".
+  AB_DIR="${AB_WORKTREE:-/tmp/market-rewind-baseline-$STAMP}"
+  rm -rf "$AB_DIR"
+  if ! git worktree add -q --detach "$AB_DIR" "$BASELINE_REF" > "$LOGDIR/09-worktree.log" 2>&1; then
+    skip_step "9 A/B against baseline" "git worktree add failed; see $LOGDIR/09-worktree.log"
+    tail -5 "$LOGDIR/09-worktree.log" | sed 's/^/    /' >> "$REPORT"
   else
-    ON_BASELINE=0
-    if git checkout -q main 2> /dev/null; then
-      ON_BASELINE=1
-    elif git checkout -q "$BASELINE_REF" 2> /dev/null; then
-      ON_BASELINE=1   # no local `main`; the branch-point commit is the same baseline
-      note "9 A/B: no local main branch, using $BASELINE_REF directly"
-    fi
-    if [ "$ON_BASELINE" -eq 0 ]; then
-      skip_step "9 A/B against main" "could not check out main or $BASELINE_REF"
+    ln -s "$REPO_ROOT/node_modules" "$AB_DIR/node_modules"
+    git -C "$AB_DIR" checkout -q "$FIX_FULL_SHA" -- "$PROBE_SPEC" "$PROBE_MODULE"
+    note "9 baseline: $(git -C "$AB_DIR" rev-parse --short HEAD) in $AB_DIR (your checkout stays at $FIX_SHA)"
+    if git -C "$AB_DIR" diff --quiet "$BASELINE_REF" -- src/store/usePlaybackStore.ts src/hooks/useChartData.ts src/hooks/useChartLifecycle.ts; then
+      note "    source fix present on baseline? NO (correct — only the probe was copied over)"
     else
-      git checkout -q "$FIX_FULL_SHA" -- "$PROBE_SPEC"   # probe only, NOT the source fix
-      note "9 A/B baseline: $(git rev-parse --short HEAD) + probe spec copied from $FIX_BRANCH @ $FIX_SHA"
-      note "    source fix present on baseline? $(git diff --quiet "$BASELINE_REF" -- src/store/usePlaybackStore.ts src/hooks/useChartData.ts src/hooks/useChartLifecycle.ts && echo NO || echo YES-UNEXPECTED)"
-      ab_probe "9a probe on main (expect FAIL)" "09a-ab-main"
-      run_step "9c journey 01-boot on baseline" "09c-ab-journey-baseline" \
-        npx playwright test -c playwright.journey.config.ts tests/regression/journey/01-boot.spec.ts
-      note "9c journey 01-boot on baseline: $(pwsummary "$LOGDIR/09c-ab-journey-baseline.log")"
-      note "    compare with step 5 above: same failures on both sides => pre-existing, not this fix"
-      rm -f "$PROBE_SPEC"
-      git checkout -q "$ORIG_REF"
-      note "9 A/B fix: $FIX_BRANCH @ $(git rev-parse --short HEAD)"
-      ab_probe "9b probe on fix (expect PASS)" "09b-ab-fix"
+      note "    source fix present on baseline? YES-UNEXPECTED — the comparison is invalid"
     fi
+
+    ab_probe "$AB_DIR" "9a probe on baseline (expect FAIL)" "09a-ab-main"
+    ab_probe "$REPO_ROOT" "9b probe on fix (expect PASS)" "09b-ab-fix"
+
+    run_in "$AB_DIR" "9c journey 01-boot on baseline" "09c-ab-journey-baseline" \
+      npx playwright test -c playwright.journey.config.ts tests/regression/journey/01-boot.spec.ts
+    note "9c journey 01-boot: baseline $(pwsummary "$LOGDIR/09c-ab-journey-baseline.log") vs fix $(pwsummary "$LOGDIR/05-journey-boot.log")"
+    note "    identical failures on both sides => pre-existing, not this fix"
+
+    # shellcheck disable=SC2086
+    run_in "$AB_DIR" "9d suspect specs on baseline" "09d-ab-suspects-baseline" \
+      npx playwright test $SUSPECT_SPECS
+    # shellcheck disable=SC2086
+    run_in "$REPO_ROOT" "9e suspect specs on fix" "09e-ab-suspects-fix" \
+      npx playwright test $SUSPECT_SPECS
+    note "9d/9e suspect specs (chartIntegrity, randomDayReplay, dateReset):"
+    note "    baseline: $(pwsummary "$LOGDIR/09d-ab-suspects-baseline.log")"
+    note "    fix:      $(pwsummary "$LOGDIR/09e-ab-suspects-fix.log")"
+    note "    any test failing on the fix but passing on the baseline is a regression from this change"
+
+    rm -f "$AB_DIR/node_modules"
+    git worktree remove --force "$AB_DIR" 2> /dev/null || true
+    git worktree prune 2> /dev/null || true
+    AB_DIR=""
     note ""
   fi
 elif [ "$DO_AB" -eq 1 ]; then
-  skip_step "9 A/B against main" "needs both a browser and a running backend"
+  skip_step "9 A/B against baseline" "needs both a browser and a running backend"
 fi
 
 # ---------------------------------------------------------------- freeze report extraction
@@ -379,7 +422,7 @@ note ""
 note "=== PASTE THIS BACK ==="
 note "BRANCH: $FIX_BRANCH @ $FIX_SHA"
 note "BACKEND: $BACKEND_UP   TICK_LAKE: $([ -d "$TICK_LAKE" ] && echo present || echo absent) ($TICK_LAKE)   CHROMIUM: $([ "$BROWSER_OK" = yes ] && echo installed || echo missing)"
-note "TAPE: ${SEEK_SYMBOL:-<spec default AAPL>} ${SEEK_DATE:-<spec default SEED_DATE>} entry ${SEEK_ENTRY:-<spec default 09:30>}   (auto-picked densest unless pinned)"
+note "TAPE primary: ${SEEK_SYMBOL:-AAPL} ${SEEK_DATE:-$SEED_DATE} entry ${SEEK_ENTRY:-09:30}   densest symbol: ${DENSE_SYMBOL:-<none>}"
 for row in "${STEP_RESULTS[@]}"; do
   note "  $row"
 done

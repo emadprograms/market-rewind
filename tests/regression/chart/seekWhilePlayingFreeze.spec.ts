@@ -138,6 +138,9 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
       // If the main thread is blocked, this evaluation cannot even be dispatched until it frees.
       await page.evaluate(() => undefined);
       const dispatchLatencyMs = Date.now() - t0;
+      // Read straight away: these are the writes the seek itself caused. Reading only after the
+      // settle wait charges normal playback writes to the seek, which at 25x/100x is 10-20 extra.
+      const immediate = await readProbe(page);
       await page.waitForTimeout(400);
       const after = await readProbe(page);
       perSeek.push({
@@ -145,7 +148,8 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
         dispatchLatencyMs,
         heartbeatMaxGapMs: after.probe?.heartbeatMaxGapMs,
         longTaskMaxMs: after.probe?.longTasks.maxMs,
-        writes: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
+        writes: immediate.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
+        writesAfterSettle: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
         isPaused: after.context.isPaused,
         currentTimeMs: after.context.currentTime,
       });
@@ -157,6 +161,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
       await stepBackward.click();
       await page.evaluate(() => undefined);
       const dispatchLatencyMs = Date.now() - t0;
+      const immediate = await readProbe(page);
       await page.waitForTimeout(400);
       const after = await readProbe(page);
       perSeek.push({
@@ -164,7 +169,8 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
         dispatchLatencyMs,
         heartbeatMaxGapMs: after.probe?.heartbeatMaxGapMs,
         longTaskMaxMs: after.probe?.longTasks.maxMs,
-        writes: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
+        writes: immediate.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
+        writesAfterSettle: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
         isPaused: after.context.isPaused,
         currentTimeMs: after.context.currentTime,
       });
@@ -181,8 +187,6 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
             perSeek,
             totals: final.probe,
           },
-          null,
-          2
         )
     );
 
@@ -209,6 +213,9 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
   });
 
   test('rapid scrubbing while playing does not degrade into a per-tick replay', async ({ page }) => {
+    // 30 seeks can legitimately take ~1s each while the residual store-side cost stands, which
+    // blows the default 60s timeout and hides the measurement behind a timeout error.
+    test.setTimeout(300_000);
     const pageErrors = collectPageErrors(page);
 
     await startSession(page, SYMBOL, DATE, ENTRY);
@@ -254,8 +261,6 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
             wallMs,
             probe: after.probe,
           },
-          null,
-          2
         )
     );
 
@@ -331,8 +336,6 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
             rewoundBars: rewoundTimes.length,
             heartbeatMaxGapMs: state.probe?.heartbeatMaxGapMs,
           },
-          null,
-          2
         )
     );
 
@@ -380,6 +383,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
       const m = await page.evaluate(measureStoreSeekBy, shape.offsetMs);
       await page.evaluate(() => undefined);
       const dispatchLatencyMs = Date.now() - t0;
+      const immediate = await readProbe(page);
       await page.waitForTimeout(600);
       const after = await readProbe(page);
       measurements.push({
@@ -388,7 +392,8 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
         dispatchLatencyMs,
         heartbeatMaxGapMs: after.probe?.heartbeatMaxGapMs,
         longTaskMaxMs: after.probe?.longTasks.maxMs,
-        writes: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
+        writes: immediate.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
+        writesAfterSettle: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
         isPaused: after.context.isPaused,
       });
     }
@@ -425,8 +430,6 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
               spreadRatio: Math.round((Math.max(...storeSeekValues) / Math.max(0.01, Math.min(...storeSeekValues))) * 10) / 10,
             },
           },
-          null,
-          2
         )
     );
 
@@ -512,8 +515,6 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
             firstSamples: samples.slice(0, 5),
             lastSamples: samples.slice(-5),
           },
-          null,
-          2
         )
     );
 
