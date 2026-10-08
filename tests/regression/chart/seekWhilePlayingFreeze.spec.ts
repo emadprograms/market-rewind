@@ -63,7 +63,18 @@ const STORE_SEEK_BUDGET_MS = 5000;
 /** Max frame gap tolerated while seeking. A blocked main thread blows straight through this. */
 const STALL_BUDGET_MS = 1500;
 /** Default layout is 5min + 1D, so a 3-minute step spans at most a couple of buckets. */
+// A seek legitimately writes one candle + one volume per 5-minute bucket it crosses (INGEST-06
+// coalescing is per bucket, not per tick). So the budget is the slack below PLUS the buckets crossed.
+// The slack also absorbs playback writes that land inside the seek window at 25x/100x. A per-tick
+// regression writes ~3,600 times for a 60-minute seek and fails any bucket-scaled budget by a mile.
 const WRITES_PER_SEEK_BUDGET = 12;
+const BUCKET_MS = 5 * 60000;
+const writesBudgetFor = (m: { targetMs?: number; currentTimeBefore?: number | null }) => {
+  const crossed = (m.targetMs !== undefined && m.currentTimeBefore !== undefined && m.currentTimeBefore !== null)
+    ? Math.ceil(Math.abs(m.targetMs - m.currentTimeBefore) / BUCKET_MS)
+    : 0;
+  return WRITES_PER_SEEK_BUDGET + crossed;
+};
 
 /**
  * Thin Playwright wrappers. The code that actually runs in the page lives in ./freezeProbeInPage
@@ -407,6 +418,8 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
     measurements.push({
       name: 'fullTapeJump',
       storeSeekMs: full.storeSeekMs,
+      targetMs: full.targetMs,
+      currentTimeBefore: full.currentTimeBefore,
       dispatchLatencyMs: null,
       heartbeatMaxGapMs: afterFull.probe?.heartbeatMaxGapMs,
       longTaskMaxMs: afterFull.probe?.longTasks.maxMs,
@@ -437,7 +450,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
       expect(m.storeSeekMs, `store-side seek ${m.name} took too long`).toBeLessThan(STORE_SEEK_BUDGET_MS);
       expect(m.heartbeatMaxGapMs, `frame stalled during ${m.name}`).toBeLessThan(STALL_BUDGET_MS);
       for (const w of m.writes || []) {
-        expect(w, `chart primitives written during ${m.name}`).toBeLessThanOrEqual(WRITES_PER_SEEK_BUDGET);
+        expect(w, `chart primitives written during ${m.name} (budget ${writesBudgetFor(m)})`).toBeLessThanOrEqual(writesBudgetFor(m));
       }
     }
     expect(pageErrors).toEqual([]);
