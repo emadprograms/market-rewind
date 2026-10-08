@@ -73,7 +73,7 @@ test.describe('TEST-08: Historical Random Day Replay (April 4th, 2025)', () => {
     await playBtn.click();
 
     // Replay is now running. Increase playback speed to 10x so we can watch time advance
-    const speedSelect = page.locator('.playback-bar select');
+    const speedSelect = page.getByTestId('playback-speed-select');
     if (await speedSelect.isVisible()) {
       await speedSelect.selectOption('10');
     }
@@ -157,7 +157,7 @@ test.describe('TEST-08: Historical Random Day Replay (April 4th, 2025)', () => {
     console.log('Initial bars count at 09:34:', initialBarsCount);
 
     // Increase speed to 50x
-    const speedSelect = page.locator('.playback-bar select');
+    const speedSelect = page.getByTestId('playback-speed-select');
     if (await speedSelect.isVisible()) {
       await speedSelect.selectOption('50');
     }

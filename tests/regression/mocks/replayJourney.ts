@@ -222,7 +222,7 @@ export async function pressPause(page: Page): Promise<void> {
 }
 
 export async function setSpeed(page: Page, value: string): Promise<void> {
-  await page.locator('.playback-bar select').selectOption(value);
+  await page.getByTestId('playback-speed-select').selectOption(value);
 }
 
 export function scrubberCounter(page: Page): Locator {

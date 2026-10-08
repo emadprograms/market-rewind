@@ -279,6 +279,16 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     unverified until the user's probe runs on the new SHA. CODE-INFERRED UNTIL PROFILED, as for cause 2.
     Known non-run here: chartShaking, realtimePlayback, sync, journey, and the seek probe are browser-only.
 
+- timestamp: 2026-10-08T17:01:18Z
+  checked: "User's runs on 74151ee: --quick (stamp 20261008-192911) and --ab (stamp 20261008-194421), real tick lake, Chromium, backend up"
+  found: |
+    --quick: tsc, vitest 98/594/2, seek guards 8/8, build, pytest 232/2, journey 01-boot 5/5, freeze probes 6/6b/6c/6d, chartShaking, realtimePlayback and sync all PASS. Fix-side writes per step <= 6 (max 100x forward); forward60m 5-min chart writes [1,2] (was [14,2]); storeSeekMs 4.4-8.4 ms on forward60m; no future bars after rewind.
+    --ab: VALID verdict. Baseline (e57efe8) FAILS the probes: step-while-playing forward writes 267 and heartbeat gap 972 ms; rapid-scrub heartbeat 4477 ms; rewind futureBars 46; forward60m storeSeekMs 4127 ms with 2123 writes. Fix (74151ee) PASSES the same probes. This is the baseline-fails / fix-passes evidence the debug session needed.
+    Suspect specs: baseline 4 failed (chartIntegrity Issue 1&2, randomDayReplay x2, dateReset 09:20), fix 3 failed (the first three). No test fails on the fix that passes on the baseline, so no regression. The three shared failures predate the PR.
+    Strict-mode root cause (randomDayReplay): the speed and step selects are both unscoped under .playback-bar, so the locator matches two elements. realtimePlayback used .first(), which set the step size to 10m rather than the speed to 10x, and its time-changed assertion could not detect the difference.
+  implication: |
+    The probe A/B is now a valid comparison. Freeze-fix claims rest on the baseline-fails / fix-passes result. The 5-min write count is confirmed in the browser (1-2 per step). Selector fix: speed select has data-testid playback-speed-select, and tests/unit/regressionSelectors.test.ts guards against the unscoped locator (mutation-tested). Not yet confirmed in a browser: the randomDayReplay and realtimePlayback runs after this change, and the chartIntegrity Issue 1&2 failure, whose error text is not in the report.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 

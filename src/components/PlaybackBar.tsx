@@ -373,6 +373,8 @@ export function PlaybackBar({
       <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto'}}>
         <span style={{fontSize: '0.75rem', color: 'var(--text-secondary)'}}>SPEED</span>
         <select 
+          data-testid="playback-speed-select"
+          aria-label="Playback speed"
           value={playbackSpeed} 
           onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))} 
           style={{width: 'auto', padding: '2px 6px', fontSize: '11px', background: 'rgba(0,0,0,0.2)', border: '1px solid #2a2e39'}}

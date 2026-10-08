@@ -54,7 +54,7 @@ test.describe('TEST-06: Real-Time Playback Clock & Tick Timing', () => {
     await startSession(page, 'AAPL', '2026-09-25', '09:30');
 
     // Change speed to 10x (select option value 10)
-    const speedSelect = page.locator('.playback-bar select').first();
+    const speedSelect = page.getByTestId('playback-speed-select');
     await speedSelect.selectOption('10');
 
     const timeDisplay = page.locator('.time-display');
