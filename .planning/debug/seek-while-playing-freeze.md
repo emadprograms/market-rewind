@@ -341,6 +341,16 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     Open: the user's original repro is SPY at 09:30 (dense session). SPY has no ticks on 2026-10-07, so this run does not cover the original SPY target. Manual UAT (human, browser) has not been done. Session stays awaiting_human_verify until the user confirms. Only then archive to resolved/ and add the knowledge-base entry.
     Note: the commit that records this entry is docs-only. The verified code is f186514.
 
+- timestamp: 2026-10-08T21:00:31Z
+  checked: "Repo search for SPY (tests/tools/src/docs, 158 references) and check of the real-lake paths. Owner decision via chat."
+  found: |
+    No test runs SPY against the real tick lake. SPY references are mocked (journey suite, apiMock, marketSimulator), synthetic (vitest fixtures), or mocked fetch (candleRendering). The real-lake specs and the freeze probe use AAPL and NVDA. The lake has 19 symbols; SPY has 0 ticks on 2026-10-07.
+    chartShaking.spec.ts line 8 comment says SPY, but the code calls startSession with AAPL. Stale comment, no behaviour change.
+  decision: |
+    Target repro for the seek-while-playing freeze: NVDA, 2026-10-07 (SEED_DATE), entry 09:30 ET, 2 charts (default 5min + 1D), speed 1x, full session, no soak. Owner choice: "use nvda, since it is so dense."
+    This replaces the SPY 09:30 target in the original report. The probe (step 6b) already runs this tape: SEEK_SYMBOL=NVDA SEEK_DATE=SEED_DATE SEEK_ENTRY=09:30. AAPL 09:30 stays as the primary tape.
+    Status is unchanged: awaiting_human_verify. Manual UAT on NVDA is still required before resolution.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
