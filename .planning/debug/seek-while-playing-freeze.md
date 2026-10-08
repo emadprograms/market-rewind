@@ -316,6 +316,17 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     TEST-07: NOT resolved. The earlier diagnosis (stale data-last-bar-time attribute, read too early) is REJECTED. The series itself has no 09:20 or 09:25 bucket 15 s after the entry at 09:30, so the attribute was not the cause. Two open explanations: (a) the tape has no AAPL trades between 09:15 and 09:30 ET on 2026-09-25, in which case the test expectation is wrong for that day; (b) the chart's candle loading stops at 09:15, which would be a product bug. The sandbox cannot tell them apart. Next step: count the lake's AAPL ticks per minute in 13:10-13:31 UTC on 2026-09-25 through /api/ticks on the user's backend.
     The 100x writesAfterSettle values (up to 22 per chart per step; 39 in the store-seek probe) count playback advancing during the settle window. They are recorded, not asserted, and are not part of the seek budget.
 
+- timestamp: 2026-10-08T20:35:19Z
+  checked: "Tick-count check on 2026-09-25 (user's backend, relayed verbatim) and the user's decision on the TEST-07 fix"
+  found: |
+    /api/ticks AAPL 2026-09-25 13:10-13:31 UTC (09:10-09:31 ET): 171 ticks in total. Minutes with ticks: 13:13 (2), 13:15 (1), 13:19 (2), 13:30 (166). No ticks from 09:20 to 09:29 ET.
+    Single test on 7f07ee2: TEST-07 Issue 1 & 2 fails with the same message (Last NY time=09:15, series count=1410).
+  implication: |
+    The chart is correct for this tape. The 09:15 bucket holds the 09:15 and 09:19 trades, and the 09:20 and 09:25 buckets have no trades, so no bar is expected there. The failure is a bad test expectation for this date, not a product bug. Whether 09:20-09:29 is a real gap or a lake gap is still unconfirmed.
+    User decision (ask_user): change the shared seed date. The user then chose 2026-10-07 (reported to have much fuller data; not verified in this sandbox).
+    Change in 3e3d9d1: SEED_DATE 2026-09-25 -> 2026-10-07 (e2e-utils.ts, which also moves the harness's primary freeze tape); chartIntegrity Issues 1-4 follow the date (Issue 4 text: Oct 7, not Oct 6); harness fallback and brief tape reference updated.
+    Consequence: the A/B result on 74151ee/be63c52 used the 09-25 tape and does not apply. The A/B must be re-run on 3e3d9d1. Tape check on 10-07 is still owed. If TEST-07 still fails on 10-07 with full data, that is a product bug and needs its own investigation.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
