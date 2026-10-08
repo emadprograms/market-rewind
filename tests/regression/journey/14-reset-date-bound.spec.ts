@@ -7,7 +7,7 @@
  * After clicking the red Reset Session button (Sidebar), the Configure Session
  * overlay appears. Picking a new earlier date (e.g., 2026-09-22) and clicking
  * Initialize must:
- *  - Anchor replay at 09:20 ET of the NEW date (not old)
+ *  - Anchor replay at 09:10 ET of the NEW date (not old)
  *  - Load intraday history ending at NEW date (not latest date)
  *  - Daily chart must show only bars < NEW date (no future leak)
  *  - Tick buffer must be bounded to NEW date (not old)
@@ -32,12 +32,12 @@ const INITIAL_DATE = '2026-09-25';
 const NEW_DATE = '2026-09-22';
 
 test.describe('JOURNEY 14 — Red Reset respects chosen date (no future leak)', () => {
-  test('reset then picking earlier date anchors at 09:20 ET of NEW date', async ({ page }) => {
+  test('reset then picking earlier date anchors at 09:10 ET of NEW date', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
     await beginReplay(page, { ticker: 'SPY', date: INITIAL_DATE });
 
     // Verify initial anchor
-    await expect(page.locator('.time-display')).toContainText('09:20:00');
+    await expect(page.locator('.time-display')).toContainText('09:10:00');
 
     // Click red Reset Session button
     await page.locator('.sidebar button[title="Reset Session"]').click();
@@ -51,8 +51,8 @@ test.describe('JOURNEY 14 — Red Reset respects chosen date (no future leak)', 
     await expect(page.locator('.chart-card')).toHaveCount(2, { timeout: 30_000 });
     // Tick buffer loading finished
     await expect(page.locator('.playback-bar')).toHaveAttribute('data-ticks-loading', 'false', { timeout: 40_000 });
-    // Replay clock must be at 09:20 of NEW date, NOT old date's time
-    await expect(page.locator('.time-display')).toContainText('09:20:00', { timeout: 40_000 });
+    // Replay clock must be at 09:10 of NEW date, NOT old date's time
+    await expect(page.locator('.time-display')).toContainText('09:10:00', { timeout: 40_000 });
 
     const state = await readPlaybackState(page);
     expect(state.currentTime).not.toBeNull();
@@ -69,7 +69,7 @@ test.describe('JOURNEY 14 — Red Reset respects chosen date (no future leak)', 
     expect(pageErrors).toEqual([]);
   });
 
-  test('intraday chart after reset shows 09:20 bucket of NEW date, not afternoon/EOD of old date', async ({ page }) => {
+  test('intraday chart after reset shows 09:10 bucket of NEW date, not afternoon/EOD of old date', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
     await beginReplay(page, { ticker: 'SPY', date: INITIAL_DATE });
 
@@ -83,11 +83,11 @@ test.describe('JOURNEY 14 — Red Reset respects chosen date (no future leak)', 
     const bar = await readBarData(card);
     expect(bar.lastBarTime).toBeTruthy();
     const etClock = utcToEtClock(bar.lastBarTime!);
-    // Must be 09:20 or shortly after, not midday / close (which would indicate future leak to EOD)
+    // Must be 09:10 or shortly after, not midday / close (which would indicate future leak to EOD)
     expect(etClock).toMatch(/^09:(1\d|20)$/);
     // And last bar's ET date must be NEW date's day (intraday bars are timestamped to NEW date)
     const lastEtDate = utcToEtDate(bar.lastBarTime!);
-    // For intraday at 09:20 anchor, last bar is on NEW date (or prior day's close), but definitely not after NEW date
+    // For intraday at 09:10 anchor, last bar is on NEW date (or prior day's close), but definitely not after NEW date
     expect(lastEtDate <= NEW_DATE).toBe(true);
 
     expect(pageErrors).toEqual([]);
@@ -131,9 +131,9 @@ test.describe('JOURNEY 14 — Red Reset respects chosen date (no future leak)', 
     await expect(page.locator('.playback-bar')).toHaveAttribute('data-ticks-loading', 'false', { timeout: 40_000 });
     const state = await readPlaybackState(page);
     expect(state.totalTicks).toBeGreaterThan(0);
-    // At 09:20 anchor, cursor near start, not at end
+    // At 09:10 anchor, cursor near start, not at end
     expect(state.currentTickIndex).toBeLessThanOrEqual(2);
-    // Total ticks for one day's replay buffer is ~ 390*60 = 23400 for 1-sec ticks from 09:20-16:00,
+    // Total ticks for one day's replay buffer is ~ 390*60 = 23400 for 1-sec ticks from 09:10-16:00,
     // plus prior handling. If buffer leaked to end (future), total would be massive and index would be mid.
     // Ensure we didn't load ticks beyond NEW date's 23:59
     if (state.currentTick) {

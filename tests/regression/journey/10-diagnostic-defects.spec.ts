@@ -23,7 +23,7 @@ test.describe('JOURNEY 10 — Diagnostic Defects Replication', () => {
     const initialMin = await slider.getAttribute('min');
 
     // Seek to 09:34
-    // Scrubber domain should remain anchored to session start, allowing jump back to 09:20
+    // Scrubber domain should remain anchored to session start, allowing jump back to 09:10
     const sliderBox = await slider.boundingBox();
     if (sliderBox) {
       await page.mouse.click(sliderBox.x + sliderBox.width * 0.5, sliderBox.y + sliderBox.height / 2);

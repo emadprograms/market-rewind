@@ -53,7 +53,7 @@ test.describe('JOURNEY 03 — Historical context (previous days before the targe
     // Several completed daily candles of history.
     expect(bar.barsCount).toBeGreaterThanOrEqual(5);
 
-    // Every daily bar shown at the 09:20 anchor is a PRIOR day (no today leak).
+    // Every daily bar shown at the 09:10 anchor is a PRIOR day (no today leak).
     if (bar.lastBarTime) {
       expect(utcToEtDate(bar.lastBarTime) < TARGET).toBe(true);
     }

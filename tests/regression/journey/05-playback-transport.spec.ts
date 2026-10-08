@@ -132,7 +132,7 @@ test.describe('JOURNEY 05 — Playback transport (play / pause / step / scrub / 
     expect(Math.abs(current - (targetIndex + 1))).toBeLessThanOrEqual(1);
   });
 
-  test('Reset to Start returns the cursor to the 09:20 anchor', async ({ page }) => {
+  test('Reset to Start returns the cursor to the 09:10 anchor', async ({ page }) => {
     await beginReplay(page, { ticker: 'SPY', date: TARGET });
 
     // Advance well into the session first.
@@ -142,13 +142,13 @@ test.describe('JOURNEY 05 — Playback transport (play / pause / step / scrub / 
     await pressPause(page);
 
     const advancedClock = await readReplayClock(page);
-    expect(advancedClock > '09:20:00.000').toBe(true);
+    expect(advancedClock > '09:10:00.000').toBe(true);
 
     await page.getByTitle('Reset to Start').click();
     await page.waitForTimeout(250);
 
     const resetClock = await readReplayClock(page);
-    expect(resetClock.startsWith('09:20:00')).toBe(true);
+    expect(resetClock.startsWith('09:10:00')).toBe(true);
 
     const state = await readPlaybackState(page);
     expect(state.isPaused).toBe(true);
@@ -164,7 +164,7 @@ test.describe('JOURNEY 05 — Playback transport (play / pause / step / scrub / 
     const before = await readBarData(card);
 
     // Run fast for long enough to cross at least one 5-minute boundary
-    // (09:20 -> past 09:25 needs >300s of market time; 100x * ~3.5s ≈ 350s).
+    // (09:10 -> past 09:15 needs >300s of market time; 100x * ~3.5s ≈ 350s).
     await setSpeed(page, '100');
     await pressPlay(page);
     await expect(async () => {
@@ -176,7 +176,7 @@ test.describe('JOURNEY 05 — Playback transport (play / pause / step / scrub / 
     const after = await readBarData(card);
     // A fresh intraday candle formed, so the bar count grew.
     expect(after.barsCount).toBeGreaterThan(before.barsCount);
-    // And the latest bar advanced past the 09:20 anchor.
+    // And the latest bar advanced past the 09:10 anchor.
     expect(utcToEtClock(after.lastBarTime!) >= utcToEtClock(before.lastBarTime!)).toBe(true);
 
     expect(pageErrors).toEqual([]);

@@ -3,8 +3,8 @@
  * Browser E2E verification addressing gaps identified in market-rewind-review-2026-09-29.md:
  * 1. Time & Sales Drawer Lifecycle: explicitly toggle closed -> open without hook-order crash,
  *    verify nonempty tape rows, and test selected chart symbol isolation.
- * 2. Slider Bounds Invariance: in a session starting at 09:20 ET where first trade occurs at 09:30,
- *    seeking forward to 09:34 preserves the initial 09:20 minimum slider domain.
+ * 2. Slider Bounds Invariance: in a session starting at 09:10 ET where first trade occurs at 09:30,
+ *    seeking forward to 09:34 preserves the initial 09:10 minimum slider domain.
  */
 
 import { test, expect } from '@playwright/test';
@@ -40,7 +40,7 @@ test.describe('JOURNEY 11 — Review Findings E2E Hardening', () => {
     expect(pageErrors.length).toBe(0);
   });
 
-  test('REV E2E 2: Seeking forward preserves session start 09:20 as slider minimum even when first trade is at 09:30', async ({
+  test('REV E2E 2: Seeking forward preserves session start 09:10 as slider minimum even when first trade is at 09:30', async ({
     page,
   }) => {
     const pageErrors = collectPageErrors(page);
