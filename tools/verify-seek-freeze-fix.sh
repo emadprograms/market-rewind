@@ -40,8 +40,25 @@ for arg in "$@"; do
   esac
 done
 
-FIX_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+FIX_FULL_SHA="$(git rev-parse HEAD)"
 FIX_SHA="$(git rev-parse --short HEAD)"
+FIX_BRANCH_RAW="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$FIX_BRANCH_RAW" = "HEAD" ]; then
+  FIX_BRANCH="(detached)"          # checked out by SHA, not by branch name
+  ORIG_REF="$FIX_FULL_SHA"
+else
+  FIX_BRANCH="$FIX_BRANCH_RAW"
+  ORIG_REF="$FIX_BRANCH_RAW"
+fi
+
+# The A/B step switches branches in somebody else's working copy. Always put it back, even if
+# the harness is interrupted mid-run.
+restore_ref() {
+  git rev-parse --verify -q HEAD > /dev/null 2>&1 || return 0
+  [ "$(git rev-parse HEAD)" = "$FIX_FULL_SHA" ] && return 0
+  git checkout -q "$ORIG_REF" 2> /dev/null || true
+}
+trap restore_ref EXIT INT TERM
 BASELINE_REF="e57efe8"   # main @ branch point
 PROBE_SPEC="tests/regression/chart/seekWhilePlayingFreeze.spec.ts"
 
@@ -94,7 +111,9 @@ skip_step() {
 note "MARKET REWIND — seek-while-playing-freeze verification"
 note "generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 note "host: $(uname -srm)  node: $(node -v 2>/dev/null || echo n/a)  npm: $(npm -v 2>/dev/null || echo n/a)"
-note "branch: $FIX_BRANCH @ $FIX_SHA   (baseline for A/B: main @ $BASELINE_REF)"
+MAIN_TIP="$(git rev-parse --short origin/main 2>/dev/null || git rev-parse --short main 2>/dev/null || echo unknown)"
+note "branch: $FIX_BRANCH @ $FIX_SHA"
+note "A/B baseline: main tip $MAIN_TIP (branch point of this fix: $BASELINE_REF)"
 note "logs: $LOGDIR"
 note ""
 
@@ -273,14 +292,22 @@ if [ "$DO_AB" -eq 1 ] && [ "$BROWSER_OK" = "yes" ] && [ "$BACKEND_UP" = "up" ]; 
   if [ "$DIRTY" = "yes" ]; then
     skip_step "9 A/B against main" "working tree is dirty; refusing to switch branches. Commit or stash first, then re-run with --ab"
   else
-    git checkout -q main || { skip_step "9 A/B against main" "git checkout main failed"; }
-    if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
-      git checkout -q "$FIX_BRANCH" -- "$PROBE_SPEC"   # probe only, NOT the source fix
-      note "9 A/B baseline: main @ $(git rev-parse --short HEAD) + probe spec copied from $FIX_BRANCH"
+    ON_BASELINE=0
+    if git checkout -q main 2> /dev/null; then
+      ON_BASELINE=1
+    elif git checkout -q "$BASELINE_REF" 2> /dev/null; then
+      ON_BASELINE=1   # no local `main`; the branch-point commit is the same baseline
+      note "9 A/B: no local main branch, using $BASELINE_REF directly"
+    fi
+    if [ "$ON_BASELINE" -eq 0 ]; then
+      skip_step "9 A/B against main" "could not check out main or $BASELINE_REF"
+    else
+      git checkout -q "$FIX_FULL_SHA" -- "$PROBE_SPEC"   # probe only, NOT the source fix
+      note "9 A/B baseline: $(git rev-parse --short HEAD) + probe spec copied from $FIX_BRANCH @ $FIX_SHA"
       note "    source fix present on baseline? $(git diff --quiet "$BASELINE_REF" -- src/store/usePlaybackStore.ts src/hooks/useChartData.ts src/hooks/useChartLifecycle.ts && echo NO || echo YES-UNEXPECTED)"
       ab_probe "9a probe on main (expect FAIL)" "09a-ab-main"
       rm -f "$PROBE_SPEC"
-      git checkout -q "$FIX_BRANCH"
+      git checkout -q "$ORIG_REF"
       note "9 A/B fix: $FIX_BRANCH @ $(git rev-parse --short HEAD)"
       ab_probe "9b probe on fix (expect PASS)" "09b-ab-fix"
     fi
