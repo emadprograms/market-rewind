@@ -128,9 +128,8 @@ skip_step() {
 note "MARKET REWIND — seek-while-playing-freeze verification"
 note "generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 note "host: $(uname -srm)  node: $(node -v 2>/dev/null || echo n/a)  npm: $(npm -v 2>/dev/null || echo n/a)"
-MAIN_TIP="$(git rev-parse --short origin/main 2>/dev/null || git rev-parse --short main 2>/dev/null || echo unknown)"
 note "branch: $FIX_BRANCH @ $FIX_SHA"
-note "A/B baseline: main tip $MAIN_TIP (branch point of this fix: $BASELINE_REF)"
+note "A/B baseline ref: $BASELINE_REF = $(git rev-parse --short "$BASELINE_REF" 2>/dev/null || echo unresolved) (branch point of this fix; origin/main is not used)"
 note "logs: $LOGDIR"
 note ""
 
@@ -335,10 +334,38 @@ run_in() {
   RUN_STEP_CWD=""
 }
 
+# Provenance guards for the A/B. The earlier run was invalid because Playwright's webServer uses
+# reuseExistingServer (CI unset) on a hardcoded localhost:3000, so a leftover dev server silently
+# served the fixed code to the "baseline" side. Each side now proves two things before it runs:
+#   (a) its src/ tree equals the ref it claims to test, and
+#   (b) nothing is already listening on :3000, so Playwright must start its own server in that tree.
+AB_INVALID=0
+src_matches_ref() {  # <dir> <ref>: src/ equals the ref and has no uncommitted changes
+  # Fail closed: an unresolvable ref makes git diff error, which must never read as "equal".
+  git -C "$1" rev-parse --verify -q "$2^{commit}" > /dev/null 2>&1 || return 1
+  git -C "$1" diff --quiet "$2" -- src 2>/dev/null \
+    && [ -z "$(git -C "$1" status --porcelain -- src)" ]
+}
+port_3000_busy() {
+  (exec 3<>/dev/tcp/127.0.0.1/3000) 2>/dev/null
+}
+ab_run() {  # <dir> <ref> <label> <logslug> <command...>
+  local dir="$1" ref="$2" label="$3" slug="$4"; shift 4
+  if ! src_matches_ref "$dir" "$ref"; then
+    note "[$label] NOT RUN: $dir src/ does not equal $ref; this side would not test what it claims"
+    AB_INVALID=1; return 0
+  fi
+  if port_3000_busy; then
+    note "[$label] NOT RUN: port 3000 is already in use, so Playwright would reuse that server, not $dir"
+    AB_INVALID=1; return 0
+  fi
+  run_in "$dir" "$label" "$slug" "$@"
+}
+
 ab_probe() {
-  local dir="$1" label="$2" logslug="$3"
-  run_in "$dir" "$label" "$logslug" npx playwright test "$PROBE_SPEC"
-  grep -h 'FREEZE-REPORT' "$LOGDIR/$logslug.log" | sed "s/^/[$label] /" >> "$REPORT"
+  local dir="$1" ref="$2" label="$3" logslug="$4"
+  ab_run "$dir" "$ref" "$label" "$logslug" npx playwright test "$PROBE_SPEC"
+  grep -h 'FREEZE-REPORT' "$LOGDIR/$logslug.log" 2>/dev/null | sed "s/^/[$label] /" >> "$REPORT"
 }
 
 if [ "$DO_AB" -eq 1 ] && [ "$BROWSER_OK" = "yes" ] && [ "$BACKEND_UP" = "up" ]; then
@@ -355,30 +382,35 @@ if [ "$DO_AB" -eq 1 ] && [ "$BROWSER_OK" = "yes" ] && [ "$BACKEND_UP" = "up" ]; 
     ln -s "$REPO_ROOT/node_modules" "$AB_DIR/node_modules"
     git -C "$AB_DIR" checkout -q "$FIX_FULL_SHA" -- "$PROBE_SPEC" "$PROBE_MODULE"
     note "9 baseline: $(git -C "$AB_DIR" rev-parse --short HEAD) in $AB_DIR (your checkout stays at $FIX_SHA)"
-    if git -C "$AB_DIR" diff --quiet "$BASELINE_REF" -- src/store/usePlaybackStore.ts src/hooks/useChartData.ts src/hooks/useChartLifecycle.ts; then
-      note "    source fix present on baseline? NO (correct — only the probe was copied over)"
+    if src_matches_ref "$AB_DIR" "$BASELINE_REF"; then
+      note "    baseline src/ == $BASELINE_REF: yes"
     else
-      note "    source fix present on baseline? YES-UNEXPECTED — the comparison is invalid"
+      note "    baseline src/ == $BASELINE_REF: NO (A/B will be marked invalid)"; AB_INVALID=1
     fi
 
-    ab_probe "$AB_DIR" "9a probe on baseline (expect FAIL)" "09a-ab-main"
-    ab_probe "$REPO_ROOT" "9b probe on fix (expect PASS)" "09b-ab-fix"
+    ab_probe "$AB_DIR" "$BASELINE_REF" "9a probe on baseline (expect FAIL)" "09a-ab-main"
+    ab_probe "$REPO_ROOT" "$FIX_FULL_SHA" "9b probe on fix (expect PASS)" "09b-ab-fix"
 
-    run_in "$AB_DIR" "9c journey 01-boot on baseline" "09c-ab-journey-baseline" \
+    ab_run "$AB_DIR" "$BASELINE_REF" "9c journey 01-boot on baseline" "09c-ab-journey-baseline" \
       npx playwright test -c playwright.journey.config.ts tests/regression/journey/01-boot.spec.ts
     note "9c journey 01-boot: baseline $(pwsummary "$LOGDIR/09c-ab-journey-baseline.log") vs fix $(pwsummary "$LOGDIR/05-journey-boot.log")"
     note "    identical failures on both sides => pre-existing, not this fix"
 
     # shellcheck disable=SC2086
-    run_in "$AB_DIR" "9d suspect specs on baseline" "09d-ab-suspects-baseline" \
+    ab_run "$AB_DIR" "$BASELINE_REF" "9d suspect specs on baseline" "09d-ab-suspects-baseline" \
       npx playwright test $SUSPECT_SPECS
     # shellcheck disable=SC2086
-    run_in "$REPO_ROOT" "9e suspect specs on fix" "09e-ab-suspects-fix" \
+    ab_run "$REPO_ROOT" "$FIX_FULL_SHA" "9e suspect specs on fix" "09e-ab-suspects-fix" \
       npx playwright test $SUSPECT_SPECS
     note "9d/9e suspect specs (chartIntegrity, randomDayReplay, dateReset):"
     note "    baseline: $(pwsummary "$LOGDIR/09d-ab-suspects-baseline.log")"
     note "    fix:      $(pwsummary "$LOGDIR/09e-ab-suspects-fix.log")"
     note "    any test failing on the fix but passing on the baseline is a regression from this change"
+    if [ "$AB_INVALID" -eq 0 ]; then
+      note "9 A/B verdict: VALID (each side ran its own tree on its own server). Read 9a: it must FAIL."
+    else
+      note "9 A/B verdict: INVALID. At least one side was not run or was not provably its own tree. Do not quote it."
+    fi
 
     rm -f "$AB_DIR/node_modules"
     git worktree remove --force "$AB_DIR" 2> /dev/null || true
