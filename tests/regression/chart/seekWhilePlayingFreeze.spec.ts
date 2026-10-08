@@ -38,6 +38,17 @@ import { startSession, chartCard, collectPageErrors, SEED_DATE } from '../e2e-ut
 const SYMBOL = process.env.SEEK_SYMBOL || 'AAPL';
 const DATE = process.env.SEEK_DATE || SEED_DATE;
 const ENTRY = process.env.SEEK_ENTRY || '09:30';
+/** Playback speed to run the seek loops at (0.5|1|2|5|10|25|50|100). Default: leave the UI alone. */
+const SPEED = process.env.SEEK_SPEED ? Number(process.env.SEEK_SPEED) : null;
+/** Set SEEK_SOAK_MS=600000 to add the long-run leak/degradation test (skipped otherwise). */
+const SOAK_MS = process.env.SEEK_SOAK_MS ? Number(process.env.SEEK_SOAK_MS) : 0;
+/**
+ * Loose ceiling for a single synchronous store-side seek. This is a diagnostic bound, not the
+ * fix's acceptance gate: seekTickTime still rebuilds latestTickBySymbol in O(buffered ticks),
+ * which is a known follow-up. The point of measuring it is to size that follow-up with a real
+ * number instead of a guess.
+ */
+const STORE_SEEK_BUDGET_MS = 5000;
 
 /** Max frame gap tolerated while seeking. A blocked main thread blows straight through this. */
 const STALL_BUDGET_MS = 1500;
@@ -160,6 +171,18 @@ async function seriesTimes(page: import('@playwright/test').Page, index = 0): Pr
   }, index);
 }
 
+/** Drives the real SPEED <select> (same handler the user drives) and confirms the store took it. */
+async function applySpeed(page: import('@playwright/test').Page) {
+  if (!SPEED) return;
+  const select = page.locator('select:has(option[value="100"])').first();
+  await select.selectOption(String(SPEED));
+  await page.waitForFunction(
+    (s) => (window as any).usePlaybackStore?.getState()?.playbackSpeed === s,
+    SPEED,
+    { timeout: 5000 }
+  );
+}
+
 test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => {
   test('stepping forward and backward while playing keeps the main thread responsive', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
@@ -179,6 +202,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
       await page.waitForTimeout(300);
     }
 
+    await applySpeed(page);
     await page.getByRole('button', { name: /PLAY/i }).click();
     await page.waitForFunction(() => (window as any).usePlaybackStore.getState().isPaused === false, {
       timeout: 10000,
@@ -210,6 +234,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
         longTaskMaxMs: after.probe?.longTasks.maxMs,
         writes: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
         isPaused: after.context.isPaused,
+        currentTimeMs: after.context.currentTime,
       });
     }
 
@@ -228,6 +253,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
         longTaskMaxMs: after.probe?.longTasks.maxMs,
         writes: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
         isPaused: after.context.isPaused,
+        currentTimeMs: after.context.currentTime,
       });
     }
 
@@ -238,6 +264,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
           {
             test: 'step-while-playing',
             tape: { totalTicks, spanMinutes: Math.round(spanMs / 60000), masterDataBars: before.context.masterDataBars },
+            playbackSpeed: final.context.playbackSpeed,
             perSeek,
             totals: final.probe,
           },
@@ -250,8 +277,12 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
     for (const s of perSeek) {
       expect(s.heartbeatMaxGapMs, `frame stalled during a ${s.direction} seek`).toBeLessThan(STALL_BUDGET_MS);
       expect(s.dispatchLatencyMs, `main thread blocked during a ${s.direction} seek`).toBeLessThan(STALL_BUDGET_MS);
-      // A seek must not pause playback (261007-nsp), except at end-of-session data.
-      if (s.direction === 'forward' && canAssertStillPlaying) {
+      // A seek must not pause playback (261007-nsp). Reaching the end of the session data does
+      // auto-pause by design, so only assert while the playhead is still >2 min from the last tick
+      // -- otherwise a high-speed run (SEEK_SPEED=100) exhausts the tape and fails for no reason.
+      const tapeLeftMs =
+        lastTickMs !== null && typeof s.currentTimeMs === 'number' ? lastTickMs - s.currentTimeMs : null;
+      if (s.direction === 'forward' && canAssertStillPlaying && (tapeLeftMs === null || tapeLeftMs > 120000)) {
         expect(s.isPaused, 'forward seek force-paused playback').toBe(false);
       }
       for (const w of s.writes || []) {
@@ -278,6 +309,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
     );
 
     await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), firstTickMs!);
+    await applySpeed(page);
     await page.getByRole('button', { name: /PLAY/i }).click();
     await page.waitForFunction(() => (window as any).usePlaybackStore.getState().isPaused === false, {
       timeout: 10000,
@@ -304,6 +336,7 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
           {
             test: 'rapid-scrub-while-playing',
             tape: { totalTicks, spanMinutes: Math.round(span / 60000) },
+            playbackSpeed: after.context.playbackSpeed,
             seeks: 30,
             wallMs,
             probe: after.probe,
@@ -392,6 +425,214 @@ test.describe('Seek While Playing — Freeze & Temporal Isolation (E2E)', () => 
 
     expect(maxBarSec).toBeLessThanOrEqual(playheadBucketStart + bucketSec);
     expect(state.probe!.heartbeatMaxGapMs).toBeLessThan(STALL_BUDGET_MS);
+    expect(pageErrors).toEqual([]);
+  });
+
+  /**
+   * DIAGNOSTIC, not a fix gate. Times the synchronous store-side cost of four seek shapes while
+   * playing, so the remaining O(buffered ticks) latestTickBySymbol rebuild gets a real number.
+   * Expected to pass on `main` too -- the interesting output is the storeSeekMs column and how
+   * flat it is across distances (flat == cost is the fixed rebuild, not the distance).
+   */
+  test('store-side seek cost is bounded (diagnostic for the O(n) latestTickBySymbol rebuild)', async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+
+    await startSession(page, SYMBOL, DATE, ENTRY);
+    await installProbe(page);
+    const before = await readProbe(page);
+    const { firstTickMs, lastTickMs, totalTicks } = before.context;
+
+    test.skip(
+      totalTicks < 500 || firstTickMs === null || lastTickMs === null,
+      `tape too thin for a meaningful cost measurement (totalTicks=${totalTicks})`
+    );
+
+    const span = lastTickMs! - firstTickMs!;
+    await applySpeed(page);
+    // Park at 70% so a 60-minute rewind stays inside the tape.
+    await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), firstTickMs! + Math.floor(span * 0.7));
+    await page.getByRole('button', { name: /PLAY/i }).click();
+    await page.waitForFunction(() => (window as any).usePlaybackStore.getState().isPaused === false, { timeout: 10000 });
+    await page.waitForTimeout(800);
+
+    const shapes = [
+      { name: 'backward60m', offsetMs: -60 * 60000 },
+      { name: 'forward3m', offsetMs: 3 * 60000 },
+      { name: 'forward60m', offsetMs: 60 * 60000 },
+    ];
+    const measurements: any[] = [];
+    for (const shape of shapes) {
+      await readProbe(page, true);
+      const t0 = Date.now();
+      const m = await page.evaluate((off) => {
+        const store = (window as any).usePlaybackStore.getState();
+        const target = store.currentTime + off;
+        const start = performance.now();
+        store.seekTickTime(target);
+        return {
+          storeSeekMs: Math.round((performance.now() - start) * 100) / 100,
+          targetMs: target,
+          bufferedTicks: store.totalTicks ?? 0,
+        };
+      }, shape.offsetMs);
+      await page.evaluate(() => undefined);
+      const dispatchLatencyMs = Date.now() - t0;
+      await page.waitForTimeout(600);
+      const after = await readProbe(page);
+      measurements.push({
+        ...shape,
+        ...m,
+        dispatchLatencyMs,
+        heartbeatMaxGapMs: after.probe?.heartbeatMaxGapMs,
+        longTaskMaxMs: after.probe?.longTasks.maxMs,
+        writes: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
+        isPaused: after.context.isPaused,
+      });
+    }
+
+    // Full-tape jump last: reaching the end of the session auto-pauses by design (261007-nsp).
+    await readProbe(page, true);
+    const full = await page.evaluate((lastMs) => {
+      const store = (window as any).usePlaybackStore.getState();
+      const start = performance.now();
+      store.seekTickTime(lastMs - 1);
+      // Re-read the store: zustand's set() produced a new state object, so the snapshot above
+      // cannot tell us whether the seek auto-paused at end-of-session.
+      return {
+        storeSeekMs: Math.round((performance.now() - start) * 100) / 100,
+        isPaused: (window as any).usePlaybackStore.getState().isPaused,
+      };
+    }, lastTickMs!);
+    await page.waitForTimeout(600);
+    const afterFull = await readProbe(page);
+    measurements.push({
+      name: 'fullTapeJump',
+      storeSeekMs: full.storeSeekMs,
+      dispatchLatencyMs: null,
+      heartbeatMaxGapMs: afterFull.probe?.heartbeatMaxGapMs,
+      longTaskMaxMs: afterFull.probe?.longTasks.maxMs,
+      writes: afterFull.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
+      isPaused: afterFull.isPaused,
+    });
+
+    const storeSeekValues = measurements.map((m) => m.storeSeekMs);
+    console.log(
+      'FREEZE-REPORT ' +
+        JSON.stringify(
+          {
+            test: 'store-seek-cost-diagnostic',
+            tape: { totalTicks, spanMinutes: Math.round(span / 60000) },
+            playbackSpeed: afterFull.context.playbackSpeed,
+            measurements,
+            storeSeekMs: {
+              min: Math.min(...storeSeekValues),
+              max: Math.max(...storeSeekValues),
+              // Flat across distances => the cost is the fixed O(n) rebuild, not the seek size.
+              spreadRatio: Math.round((Math.max(...storeSeekValues) / Math.max(0.01, Math.min(...storeSeekValues))) * 10) / 10,
+            },
+          },
+          null,
+          2
+        )
+    );
+
+    for (const m of measurements) {
+      expect(m.storeSeekMs, `store-side seek ${m.name} took too long`).toBeLessThan(STORE_SEEK_BUDGET_MS);
+      expect(m.heartbeatMaxGapMs, `frame stalled during ${m.name}`).toBeLessThan(STALL_BUDGET_MS);
+      for (const w of m.writes || []) {
+        expect(w, `chart primitives written during ${m.name}`).toBeLessThanOrEqual(WRITES_PER_SEEK_BUDGET);
+      }
+    }
+    expect(pageErrors).toEqual([]);
+  });
+
+  /**
+   * OPT-IN long run: seeks continuously at speed while playing and watches for degradation.
+   * Enabled with SEEK_SOAK_MS (e.g. 600000 = 10 minutes). Heap numbers are reported, not
+   * asserted -- GC timing makes them flaky; the gate is that the main thread never stalls.
+   */
+  test('soak: repeated seeking at speed does not degrade over time', async ({ page }) => {
+    test.skip(!SOAK_MS, 'opt-in: set SEEK_SOAK_MS=600000 to run the soak');
+    test.setTimeout(SOAK_MS + 180000);
+
+    const pageErrors = collectPageErrors(page);
+    await startSession(page, SYMBOL, DATE, ENTRY);
+    await installProbe(page);
+    const before = await readProbe(page);
+    const { firstTickMs, lastTickMs, totalTicks } = before.context;
+    test.skip(totalTicks < 500 || firstTickMs === null || lastTickMs === null, 'tape too thin to soak');
+
+    await applySpeed(page);
+    await page.getByRole('button', { name: /PLAY/i }).click();
+    await page.waitForFunction(() => (window as any).usePlaybackStore.getState().isPaused === false, { timeout: 10000 });
+
+    const heap = () =>
+      page.evaluate(() => ({
+        usedJSHeapSize: (performance as any).memory?.usedJSHeapSize ?? null,
+      }));
+
+    const startHeap = await heap();
+    const span = lastTickMs! - firstTickMs!;
+    const deadline = Date.now() + SOAK_MS;
+    const samples: any[] = [];
+    let i = 0;
+    let maxHeap = startHeap.usedJSHeapSize ?? 0;
+
+    while (Date.now() < deadline) {
+      i += 1;
+      // Alternate direction, as a user scrubbing around the session would.
+      const frac = i % 2 === 0 ? 0.25 + ((i / 4) % 0.5) : 0.75 - ((i / 4) % 0.5);
+      const target = firstTickMs! + Math.floor(span * Math.min(0.95, Math.max(0.05, frac)));
+      await readProbe(page, true);
+      await page.evaluate((t) => (window as any).usePlaybackStore.getState().seekTickTime(t), target);
+      await page.waitForTimeout(2000);
+      const after = await readProbe(page);
+      const h = await heap();
+      if (h.usedJSHeapSize && h.usedJSHeapSize > maxHeap) maxHeap = h.usedJSHeapSize;
+      samples.push({
+        seek: i,
+        heartbeatMaxGapMs: after.probe?.heartbeatMaxGapMs,
+        longTaskMaxMs: after.probe?.longTasks.maxMs,
+        writes: after.probe?.charts.map((c: any) => c.updateCalls + c.setDataCalls),
+        usedJSHeapMB: h.usedJSHeapSize ? Math.round(h.usedJSHeapSize / 1048576) : null,
+        isPaused: after.context.isPaused,
+      });
+      // Playback must survive the whole soak; if it stopped, that is the finding.
+      if (after.context.isPaused !== false) break;
+    }
+
+    const endHeap = await heap();
+    const worstGap = samples.reduce((m, s) => Math.max(m, s.heartbeatMaxGapMs || 0), 0);
+    console.log(
+      'FREEZE-REPORT ' +
+        JSON.stringify(
+          {
+            test: 'soak',
+            soakMs: SOAK_MS,
+            seeks: samples.length,
+            playbackSpeed: before.context.playbackSpeed,
+            tape: { totalTicks, spanMinutes: Math.round(span / 60000) },
+            heapMB: {
+              start: startHeap.usedJSHeapSize ? Math.round(startHeap.usedJSHeapSize / 1048576) : null,
+              end: endHeap.usedJSHeapSize ? Math.round(endHeap.usedJSHeapSize / 1048576) : null,
+              max: maxHeap ? Math.round(maxHeap / 1048576) : null,
+            },
+            worstHeartbeatGapMs: worstGap,
+            firstSamples: samples.slice(0, 5),
+            lastSamples: samples.slice(-5),
+          },
+          null,
+          2
+        )
+    );
+
+    expect(samples.length).toBeGreaterThan(0);
+    expect(worstGap, 'main thread stalled during the soak').toBeLessThan(STALL_BUDGET_MS);
+    for (const smp of samples) {
+      for (const w of smp.writes || []) {
+        expect(w, 'per-tick writes reappeared during the soak').toBeLessThanOrEqual(WRITES_PER_SEEK_BUDGET);
+      }
+    }
     expect(pageErrors).toEqual([]);
   });
 });

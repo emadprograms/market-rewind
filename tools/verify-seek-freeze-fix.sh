@@ -7,6 +7,11 @@
 #   bash tools/verify-seek-freeze-fix.sh            # everything the local env allows
 #   bash tools/verify-seek-freeze-fix.sh --ab       # also A/B the probe against main
 #   bash tools/verify-seek-freeze-fix.sh --quick    # skip the long full-regression run
+#   bash tools/verify-seek-freeze-fix.sh --soak=600000   # add the 10-minute soak
+#
+# Env: SEEK_SYMBOL / SEEK_DATE / SEEK_ENTRY pick the tape (default AAPL / SEED_DATE / 09:30).
+#      TICK_LAKE_ROOT overrides where the tick lake is expected.
+#      VERIFY_OUTDIR overrides the /tmp output directory.
 #
 # Nothing here modifies tracked source. Logs and the report go to /tmp.
 
@@ -23,11 +28,14 @@ mkdir -p "$LOGDIR"
 
 DO_AB=0
 DO_QUICK=0
+SOAK_MS=0
 for arg in "$@"; do
   case "$arg" in
     --ab) DO_AB=1 ;;
     --quick) DO_QUICK=1 ;;
-    -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --soak) SOAK_MS=600000 ;;
+    --soak=*) SOAK_MS="${arg#--soak=}" ;;
+    -h|--help) sed -n '2,16p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -137,6 +145,7 @@ elif [ "$BACKEND_UP" = "down" ]; then
   E2E_POSSIBLE="journey-only (backend down; real-tape specs need it)"
 fi
 note "e2e capability: $E2E_POSSIBLE"
+note "tape: ${SEEK_SYMBOL:-AAPL} ${SEEK_DATE:-<SEED_DATE>} ${SEEK_ENTRY:-09:30}   speed runs: default + 25x + 100x   soak: ${SOAK_MS}ms"
 note ""
 
 # ---------------------------------------------------------------- 1. static gates
@@ -196,6 +205,18 @@ else
       run_step "6b freeze probe (SEEK_SYMBOL=$SEEK_SYMBOL SEEK_DATE=$SEEK_DATE)" "06b-freeze-alt" \
         env SEEK_SYMBOL="$SEEK_SYMBOL" SEEK_DATE="$SEEK_DATE" SEEK_ENTRY="${SEEK_ENTRY:-09:30}" \
         npx playwright test "$PROBE_SPEC"
+    fi
+
+    # The freeze cost scales with how many ticks elapse per unit of real time, so the same probe
+    # runs at high speed multipliers too. SEEK_SOAK_MS stays unset here => the soak test skips.
+    run_step "6c freeze probe @25x" "06c-freeze-25x" env SEEK_SPEED=25 npx playwright test "$PROBE_SPEC"
+    run_step "6d freeze probe @100x" "06d-freeze-100x" env SEEK_SPEED=100 npx playwright test "$PROBE_SPEC"
+
+    if [ "$SOAK_MS" -gt 0 ] 2>/dev/null; then
+      run_step "6e soak (${SOAK_MS}ms) @25x" "06e-soak" \
+        env SEEK_SOAK_MS="$SOAK_MS" SEEK_SPEED=25 npx playwright test "$PROBE_SPEC" -g "soak"
+    else
+      skip_step "6e soak" "opt-in: re-run with --soak=600000"
     fi
 
     run_step "7a chartShaking" "07a-chart-shaking" npx playwright test tests/regression/chart/chartShaking.spec.ts

@@ -108,13 +108,27 @@ Expected: all passed. Report per-spec results, especially `05-playback-transport
 npx playwright test tests/regression/chart/seekWhilePlayingFreeze.spec.ts
 ```
 
-Three tests, added by this fix:
+Five tests, added by this fix:
 
-| Test | What it proves |
-|---|---|
-| `stepping forward and backward while playing keeps the main thread responsive` | rAF heartbeat gap and click-dispatch latency stay under 1500 ms per seek; ≤12 chart-primitive writes per seek per chart; seeking does not force-pause |
-| `rapid scrubbing while playing does not degrade into a per-tick replay` | 30 scrubber-sized seeks stay bounded in writes and never stall a frame |
-| `rewinding while playing leaves no candle newer than the playhead` | zero future-data leakage after a rewind |
+| Test | What it proves | Gate? |
+|---|---|---|
+| `stepping forward and backward while playing keeps the main thread responsive` | rAF heartbeat gap and click-dispatch latency stay under 1500 ms per seek; ≤12 chart-primitive writes per seek per chart; seeking does not force-pause | gate |
+| `rapid scrubbing while playing does not degrade into a per-tick replay` | 30 scrubber-sized seeks stay bounded in writes and never stall a frame | gate |
+| `rewinding while playing leaves no candle newer than the playhead` | zero future-data leakage after a rewind | gate |
+| `store-side seek cost is bounded (diagnostic for the O(n) latestTickBySymbol rebuild)` | times four seek shapes (−60 m, +3 m, +60 m, full-tape) inside the store | **diagnostic — expected to pass on `main` too; the numbers are the deliverable** |
+| `soak: repeated seeking at speed does not degrade over time` | continuous seeking for `SEEK_SOAK_MS`, watching frame gaps and heap | opt-in |
+
+The store-seek diagnostic exists because the fix did **not** remove the O(buffered ticks)
+rebuild of `latestTickBySymbol` inside `seekTickTime` — it is a known follow-up, and its cost
+can only be measured against a real 100k-tick buffer. Report `storeSeekMs` per shape and the
+`spreadRatio`. A ratio near 1 means the cost is the fixed rebuild (independent of seek
+distance), which is exactly what would need optimising next; a large ratio means distance still
+drives cost.
+
+The harness runs the probe three times: default speed, `SEEK_SPEED=25`, `SEEK_SPEED=100`. The
+high-speed runs matter because they elapse more tape per real second, which is where per-tick
+write volume would reappear first. Add `--soak=600000` for a 10-minute run; heap figures are
+reported, not asserted (GC timing makes them flaky).
 
 Each test always prints a `FREEZE-REPORT {...}` JSON block to stdout. **Copy every
 `FREEZE-REPORT` block into the report, pass or fail.**
@@ -220,15 +234,18 @@ BACKEND: up|down   TICK_LAKE_ROOT: <path>   TAPE: <symbol> <date> totalTicks=<n>
 3  build:              PASS|FAIL  <bundle size / time>
 4  backend pytest:     passed=<n> failed=<n>
 5  journey e2e:        passed=<n> failed=<n>  failures: <spec › test + error>
-6  freeze probe (fix): passed=<n> failed=<n> skipped=<n>
+6  freeze probe (fix): passed=<n> failed=<n> skipped=<n>   [@default, @25x, @100x separately]
                        FREEZE-REPORT blocks: <paste all, verbatim>
+6b store-seek diagnostic: storeSeekMs backward60m=<n> forward3m=<n> forward60m=<n> fullTape=<n>
+                          spreadRatio=<n>   bufferedTicks=<n>
+6c soak (if run):        seeks=<n> worstHeartbeatGapMs=<n> heapMB start/end/max=<n>/<n>/<n>
 7  chartShaking:       passed=<n> failed=<n>  failures: <verbatim>
 7b realtimePlayback:   passed=<n> failed=<n>
 7c sync/:              passed=<n> failed=<n>
 8  full regression:    passed=<n> failed=<n>  per-spec: <list>
 9  A/B on main:        freeze probe passed=<n> failed=<n>
-                       main:  heartbeatMaxGapMs=<n> dispatchLatencyMs=<n> writes=<n> longTaskMaxMs=<n>
-                       fix:   heartbeatMaxGapMs=<n> dispatchLatencyMs=<n> writes=<n> longTaskMaxMs=<n>
+                       main:  heartbeatMaxGapMs=<n> dispatchLatencyMs=<n> writes=<n> longTaskMaxMs=<n> storeSeekMs max=<n>
+                       fix:   heartbeatMaxGapMs=<n> dispatchLatencyMs=<n> writes=<n> longTaskMaxMs=<n> storeSeekMs max=<n>
 10 manual UAT:         froze=YES|NO  unresponsive_dialog=YES|NO
                        longest_task_ms=<n>  scrub_drag_scripting_ms=<n>
                        future_candle_after_rewind=YES|NO
