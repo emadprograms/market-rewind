@@ -8,17 +8,19 @@ updated: 2026-10-08T14:30:00.000Z
 ## Current Focus
 <!-- OVERWRITE on each update - always reflects NOW -->
 
-hypothesis: CONFIRMED (see Resolution.root_cause).
-test: Fix-acceptance guardrail complete in-sandbox; remaining signals (real-browser E2E and
-  real-tick-lake UAT) are env-blocked here and delegated to the user's local agent.
-expecting: On a machine with the tick lake and a Playwright browser, seeking/stepping/
-  scrubbing while playing keeps the tab responsive, the chart follows the playhead in both
-  directions, and no candle newer than the playhead survives a rewind.
-next_action: Human/local-agent verification. Run the brief in the session handoff:
-  vitest + tsc + build, the two seek guards, tests/regression/chart/chartShaking.spec.ts
-  (scrub/rewind/forward+play), tests/regression/replay/realtimePlayback.spec.ts, the mocked
-  journey suite, and the manual seek-while-playing UAT with a DevTools longest-task
-  measurement on both the fixed branch and main.
+hypothesis: CONFIRMED in direction (see Resolution.root_cause). Cause 2 (1D per-tick
+  O(ticks x future) work) is supported by the user's browser timing, but NOT yet profiled.
+  Attribution between cause 1 (seekEpoch rebuild) and cause 2 (1D memo + binary search) is open.
+test: Browser probe on the user's machine, stamp 20261008-190034, fix side only. Fix-side
+  numbers pass the freeze probes. The A/B against baseline was INVALID (see Evidence), so
+  "baseline fails, fix passes" is not yet demonstrated.
+expecting: At 1x, 25x and 100x on the dense tape: writes <= 12 per chart per step, frame gap
+  < 1500 ms, storeSeekMs < 5000 ms on forward60m, no page errors. chartShaking, realtimePlayback
+  and sync stay green. Open decision: the 5-min chart writes 14-15 on forward60m, above 12.
+next_action: (1) Decide whether to recalibrate WRITES_PER_SEEK_BUDGET or reduce writes.
+  (2) Re-run the harness pinned to d8905cc: --quick, then --ab. Exclude --soak. The A/B
+  verdict line must read VALID and 9a must FAIL before the result is quoted.
+  (3) The user confirms the fix; only then archive to resolved/ and add a knowledge-base entry.
 bug_class: bohrbug  <!-- deterministic: reproduces on every seek-while-playing, scales with elapsed tick count -->
 reasoning_checkpoint:
   hypothesis: Seek-while-playing routes the whole time jump through subscriber 6's per-tick
@@ -225,6 +227,34 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     the default anchor has data. 53 occurrences in journey/ and mocks/ changed. replay/*.spec.ts and
     tickReplayDateReset.test.tsx were NOT changed (they are explicit-anchor or out of the approved scope).
   implication: "Journey results are NOT verified here (no browser). Lists 74 tests in 14 files."
+
+- timestamp: 2026-10-08T16:19:37Z
+  checked: "User's dense-tape probe run, stamp 20261008-190034, 2 charts (default layout), 1x, SPY 09:30 dense tape, detached at ccb2af0"
+  found: |
+    Fix side (steps 6, 6b, 6c, 6d PASS): forward60m storeSeekMs 6.9-9.6 ms on AAPL and 8.9-9.4 ms on
+    NVDA, down from 4,480 and 8,142 ms. Frame gaps 17-32 ms, down from 4.5-8.2 s. fullTapeJump 17-32 ms.
+    Writes within budget on 1x and 25x for steps. 100x: settled [50,38]. Journey 01-boot fails on
+    the baseline expectation (09:20) and passes 5/5 on the fix.
+    Write count on the 5-min chart: [14,2] at 1x and 25x, [15,3] at 100x for forward60m. That is above
+    the acceptance target of <= 12 per chart per step. Not yet decided.
+    A/B INVALID: step 9a ("baseline", expect FAIL) PASSED with fix-side numbers (storeSeekMs 9.6 ms, not
+    4,480 ms). 9d and 9e match exactly. Cause: webServer reuseExistingServer on a hardcoded :3000 when
+    CI is unset, so a leftover server served the fixed code. The harness's source check compared the
+    worktree to its own ref and could never fail. Fixed in d8905cc (guards: src tree must equal the ref,
+    port 3000 must be free, fail-closed on unknown ref; verdict VALID/INVALID). Guard self-tests passed.
+    Sandbox note: the local branch had been reset to e57efe8 by a sandbox rollback. Every changed file was
+    checked byte-for-byte against ccb2af0 and none was lost. The branch now points at the pushed tip.
+  implication: |
+    Cause 2 is supported by a browser-side measurement: the forward60m store cost dropped about 450x on
+    AAPL and 900x on NVDA after the fix. CODE-INFERRED UNTIL PROFILED. The end-to-end timing cannot yet
+    attribute the drop between cause 1 (seekEpoch rebuild) and cause 2 (1D memo and binary search).
+    Next: a Chrome Performance profile of subscriber 6 on the 1D branch, or a before/after timing with
+    one of the two changes reverted. The baseline must be re-measured with the fixed harness before
+    "fails on baseline, passes on fix" is claimed.
+    Journey staleness is resolved in c1d57b2 (09:20 -> 09:10, 53 occurrences in journey/ and mocks/).
+    replay/dateReset.spec.ts still expects 09:20. Out of the approved scope. Decision open.
+    chartIntegrity and randomDayReplay fail on a strict-mode locator on the step-size select. PlaybackBar.tsx
+    is unchanged in this PR, so this PR does not cause it. Not yet checked against a clean baseline run.
 
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
