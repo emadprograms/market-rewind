@@ -62,19 +62,14 @@ const STORE_SEEK_BUDGET_MS = 5000;
 
 /** Max frame gap tolerated while seeking. A blocked main thread blows straight through this. */
 const STALL_BUDGET_MS = 1500;
-/** Default layout is 5min + 1D, so a 3-minute step spans at most a couple of buckets. */
-// A seek legitimately writes one candle + one volume per 5-minute bucket it crosses (INGEST-06
-// coalescing is per bucket, not per tick). So the budget is the slack below PLUS the buckets crossed.
-// The slack also absorbs playback writes that land inside the seek window at 25x/100x. A per-tick
-// regression writes ~3,600 times for a 60-minute seek and fails any bucket-scaled budget by a mile.
+/** Default layout is 5min + 1D. Acceptance (user, this round): writes <= 12 per chart per step. */
+// A seek while playing is rebuilt in bulk (SEEK-BULK-01): one setData per series, not one update
+// per 5-minute bucket crossed. So the budget is flat, and it does not grow with the distance
+// sought. A per-tick or per-bucket regression writes ~3,600 times for a 60-minute seek and fails
+// this by a mile. Guarded in-sandbox by tests/unit/seekBulkRebuild.test.tsx.
 const WRITES_PER_SEEK_BUDGET = 12;
-const BUCKET_MS = 5 * 60000;
-const writesBudgetFor = (m: { targetMs?: number; currentTimeBefore?: number | null }) => {
-  const crossed = (m.targetMs !== undefined && m.currentTimeBefore !== undefined && m.currentTimeBefore !== null)
-    ? Math.ceil(Math.abs(m.targetMs - m.currentTimeBefore) / BUCKET_MS)
-    : 0;
-  return WRITES_PER_SEEK_BUDGET + crossed;
-};
+const writesBudgetFor = (_m: { targetMs?: number; currentTimeBefore?: number | null }) =>
+  WRITES_PER_SEEK_BUDGET;
 
 /**
  * Thin Playwright wrappers. The code that actually runs in the page lives in ./freezeProbeInPage

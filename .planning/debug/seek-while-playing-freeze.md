@@ -9,18 +9,18 @@ updated: 2026-10-08T14:30:00.000Z
 <!-- OVERWRITE on each update - always reflects NOW -->
 
 hypothesis: CONFIRMED in direction (see Resolution.root_cause). Cause 2 (1D per-tick
-  O(ticks x future) work) is supported by the user's browser timing, but NOT yet profiled.
-  Attribution between cause 1 (seekEpoch rebuild) and cause 2 (1D memo + binary search) is open.
-test: Browser probe on the user's machine, stamp 20261008-190034, fix side only. Fix-side
-  numbers pass the freeze probes. The A/B against baseline was INVALID (see Evidence), so
-  "baseline fails, fix passes" is not yet demonstrated.
-expecting: At 1x, 25x and 100x on the dense tape: writes <= 12 per chart per step, frame gap
-  < 1500 ms, storeSeekMs < 5000 ms on forward60m, no page errors. chartShaking, realtimePlayback
-  and sync stay green. Open decision: the 5-min chart writes 14-15 on forward60m, above 12.
-next_action: (1) Decide whether to recalibrate WRITES_PER_SEEK_BUDGET or reduce writes.
-  (2) Re-run the harness pinned to d8905cc: --quick, then --ab. Exclude --soak. The A/B
-  verdict line must read VALID and 9a must FAIL before the result is quoted.
-  (3) The user confirms the fix; only then archive to resolved/ and add a knowledge-base entry.
+  O(ticks x future) work) is supported by browser timing but NOT yet profiled. Cause 1 and
+  cause 2 contributions are not separated. SEEK-BULK-01 (this round) removes the O(buckets)
+  write cost of a multi-bucket seek. Its browser effect is not yet measured.
+test: In-sandbox: tsc 0; vitest 98 files / 594 passed / 2 skipped; tests/unit/seekBulkRebuild.test.tsx
+  (3 new) kills all three mutants. Browser: pending the user's probe on the new SHA (see Evidence).
+expecting: At 1x, 25x and 100x on the dense tape: writes <= 12 per chart per step (FLAT, user
+  decision this round), frame gap < 1500 ms, storeSeekMs < 5000 ms on forward60m, no page errors.
+  chartShaking, realtimePlayback and sync stay green.
+next_action: (1) User runs the harness pinned to the new SHA: --quick, then --ab (no --soak). The
+  A/B verdict must read VALID and 9a must FAIL before any A/B result is quoted. (2) Confirm the
+  5-min forward60m writes are <= 12. (3) User confirms the fix; only then archive to resolved/
+  and add a knowledge-base entry.
 bug_class: bohrbug  <!-- deterministic: reproduces on every seek-while-playing, scales with elapsed tick count -->
 reasoning_checkpoint:
   hypothesis: Seek-while-playing routes the whole time jump through subscriber 6's per-tick
@@ -255,6 +255,29 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     replay/dateReset.spec.ts still expects 09:20. Out of the approved scope. Decision open.
     chartIntegrity and randomDayReplay fail on a strict-mode locator on the step-size select. PlaybackBar.tsx
     is unchanged in this PR, so this PR does not cause it. Not yet checked against a clean baseline run.
+
+- timestamp: 2026-10-08T16:26:05Z
+  checked: "Write budget decision and SEEK-BULK-01 (user chose a flat <= 12 per chart per step)"
+  found: |
+    Root of the 14-15 writes: the per-bucket catch-up. Subscriber 6 calls queueUpdate once per bucket, and
+    an incremental rebuild appends each new bar with update(). A 60-minute seek on the 5-min chart is 12
+    buckets, so 12 update pairs plus the forming bar.
+    Change: (1) subscriber 6 skips the catch-up when a seek (seekEpoch changed since it last ran) spans more
+    than one bucket, and sets forceFullRebuildRef; (2) effect 3 honours that flag and takes the setData
+    path (one setData per series). Playback frames without a seek are unchanged. seenSeekEpoch is read on
+    every call, so a seek made while paused cannot leak into the next playing frame.
+    Earlier "skip subscriber 6 on seekEpoch" attempt was abandoned because it broke DIAG 2. DIAG 2 is a
+    single-bucket case, so the > 1 bucket rule keeps it intact (verified: diagnostic suite green).
+    Budget: spec WRITES_PER_SEEK_BUDGET is flat 12. The bucket-scaled budget from 695d764 is removed. The
+    brief (docs/reviews/...brief.md) already states the flat <= 12, so the code now matches it.
+    Mutation: skip disabled -> test 1 fails; force flag ignored -> test 1 fails; seen-epoch never updated ->
+    tests 2 and 3 fail. The hook was restored and verified with cmp after each mutant.
+    Also: replay/dateReset.spec.ts moved 09:20 -> 09:10 (user-approved this round).
+  implication: |
+    In-sandbox only: the write count and bulk rebuild are proved on the mocked hook, not in a browser.
+    The browser effect on the 5-min chart (expected about 2 setData writes plus forming-bar updates) is
+    unverified until the user's probe runs on the new SHA. CODE-INFERRED UNTIL PROFILED, as for cause 2.
+    Known non-run here: chartShaking, realtimePlayback, sync, journey, and the seek probe are browser-only.
 
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->

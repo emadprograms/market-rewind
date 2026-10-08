@@ -489,6 +489,10 @@ export function useChartLifecycle({
     bucketTime: -1,
     minutes: new Map(),
   });
+  // SEEK-BULK-01: set by the playback subscriber when it skips a multi-bucket seek batch. The
+  // next snapshot rebuild must then use setData, not the incremental append path, which would
+  // write one candle per bucket again.
+  const forceFullRebuildRef = useRef(false);
   // Daily bar buckets, rebuilt once per session load instead of rescanned per tick.
   // See src/lib/dailyIndex.ts for the measurements that motivated this.
   const dailyIndexRef = useRef<DailyIndex | null>(null);
@@ -606,11 +610,14 @@ export function useChartLifecycle({
       const formatted: any[] = chartData.map(formatBar);
       const hasPendingPrepend = pendingHistoryPrependRef.current !== null;
 
+      const forceFullRebuild = forceFullRebuildRef.current;
+      forceFullRebuildRef.current = false;
+
       let updatedIncrementally = false;
 
       // Incremental candle update:
       // When in same context, no history prepend, and we have a rendered last candle whose timestamp exists in formatted data
-      if (isSameContext && !hasPendingPrepend && lastCandleRef.current && lastDataCountRef.current > 0) {
+      if (isSameContext && !hasPendingPrepend && !forceFullRebuild && lastCandleRef.current && lastDataCountRef.current > 0) {
         const lastTime = lastCandleRef.current.time;
         let matchIdx = -1;
         for (let i = formatted.length - 1; i >= 0; i--) {
@@ -818,15 +825,21 @@ export function useChartLifecycle({
 
     const sym = ticker.toUpperCase();
 
+    // SEEK-BULK-01: the epoch this subscriber last saw. Read on every call, including the early
+    // returns below, so a seek made while paused is consumed by the paused rebuild and cannot
+    // leak into a later playing frame.
+    let seenSeekEpoch = usePlaybackStore.getState().seekEpoch;
     const unsubscribe = usePlaybackStore.subscribe((state) => {
+      const seekJumped = state.seekEpoch !== seenSeekEpoch;
+      seenSeekEpoch = state.seekEpoch;
       // SEEK-REBUILD-01: An explicit playhead move (seek, step, scrub, time jump) is a
       // temporal *discontinuity*, not elapsed playback. Subscriber 6 cannot render a rewind
       // at all -- the monotonic `bucketTime < lastCandle.time` guard below drops every rewound
       // tick, leaving candles from *after* the playhead on the series -- so `useChartData`
       // now refreshes React state on `seekEpoch` and effect 3 rebuilds the series in bulk
-      // from the authoritative snapshot. The catch-up below still runs (coalesced to one
-      // write per bucket by INGEST-06) so a forward jump is never left unrendered if that
-      // rebuild is suppressed.
+      // from the authoritative snapshot. A seek that crosses more than one bucket skips the
+      // catch-up entirely (SEEK-BULK-01, below). A single-bucket seek, or any playback frame,
+      // still runs the catch-up, coalesced to one write per bucket by INGEST-06.
       // REV-SYNC-02 & REV-SYNC-03: Temporal discontinuity detection (rewind during pause or playback)
       if (state.currentTime !== null && state.currentTime !== undefined) {
         if (lastConsumedTimeRef.current > state.currentTime) {
@@ -916,6 +929,22 @@ export function useChartLifecycle({
       lastConsumedTickRef.current = latestTick;
       if (state.currentTime) {
         lastConsumedTimeRef.current = state.currentTime;
+      }
+
+      // SEEK-BULK-01: a seek that crosses more than one bucket is not played back. Writing it per
+      // bucket costs O(buckets) primitive writes (about 12 for an hour on the 5-minute chart). The
+      // seek already bumped seekEpoch, so useChartData refreshes the snapshot and effect 3 rebuilds
+      // the series with one setData per series. Playback frames without a seek still take the
+      // per-bucket path below, so a real stall still renders.
+      if (seekJumped) {
+        const bucketsSpanned = new Set(
+          newlyElapsedTicks.map((t) => getBucketTime(getTickMs(t), timeframe))
+        ).size;
+        if (bucketsSpanned > 1) {
+          forceFullRebuildRef.current = true;
+          syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
+          return;
+        }
       }
 
       // INGEST-06: Coalesce chart-primitive writes per candle bucket. Every branch below

@@ -16,7 +16,7 @@ test.describe('TEST-01: Playwright Date Reset Isolation', () => {
     // Verify workspace loaded
     await expect(page.locator('.chart-card')).toHaveCount(2);
 
-    // Verify time display shows 09:20 ET of Sept 7 or closed state, NOT Sept 24
+    // Verify time display shows 09:10 ET of Sept 7 or closed state, NOT Sept 24
     const timeDisplay = page.locator('.time-display');
     await expect(timeDisplay).toBeVisible();
     const timeText = await timeDisplay.innerText();
@@ -37,7 +37,7 @@ test.describe('TEST-01: Playwright Date Reset Isolation', () => {
     expect(pageErrors).toEqual([]);
   });
 
-  test('resetting date on a normal trading day (Sept 4, 2026) starts at canonical 9:20 AM ET', async ({ page }) => {
+  test('resetting date on a normal trading day (Sept 4, 2026) starts at canonical 9:10 AM ET', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
 
     await page.goto('/');
@@ -49,10 +49,10 @@ test.describe('TEST-01: Playwright Date Reset Isolation', () => {
 
     await expect(page.locator('.chart-card')).toHaveCount(2);
 
-    // Playback bar must show 09:20 AM
+    // Playback bar must show 09:10 AM
     const timeDisplay = page.locator('.time-display');
     await expect(timeDisplay).toBeVisible();
-    await expect(timeDisplay).toContainText('09:20:00');
+    await expect(timeDisplay).toContainText('09:10:00');
 
     // Scrubber must be anchored to beginning
     const scrubberText = page.locator('.playback-bar').locator('text=/\\d+\\/\\d+/');
