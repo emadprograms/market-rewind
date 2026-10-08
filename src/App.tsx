@@ -123,10 +123,10 @@ export default function App() {
     const { setIsLoadingTicks, setBufferedTicks } = usePlaybackStore.getState();
     setIsLoadingTicks(true);
     try {
-      const queryStartEt = curEntry && curEntry < '09:20' ? curEntry : '09:20';
+      const queryStartEt = curEntry && curEntry < '09:10' ? curEntry : '09:10';
       const startTime = getUtcTimeFromEt(curDate, queryStartEt);
       const endTime = `${curDate} 23:59:59`;
-      const targetTimeStr = getUtcTimeFromEt(curDate, curEntry || '09:20');
+      const targetTimeStr = getUtcTimeFromEt(curDate, curEntry || '09:10');
       const targetMs = new Date(targetTimeStr.replace(' ', 'T') + 'Z').getTime();
       usePlaybackStore.getState().setCurrentTime(targetMs);
       usePlaybackStore.getState().seekTickTime(targetMs);

@@ -299,6 +299,8 @@ export function PlaybackBar({
             }}
           >
             <option value={1}>1m</option>
+            <option value={2}>2m</option>
+            <option value={3}>3m</option>
             <option value={5}>5m</option>
             <option value={10}>10m</option>
             <option value={15}>15m</option>

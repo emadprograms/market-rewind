@@ -141,7 +141,7 @@ export function useChartData({
 
     async function loadTicksForNewSymbol() {
       try {
-        const startTime = getUtcTimeFromEt(selectedDate, '09:20');
+        const startTime = getUtcTimeFromEt(selectedDate, '09:10');
         const endTime = `${selectedDate} 23:59:59`;
         const newTicks = await streamingClient.getTicks(sym, {
           startTime,

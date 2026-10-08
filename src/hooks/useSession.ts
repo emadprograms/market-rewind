@@ -12,7 +12,7 @@ export function useSession(tickers: string[]) {
     return getYesterdayDate();
   });
   const [sessionTicker, setSessionTicker] = useState<string>(() => localStorage.getItem('lastUsedTicker') || 'AAPL');
-  const [entryTime, setEntryTime] = useState('09:20');
+  const [entryTime, setEntryTime] = useState('09:10');
   const [isSessionStarted, setIsSessionStarted] = useState(false);
 
   // Refs to avoid stale closure when startSession is called immediately after date/time change

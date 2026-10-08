@@ -20,11 +20,22 @@ describe('Minute-Based Playback Stepping Controls', () => {
   beforeEach(() => {
     usePlaybackStore.getState().reset();
     usePlaybackStore.getState().setBufferedTicks(baseTicks);
-    usePlaybackStore.getState().setStepMinutes(1);
+    usePlaybackStore.getState().setStepMinutes(3);
     usePlaybackStore.getState().seekTickTime('2026-09-25 14:30:00.000');
   });
 
-  it('steps forward by 1 minute by default', () => {
+  it('steps forward by 3 minutes by default (stepMinutes: 3)', () => {
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:30:00.000'));
+
+    usePlaybackStore.getState().stepForward();
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:33:00.000'));
+
+    usePlaybackStore.getState().stepForward();
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:36:00.000'));
+  });
+
+  it('steps forward by 1 minute when stepMinutes is set to 1', () => {
+    usePlaybackStore.getState().setStepMinutes(1);
     expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:30:00.000'));
 
     usePlaybackStore.getState().stepForward();
@@ -32,6 +43,16 @@ describe('Minute-Based Playback Stepping Controls', () => {
 
     usePlaybackStore.getState().stepForward();
     expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:32:00.000'));
+  });
+
+  it('steps forward by 2 minutes when stepMinutes is set to 2', () => {
+    usePlaybackStore.getState().setStepMinutes(2);
+
+    usePlaybackStore.getState().stepForward();
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:32:00.000'));
+
+    usePlaybackStore.getState().stepForward();
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:34:00.000'));
   });
 
   it('steps forward by 5 minutes when stepMinutes is set to 5', () => {
@@ -59,6 +80,28 @@ describe('Minute-Based Playback Stepping Controls', () => {
 
     usePlaybackStore.getState().stepForward();
     expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 15:00:00.000'));
+  });
+
+  it('steps backward by 2 minutes when stepMinutes is set to 2', () => {
+    usePlaybackStore.getState().seekTickTime('2026-09-25 14:35:00.000');
+    usePlaybackStore.getState().setStepMinutes(2);
+
+    usePlaybackStore.getState().stepBackward();
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:34:00.000'));
+
+    usePlaybackStore.getState().stepBackward();
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:32:00.000'));
+  });
+
+  it('steps backward by 3 minutes when stepMinutes is set to 3', () => {
+    usePlaybackStore.getState().seekTickTime('2026-09-25 14:35:00.000');
+    usePlaybackStore.getState().setStepMinutes(3);
+
+    usePlaybackStore.getState().stepBackward();
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:33:00.000'));
+
+    usePlaybackStore.getState().stepBackward();
+    expect(usePlaybackStore.getState().currentTime).toBe(isoToMs('2026-09-25 14:30:00.000'));
   });
 
   it('steps backward by 5 minutes when stepMinutes is set to 5', () => {
@@ -140,7 +183,19 @@ describe('Minute-Based Playback Stepping Controls', () => {
 
     const stepSelect = screen.getByTestId('playback-step-select') as HTMLSelectElement;
     expect(stepSelect).toBeInTheDocument();
-    expect(stepSelect.value).toBe('1');
+    expect(stepSelect.value).toBe('3');
+
+    // Change to 2m
+    fireEvent.change(stepSelect, { target: { value: '2' } });
+    expect(usePlaybackStore.getState().stepMinutes).toBe(2);
+    expect(screen.getByTestId('step-forward-btn')).toHaveAttribute('title', 'Step 2m Forward');
+    expect(screen.getByTestId('step-backward-btn')).toHaveAttribute('title', 'Step 2m Backward');
+
+    // Change to 3m
+    fireEvent.change(stepSelect, { target: { value: '3' } });
+    expect(usePlaybackStore.getState().stepMinutes).toBe(3);
+    expect(screen.getByTestId('step-forward-btn')).toHaveAttribute('title', 'Step 3m Forward');
+    expect(screen.getByTestId('step-backward-btn')).toHaveAttribute('title', 'Step 3m Backward');
 
     // Change to 5m
     fireEvent.change(stepSelect, { target: { value: '5' } });

@@ -103,7 +103,7 @@ describe('Red Reset Button - Stale Closure Fix', () => {
     const initialDate = getYesterdayDate();
     expect(result.current.selectedDate).toBe(initialDate);
     // Anchor at old date
-    const oldMs = etToMs(initialDate, '09:20');
+    const oldMs = etToMs(initialDate, '09:10');
     // useSession's effect seeds currentTime to old date on mount
     await act(async () => {
       await Promise.resolve();
@@ -122,9 +122,9 @@ describe('Red Reset Button - Stale Closure Fix', () => {
       staleStartSession();
     });
 
-    // After fix, currentTime should be 2026-09-22 09:20, not initial date
+    // After fix, currentTime should be 2026-09-22 09:10, not initial date
     const curMs = usePlaybackStore.getState().currentTime!;
-    const expectedMs = etToMs('2026-09-22', '09:20');
+    const expectedMs = etToMs('2026-09-22', '09:10');
     expect(curMs).toBe(expectedMs);
     expect(new Date(curMs).toISOString().slice(0, 10)).toBe('2026-09-22');
     // Also selectedDate state should be new date after re-render
@@ -138,13 +138,13 @@ describe('Red Reset Button - Stale Closure Fix', () => {
     const { result } = renderHook(() => useSession(['AAPL']));
     await act(async () => await Promise.resolve());
     const initialDate = getYesterdayDate();
-    const beforeMs = etToMs(initialDate, '09:20');
+    const beforeMs = etToMs(initialDate, '09:10');
     // Simulate picking an earlier date
     act(() => {
       result.current.setSelectedDate('2026-09-20');
     });
     const afterMs = usePlaybackStore.getState().currentTime!;
-    expect(afterMs).toBe(etToMs('2026-09-20', '09:20'));
+    expect(afterMs).toBe(etToMs('2026-09-20', '09:10'));
     expect(afterMs).not.toBe(beforeMs);
   });
 
@@ -183,11 +183,11 @@ describe('Red Reset Button - Stale Closure Fix', () => {
     });
     // Stale closure from before date change should still use new date after fix
     const curMs = usePlaybackStore.getState().currentTime!;
-    expect(curMs).toBe(etToMs('2026-09-22', '09:20'));
+    expect(curMs).toBe(etToMs('2026-09-22', '09:10'));
     act(() => {
       result.current.startSession();
     });
-    expect(usePlaybackStore.getState().currentTime).toBe(etToMs('2026-09-22', '09:20'));
+    expect(usePlaybackStore.getState().currentTime).toBe(etToMs('2026-09-22', '09:10'));
   });
 });
 
@@ -229,7 +229,7 @@ describe('App Reset Flow - Ticks bounded to selectedDate', () => {
     // so we verify the data that would be fetched: ensure getTicks would be called with new date)
     // This test documents expected behavior: getTicks start_time should contain 2026-09-22, not 2026-09-25
     const { getUtcTimeFromEt } = result.current;
-    const start = getUtcTimeFromEt('2026-09-22', '09:20');
+    const start = getUtcTimeFromEt('2026-09-22', '09:10');
     const end = '2026-09-22 23:59:59';
     expect(start.slice(0, 10)).toBe('2026-09-22');
     expect(end.slice(0, 10)).toBe('2026-09-22');

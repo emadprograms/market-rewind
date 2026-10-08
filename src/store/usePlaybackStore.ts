@@ -151,7 +151,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   currentTime: null,
   isPaused: true,
   playbackSpeed: 1,
-  stepMinutes: 1,
+  stepMinutes: 3,
   masterData: [],
 
   isLoadingTicks: false,
