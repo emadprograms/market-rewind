@@ -289,6 +289,19 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
   implication: |
     The probe A/B is now a valid comparison. Freeze-fix claims rest on the baseline-fails / fix-passes result. The 5-min write count is confirmed in the browser (1-2 per step). Selector fix: speed select has data-testid playback-speed-select, and tests/unit/regressionSelectors.test.ts guards against the unscoped locator (mutation-tested). Not yet confirmed in a browser: the randomDayReplay and realtimePlayback runs after this change, and the chartIntegrity Issue 1&2 failure, whose error text is not in the report.
 
+- timestamp: 2026-10-08T18:24:10Z
+  checked: "Sandbox rollback recovery, then the user's re-run of 39aac48 (relayed verbatim; treated as data)"
+  found: |
+    Sandbox rollback: the local branch had been reset to e57efe8 again. Every modified and untracked file was byte-identical to origin/arena/22112ce1-market-rewind (39aac48), so nothing was lost (backup at /tmp/rescue-181900). `git reset --mixed origin/arena/22112ce1-market-rewind` brought HEAD to 39aac48 with a clean tree. The seek fix is on the remote as 4bd7ea3 (flat-12 budget, SEEK-BULK-01, 1D memo). Earlier notes that said the seek-fix files were uncommitted were wrong.
+    chartIntegrity TEST-07 "Issue 1 & 2" error text, now available: `Expected pattern: /^(09:2\d|09:30)$/  Received string: "09:15"` at chartIntegrity.spec.ts:43. Reproduced on the baseline (09d) and on 39aac48 in the user's re-run: same failure, same value. Issue 3 and Issue 4 pass.
+    The check read data-last-bar-time once, as soon as data-bars-count was non-zero. That attribute has two writers (the React render of chartData and the imperative live-update path in useChartLifecycle, lines ~1019-1024 and ~1145-1150). The imperative writer and the React render can disagree, so the attribute can lag the series. The series (__priceSeries.data(), as chartShaking reads it) is the ground truth. This diagnosis is code-inferred. It is NOT confirmed by a browser run, because the sandbox has no backend, tick lake or browser.
+    randomDayReplay TEST-08 (strict-mode selector), realtimePlayback TEST-06 and dateReset TEST-01 (now 09:10) PASS in the user's re-run on 39aac48: randomDayReplay 4, 5, 6 pass; dateReset 7, 8 pass; realtimePlayback 9, 10, 11 pass. These are the selector fix's verification.
+    Stale-note correction: the "recalibrate" wording in Current Focus and Resolution is no longer present in this file.
+  implication: |
+    TEST-07 is changed in e26a5a6 to read the real series and poll up to 15 s for the 09:25-09:30 ET bucket. If it still fails, the message now carries the last NY time, the bar count and the last three bars. A persistent 09:15 would then be a real missing-bar defect in the chart, and the next step is to fix that in the product, not in the test. Not verified in a browser. No product source changed in e26a5a6.
+    tests/regression/replay/tickReplayDateReset.test.tsx, tests/codex/*, and tests/integration/* use explicit 09:20 fixtures (computeUtcMsFromEt('...','09:20'), useMarketSimulator(...,'09:20',...)). None asserts the app default, so they are not stale. Left unchanged.
+    Local verification at e26a5a6: tsc --noEmit exit 0. tests/regression/chart/chartIntegrity.spec.ts type-checks strictly with 0 errors (via --ignoreConfig). `playwright test --list` loads it. Full vitest exit 0: 99 files, 597 passed, 2 skipped.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
