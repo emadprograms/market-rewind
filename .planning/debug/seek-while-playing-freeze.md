@@ -2,7 +2,7 @@
 status: awaiting_human_verify
 trigger: "I keep running into this issue where on my tab trying to seek forward or backward while the replay is playing immediately crashes the pages and makes it non responsive."
 created: 2026-10-08T04:50:00.000Z
-updated: 2026-10-08T05:25:00.000Z
+updated: 2026-10-08T09:45:00.000Z
 ---
 
 ## Current Focus
@@ -156,6 +156,41 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     discontinuity signal), not merely skip the per-tick catch-up — skipping alone would
     leave the chart frozen at the pre-seek state.
 
+- timestamp: 2026-10-08T09:10:38.000Z
+  checked: First real-environment run of the fix — maintainer's machine (Darwin 25.6.0 arm64, node
+    v25.6.1, Chromium installed, DuckDB backend up, tick lake present at
+    /Volumes/Micron-E 0256 A/data-harvester/data/tick_lake: 19 symbols, 7411 partitions, 13308
+    files, 1.88 GB), branch pinned at 7b7d551, driven by tools/verify-seek-freeze-fix.sh --quick.
+  found: tsc clean; vitest 95 files / 563 passed / 2 skipped; seek guards 8/8; vite build clean
+    (463.99 kB, gzip 142.66 kB); backend pytest 232 passed / 2 skipped; and the three live
+    regressions closest to this defect all PASS with the fix in place — chartShaking (40s, includes
+    "rapid slider scrubbing back and forth" and "seeking backward to earlier time preserves elapsed
+    history"), realtimePlayback (15s), sync/ (18s).
+  implication: backend_pytest moves skipped -> pass. The fix survives contact with the real tick
+    lake and a real browser for every pre-existing seek regression. The defect-specific probe
+    produced no measurements on this run — see the next entry.
+
+- timestamp: 2026-10-08T09:12:00.000Z
+  checked: Why the new freeze probe produced no FREEZE-REPORT blocks; why 23+ journey tests failed;
+    why the auto-picked tape was NVDA 2025-03-21 at 13:00.
+  found: (a) The probe died in all four tests with `page.evaluate: ReferenceError: reset is not
+    defined` at readProbe — the closure handed to page.evaluate captured its own `reset` parameter
+    instead of receiving it, so Playwright serialized a function referencing a name that does not
+    exist in the browser. Nothing was measured. (b) The journey failures are pre-existing staleness:
+    the app has defaulted the entry time to 09:10 since e57efe8 (useSession.ts:15, App.tsx:126) — a
+    commit already on main — while 11 journey specs and tests/regression/mocks/marketSimulator.ts
+    still expect the 09:20 anchor, so the mock serves nothing and each test times out at ~41s.
+    (c) /api/symbols returns whole-lake aggregates (NVDA 16.9M ticks spanning 2025-03-21 to
+    2026-10-08), so deriving a session date from first_tick selected the lake's oldest partial day.
+  implication: All three are harness/test defects, not fix defects — none is evidence about the seek
+    freeze itself. Fixed by extracting every in-page function into
+    tests/regression/chart/freezeProbeInPage.ts with explicit parameters, guarded by
+    tests/unit/freezeProbeInPage.test.ts (jsdom behaviour, an AST lint for free variables, and a ban
+    on zero-arg page.evaluate closures; both mutants of that lint were killed, the second only after
+    the first version of the regex proved vacuous). The picker now takes the date from SEED_DATE and
+    contributes only the densest symbol. The journey suite is bounded to 01-boot by default and --ab
+    runs it on the baseline as well, so "pre-existing" becomes provable rather than assumed.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
@@ -197,9 +232,9 @@ verification:
   no_op_deletion: { result: pass, deletion_justified_by_rca: false, note: "Diff adds behaviour (seekEpoch signal, snapshot refresh, write coalescing) and deletes none. The store's 274-line diff is a pure move: normalizing `set({...})` -> `return {...}` and stripping the epoch flag, the extracted `computeSeekPatch` body is line-for-line identical to HEAD's `seekTickTime` (100/100 lines)." }
   adjacent_tests: { result: pass, suites_run: ["vitest full suite: 95 files / 563 passed / 2 skipped / 0 failed", "tsc --noEmit: clean", "vite build: clean (464.01 kB, 10.59s)"] }
   revert_and_reconfirm: { result: pass, bug_returned_on_revert: true, fixed_on_reapply: true, note: "git stash of the three src files -> 4/5 guard assertions failed with the original numbers (3600 writes, 0 writes on rewind, 7199 writes over 30 seeks, 18 writes per frame); git stash pop -> 5/5 pass." }
-  e2e_browser: { result: skipped, reason_if_skipped: "No Playwright browser binary in the sandbox and the browser download host is not reachable; delegated to the user's local agent (handoff brief in this session)." }
-  real_data_uat: { result: skipped, reason_if_skipped: "No sibling ../data-harvester tick lake and no duckdb module in the sandbox, so the streaming backend cannot serve a real tape; delegated to the user's local agent." }
-  backend_pytest: { result: skipped, reason_if_skipped: "No backend files changed; duckdb unavailable in sandbox." }
+  e2e_browser: { result: skipped, reason_if_skipped: "Authoring sandbox has no browser binary and the download host is unreachable. First real-browser run (maintainer's machine, Chromium installed) executed the probe but it failed on its own serialization bug — ReferenceError: reset is not defined — so no measurement was produced. Bug fixed and guarded in tests/unit/freezeProbeInPage.test.ts; a re-run is pending. Neighbouring live E2E did run green there: chartShaking, realtimePlayback, sync/." }
+  real_data_uat: { result: skipped, reason_if_skipped: "No tick lake in the authoring sandbox. On the maintainer's machine the real lake is confirmed present (19 symbols, 1.88 GB) and the live seek regressions pass against it, but the human UAT script in the verification brief (seeking while playing at 1x, 10x step fwd/back, full scrub, HH:MM:SS jumps, rewind future-candle check) has not been performed yet." }
+  backend_pytest: { result: pass, evidence: "232 passed / 2 skipped on the maintainer's machine (Darwin arm64, real tick lake) at 7b7d551; no backend files changed by this fix." }
   guardrail_verdict: accepted
   rejected_signal: null
 
