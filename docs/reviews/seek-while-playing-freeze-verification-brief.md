@@ -1,8 +1,8 @@
 # Verification Brief — Seek While Playing Freeze
 
 **Debug session:** `.planning/debug/seek-while-playing-freeze.md` (status: `awaiting_human_verify`)
-**Under test:** branch `arena/22112ce1-market-rewind` — fix commit `4064b4b`
-**Baseline for A/B:** `main` @ `e57efe8`
+**Under test:** branch `arena/22112ce1-market-rewind` @ the SHA you were given (pinned in the hand-off; the fix chain runs `4064b4b` … `4bd7ea3`)
+**Baseline for A/B:** `e57efe8` (the branch point of this fix, the ref the harness uses). Do not use `origin/main`.
 
 This brief is written to be handed to an agent verbatim. Everything in it is runnable on a
 machine that has the real environment (tick lake + DuckDB backend + a Chromium browser), which
