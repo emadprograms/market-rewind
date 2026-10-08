@@ -327,6 +327,20 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     Change in 3e3d9d1: SEED_DATE 2026-09-25 -> 2026-10-07 (e2e-utils.ts, which also moves the harness's primary freeze tape); chartIntegrity Issues 1-4 follow the date (Issue 4 text: Oct 7, not Oct 6); harness fallback and brief tape reference updated.
     Consequence: the A/B result on 74151ee/be63c52 used the 09-25 tape and does not apply. The A/B must be re-run on 3e3d9d1. Tape check on 10-07 is still owed. If TEST-07 still fails on 10-07 with full data, that is a product bug and needs its own investigation.
 
+- timestamp: 2026-10-08T20:58:12Z
+  checked: "User's harness run pinned to f186514 (seed date 2026-10-07): Step 1 tick scan, Step 2 TEST-07 single spec, --quick (stamp 20261008-233754), --ab (stamp 20261008-234325). Real tick lake, Chromium, backend up, Darwin arm64. Relayed verbatim, checked against the raw output."
+  found: |
+    Tick scan 2026-10-07 13:20-13:30 UTC (09:20-09:30 ET): AAPL has trades in every minute (3-208 per minute). SPY has 0 ticks on this date (total=0).
+    chartIntegrity: 3/3 PASS on f186514 (TEST-07 Issue 1 & 2 passes for the first time).
+    --quick: tsc, vitest 99/597/2, seek guards 8/8, build, pytest 232/2, journey 01-boot 5/5, freeze probes 6, 6b (NVDA), 6c, 6d, chartShaking, realtimePlayback, sync: all PASS. Freeze numbers on the fix: writes max 5 per chart per step (flat budget 12); frame gap max 55 ms; storeSeekMs forward60m 3.7-7.9 ms; futureBars 0 after rewind.
+    --ab: VERDICT VALID. Probe currentTimeMs values match between the two sides (1791382800 on both), so both sides probed the same day. 9a FAIL as expected on baseline e57efe8 (forward writes 376-465 per step; heartbeat gap up to 1599 ms; rapid-scrub heartbeat 11593 ms; futureBars 64). 9b PASS on fix.
+    Step 8 regression on the fix: 32 passed, 1 skipped, exit 0 (includes chartIntegrity, randomDayReplay, dateReset). 9d baseline: 4 failed. 9e fix: 8 passed, 0 failed.
+    9c journey 01-boot: baseline 1 failed (09:20 expectation, pre-existing); fix 5 passed.
+  implication: |
+    Acceptance met on AAPL (primary) and NVDA (densest) tapes at 1x, 25x, 100x: writes <= 12, frame gap < 1500 ms, storeSeekMs < 5000 on forward60m, no page errors. chartShaking, realtimePlayback and sync are green. vitest and pytest are green. The A/B is VALID with 9a FAIL and 9b PASS. No regression: no test fails on the fix that passes on the baseline.
+    Open: the user's original repro is SPY at 09:30 (dense session). SPY has no ticks on 2026-10-07, so this run does not cover the original SPY target. Manual UAT (human, browser) has not been done. Session stays awaiting_human_verify until the user confirms. Only then archive to resolved/ and add the knowledge-base entry.
+    Note: the commit that records this entry is docs-only. The verified code is f186514.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
