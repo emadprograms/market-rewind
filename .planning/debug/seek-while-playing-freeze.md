@@ -302,6 +302,20 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     tests/regression/replay/tickReplayDateReset.test.tsx, tests/codex/*, and tests/integration/* use explicit 09:20 fixtures (computeUtcMsFromEt('...','09:20'), useMarketSimulator(...,'09:20',...)). None asserts the app default, so they are not stale. Left unchanged.
     Local verification at e26a5a6: tsc --noEmit exit 0. tests/regression/chart/chartIntegrity.spec.ts type-checks strictly with 0 errors (via --ignoreConfig). `playwright test --list` loads it. Full vitest exit 0: 99 files, 597 passed, 2 skipped.
 
+- timestamp: 2026-10-08T20:24:16Z
+  checked: "User's harness run on be63c52, relayed verbatim: --quick (stamp 20261008-212600), --ab (stamp 20261008-213138). Real tick lake, Chromium, backend up, Darwin arm64."
+  found: |
+    --quick: tsc, vitest 99/597/2, seek guards 8/8, build, pytest 232/2, journey 01-boot 5/5, freeze probes 6, 6b, 6c, 6d, chartShaking, realtimePlayback, sync: all PASS. Step 8 skipped by --quick.
+    --ab: VERDICT VALID. 9a probe on baseline e57efe8 FAILS as expected (forward writes 241-290, heartbeat gap up to 993 ms, rapid-scrub gap 4435 ms, rewind futureBars 46, forward60m storeSeekMs 4090 ms). 9b probe on fix PASSES.
+    Step 8 on fix: 31 passed, 1 skipped, 1 failed: chartIntegrity TEST-07 Issue 1 & 2 (journey/ excluded by design). randomDayReplay x2 and dateReset PASS on the fix.
+    9d baseline: 4 failed (chartIntegrity, randomDayReplay x2, dateReset). 9e fix: 1 failed (chartIntegrity TEST-07 only). No test fails on the fix that passes on the baseline: no regression.
+    TEST-07 failure text on the fix: "Chart 0 series never reached the 09:25-09:30 ET market-open bucket. Last NY time=09:15, series count=1410, last 3 bars=[2026-09-24 15:55 ET, 2026-09-25 09:10 ET, 2026-09-25 09:15 ET]" after a 15 s poll. Issue 3 on the same entry (09:30) shows the time display at 09:30:00.
+    Freeze acceptance numbers on the fix, user's machine: writes (the asserted field) max 6 per chart per step at 1x, 25x, 100x (budget 12). Frame gap max 47 ms (limit 1500). storeSeekMs forward60m 3.5-8.7 ms (limit 5000). futureBars 0 after rewind. No page errors.
+  implication: |
+    Freeze fix: the probe acceptance is met on the user's machine. Manual UAT is still not done (report placeholders). The debug session stays awaiting_human_verify.
+    TEST-07: NOT resolved. The earlier diagnosis (stale data-last-bar-time attribute, read too early) is REJECTED. The series itself has no 09:20 or 09:25 bucket 15 s after the entry at 09:30, so the attribute was not the cause. Two open explanations: (a) the tape has no AAPL trades between 09:15 and 09:30 ET on 2026-09-25, in which case the test expectation is wrong for that day; (b) the chart's candle loading stops at 09:15, which would be a product bug. The sandbox cannot tell them apart. Next step: count the lake's AAPL ticks per minute in 13:10-13:31 UTC on 2026-09-25 through /api/ticks on the user's backend.
+    The 100x writesAfterSettle values (up to 22 per chart per step; 39 in the store-seek probe) count playback advancing during the settle window. They are recorded, not asserted, and are not part of the seek budget.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
