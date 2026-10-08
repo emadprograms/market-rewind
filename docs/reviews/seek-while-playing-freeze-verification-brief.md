@@ -102,17 +102,17 @@ npx playwright test -c playwright.journey.config.ts tests/regression/journey/01-
 npm run test:journey                                                                         # all 74, ~8 min+
 ```
 
-**Known pre-existing breakage — read before treating a failure as a regression.** The app has
-defaulted the session entry time to **09:10** since `e57efe8` (`src/hooks/useSession.ts:15`,
-`src/App.tsx:126`), and `e57efe8` is already on `main`. Eleven journey specs and
-`tests/regression/mocks/marketSimulator.ts` still expect the old **09:20** anchor, so the mock
-serves nothing for a 09:10 request and those tests time out (~41 s each). A previous run spent
-502 s on this suite and was terminated before finishing.
+**Journey anchor — fixed in this PR; expect it green, and report it if it is not.** The app has
+defaulted the session entry time to **09:10** since `e57efe8` (a deliberate change, titled "default
+start time to 09:10"). The journey specs and `tests/regression/mocks/marketSimulator.ts` still
+expected **09:20**, so the mock served nothing for a 09:10 request and those tests timed out. This PR
+moves the journey suite and its mock to 09:10. Nothing was run in the authoring sandbox (no browser),
+so **the journey result is the first real signal for this change.** If `01-boot` or any journey test
+fails, paste the verbatim error. Do not assume it is the anchor again.
 
-So the harness runs only `01-boot` by default (the file that carries the anchor expectation) and
-the full suite behind `--journey`. With `--ab` it also runs `01-boot` on the baseline: **the same
-failures on both sides prove the breakage pre-dates this fix.** Report both sides. This is a
-separate defect from the seek freeze and is not fixed here.
+So the harness runs only `01-boot` by default and the full suite behind `--journey`. With `--ab` it
+also runs `01-boot` on the baseline. The baseline is a separate worktree at `main` tip, so it still
+has 09:20 and the journey failure shows there. That is expected and is the before-picture.
 
 ## 5. The defect-specific E2E probe (needs backend + browser)
 

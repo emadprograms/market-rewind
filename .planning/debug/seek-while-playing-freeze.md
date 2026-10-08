@@ -2,7 +2,7 @@
 status: awaiting_human_verify
 trigger: "I keep running into this issue where on my tab trying to seek forward or backward while the replay is playing immediately crashes the pages and makes it non responsive."
 created: 2026-10-08T04:50:00.000Z
-updated: 2026-10-08T09:45:00.000Z
+updated: 2026-10-08T14:30:00.000Z
 ---
 
 ## Current Focus
@@ -191,6 +191,41 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     contributes only the densest symbol. The journey suite is bounded to 01-boot by default and --ab
     runs it on the baseline as well, so "pre-existing" becomes provable rather than assumed.
 
+- timestamp: 2026-10-08T11:03:17Z (maintainer's machine, real tick lake, Chromium, detached @ b9bef7b)
+  checked: "Real-browser probe on the fix, 2 tapes (AAPL 2026-09-25 09:30 primary; NVDA densest) at 1x, 25x, 100x."
+  found: |
+    Canvas write fix CONFIRMED: 3-minute step = 2-4 writes/chart (was ~3,601); rewind
+    futureBars = 0 on both tapes; backward seeks 20-68 ms; chartShaking/realtimePlayback/sync PASS.
+    Main-thread fix INCOMPLETE: store-side seek forward60m = 4,480 ms (AAPL, 29.5k ticks) and
+    8,142 ms (NVDA, 72.9k ticks); frame gaps 4.5-8.2 s. Forward 3-min step on the dense tape stalls
+    2.3-2.8 s. Failing assertion: "frame stalled during forward60m, expected < 1500, received 4498".
+  implication: "The residual stall is independent of the write count. Something per-tick still runs."
+- timestamp: 2026-10-08T13:10:00Z
+  checked: "Subscriber 6, 1D branch, per catch-up tick (src/hooks/useChartLifecycle.ts)"
+  found: |
+    (a) For timeframe 1D, each catch-up tick re-aggregates the whole day's bucket (~390 minute bars)
+        even though that aggregate does not depend on the tick.
+    (b) The forming-minute scan starts at symbolTicks.length - 1. symbolTicks is ticksBySymbol[sym],
+        the ENTIRE buffered tape, future ticks included. Every call walks every future tick before it
+        reaches the current minute. Cost per call is O(future ticks), so the batch is O(ticks x future).
+  implication: "Explains the measured asymmetry: backward seeks process nothing (3-12 ms) and the
+    end-of-tape jump takes the reachedEnd branch (57 ms). Forward seeks scale with ticks x tape."
+- timestamp: 2026-10-08T13:40:00Z
+  checked: "Synthetic benchmark, 72,935-tick tape, 60-minute catch-up of 9,370 ticks (sandbox, not browser)"
+  found: |
+    Memoised per bucket: NEW total 10.3 ms vs ORIGINAL per-tick ~3,129 ms (extrapolated).
+    Forming scan alone: ORIGINAL from-end 21.2 ms per call; NEW binary-searched start 0.0099 ms per call.
+  implication: "Both changes are needed. The memo removes ~9,000 calls; the binary search removes the
+    future walk from each call that remains. Absolute numbers are sandbox-specific, not browser ground truth."
+- timestamp: 2026-10-08T14:20:00Z
+  checked: "Journey-suite default anchor (the 09:20-vs-09:10 defect from the first run)"
+  found: |
+    e57efe8 is titled 'default start time to 09:10'. The app is the intended side and the test
+    fixtures are stale. The mock tape (ET_OPEN) and its consumers were moved to 09:10 together, so
+    the default anchor has data. 53 occurrences in journey/ and mocks/ changed. replay/*.spec.ts and
+    tickReplayDateReset.test.tsx were NOT changed (they are explicit-anchor or out of the approved scope).
+  implication: "Journey results are NOT verified here (no browser). Lists 74 tests in 14 files."
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
@@ -207,12 +242,25 @@ root_cause: Confirmed — two contributing code causes behind one AND-gate, both
   and a seek changes neither — so (A) was the only path that could move the chart, and on a
   rewind its monotonic `bucketTime < lastCandle.time` guard dropped every tick (0 writes),
   leaving candles from after the playhead on screen.
+  (C) RESIDUAL, found on the first real run after (A)/(B) were fixed: subscriber 6's 1D branch
+  did per-tick work proportional to ticks x FUTURE ticks. The forming-minute scan started at the
+  end of the full buffered tape (`ticksBySymbol` includes every future tick), and the daily-bucket
+  aggregate was recomputed for every catch-up tick. Measured on the real machine: 4.5-8.2 s stall
+  per 60-minute forward seek with writes already fixed. Sandbox bench attributes ~3.1 s to the
+  per-tick aggregate and ~21 ms per call to the from-end scan, against ~9,370 calls.
   Contributing conditions, not causes: buffer sized at `limit: 100000` ticks/symbol, and the
   same per-tick write granularity also firing at high speed multipliers (18 writes for a
   900ms frame at 20 ticks/sec).
 
 fix: >
-  Three changes. (1) `src/store/usePlaybackStore.ts`: added `seekEpoch`, a monotonic counter
+  Five changes. (4) `src/hooks/useChartLifecycle.ts` (fixes cause C): the tick-independent 1D
+  aggregate is `aggregateDailyBucket(...)`, memoised per (bucket, evalTime) within a batch. The
+  forming-minute scan starts at `findFirstTickAfter(symbolTicks, evalTimeMs) - 1`, not the tape's
+  end. The only per-tick piece is `applyDailyTickFallback(...)`, an O(1) pure function shared with
+  the tests. (5) `tests/regression/chart/seekWhilePlayingFreeze.spec.ts`: the write budget is now
+  12 slack + one write pair per 5-minute bucket the seek crosses. The stall budget is unchanged.
+  Journey anchor 09:20 -> 09:10 across journey/ and mocks/ (see Evidence).
+  Three changes from the first pass. (1) `src/store/usePlaybackStore.ts`: added `seekEpoch`, a monotonic counter
   bumped by every explicit playhead move (`seekTickTime`, `seekTickIndex`, and the tick-mode
   branches of `stepForward`/`stepBackward`), and extracted the seek body verbatim into a
   module-level `computeSeekPatch(state, targetMs, bumpSeekEpoch)` so `advanceSimulationTime`'s
@@ -228,9 +276,10 @@ fix: >
 
 verification:
   target_test: { result: pass, tests: "tests/unit/seekWhilePlayingFreeze.test.ts 5/5; tests/integration/seekTimelineCandles.test.tsx 3/3" }
+  mutation_check_cause_c: { result: pass, mutants_killed: "5/5 on tests/unit/dailyBucketAggregate.test.ts: M1 linear from-end scan (locality test); M2 drop lastBarClose fallback (synthetic fallback test); M3 forming boundary >= (boundary test + equivalence); M4 drop tick volume in fallback (equivalence); M5 drop fallback entirely (equivalence). Two survivors on the first pass were test gaps, not acceptable survivors, and were closed by moving the fallback into an exported pure function the test calls." }
   mutation_check: { result: skipped, reason_if_skipped: "Stryker not configured in this repo (no stryker.conf, not a dependency); performed manual mutation testing at the fix sites instead", mutant_killed: "5/5 — M1 drop seekEpoch from the useChartData refresh condition (killed by the integration guard, chartData stayed at 30 bars); M2 write per tick, defeating coalescing (killed 3x: 3602>6, 7259>270, 19>3); M3 never flush on bucket change (killed: buckets 1790343000/060/120 missing); M4 never flush at end of batch (killed: 0 writes on a frame delta); M5 never bump seekEpoch in the store (killed 2x: rewind leak + integration guard)" }
   no_op_deletion: { result: pass, deletion_justified_by_rca: false, note: "Diff adds behaviour (seekEpoch signal, snapshot refresh, write coalescing) and deletes none. The store's 274-line diff is a pure move: normalizing `set({...})` -> `return {...}` and stripping the epoch flag, the extracted `computeSeekPatch` body is line-for-line identical to HEAD's `seekTickTime` (100/100 lines)." }
-  adjacent_tests: { result: pass, suites_run: ["vitest full suite: 95 files / 563 passed / 2 skipped / 0 failed", "tsc --noEmit: clean", "vite build: clean (464.01 kB, 10.59s)"] }
+  adjacent_tests: { result: pass, suites_run: ["vitest full suite: 95 files / 563 passed / 2 skipped / 0 failed (round 1)", "vitest full suite: 97 files / 591 passed / 2 skipped / 0 failed (round 2, after cause C)", "tsc --noEmit: clean (both rounds)", "vite build: clean (round 2, 463.99 kB)", "playwright --list: journey 74 tests / 14 files; probe 5 tests"] }
   revert_and_reconfirm: { result: pass, bug_returned_on_revert: true, fixed_on_reapply: true, note: "git stash of the three src files -> 4/5 guard assertions failed with the original numbers (3600 writes, 0 writes on rewind, 7199 writes over 30 seeks, 18 writes per frame); git stash pop -> 5/5 pass." }
   e2e_browser: { result: skipped, reason_if_skipped: "Authoring sandbox has no browser binary and the download host is unreachable. First real-browser run (maintainer's machine, Chromium installed) executed the probe but it failed on its own serialization bug — ReferenceError: reset is not defined — so no measurement was produced. Bug fixed and guarded in tests/unit/freezeProbeInPage.test.ts; a re-run is pending. Neighbouring live E2E did run green there: chartShaking, realtimePlayback, sync/." }
   real_data_uat: { result: skipped, reason_if_skipped: "No tick lake in the authoring sandbox. On the maintainer's machine the real lake is confirmed present (19 symbols, 1.88 GB) and the live seek regressions pass against it, but the human UAT script in the verification brief (seeking while playing at 1x, 10x step fwd/back, full scrub, HH:MM:SS jumps, rewind future-candle check) has not been performed yet." }
