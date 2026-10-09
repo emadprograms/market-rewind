@@ -49,7 +49,7 @@ Plan: 39-01 — COMPLETED (80/80 Phase 39 tests green)
               with 97% line coverage; build clean; Playwright journey env-blocked in sandbox —
               no browser obtainable, see 42-VERIFICATION.md §4)
 Status: Milestone v5.0 COMPLETE — all 13 requirements verified (LAKE-READ/ RESAMPLE/ API / VERIFY)
-Last activity: 2026-10-07 - Completed quick task 261007-nsp: non-pause seeking, remove live price line, execute at bid/ask
+Last activity: 2026-10-09 - Completed quick task 261009-b4e: extend seek bar and mark timestamps
 
 ### Quick Tasks Completed
 
@@ -60,6 +60,7 @@ Last activity: 2026-10-07 - Completed quick task 261007-nsp: non-pause seeking, 
 | 261007-msp | minute-based playback stepping controls with step selector (1m, 5m, 10m, 15m) | 2026-10-07 | 29b054a | [261007-msp-minute-step-playback](./quick/261007-msp-minute-step-playback/) |
 | 261007-jou | default replay date to yesterday instead of hardcoded 2026-09-25 | 2026-10-07 | f110bfb | [261007-jou-default-replay-date-to-yesterday-instead](./quick/261007-jou-default-replay-date-to-yesterday-instead/) |
 | 261007-nsp | non-pause seeking, remove live price line, execute at bid/ask | 2026-10-07 | 4b426b4 | [261007-nsp-playback-trade-quote-fixes](./quick/261007-nsp-playback-trade-quote-fixes/) |
+| 261009-b4e | extend seek bar and mark timestamps | 2026-10-09 | cefac2c | [261009-b4e-make-the-seek-longer-it-s-very-short-mak](./quick/261009-b4e-make-the-seek-longer-it-s-very-short-mak/) |
 
 
 
