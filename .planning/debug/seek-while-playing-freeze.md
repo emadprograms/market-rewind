@@ -351,6 +351,13 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     This replaces the SPY 09:30 target in the original report. The probe (step 6b) already runs this tape: SEEK_SYMBOL=NVDA SEEK_DATE=SEED_DATE SEEK_ENTRY=09:30. AAPL 09:30 stays as the primary tape.
     Status is unchanged: awaiting_human_verify. Manual UAT on NVDA is still required before resolution.
 
+- timestamp: 2026-10-09T00:00:00Z
+  checked: "Regression guard added in tests/unit/seekFreezeGuard1D.test.tsx (runs in npm test, no tick lake needed). Mutation check run on the branch source."
+  found: |
+    Before this guard, no default test failed if the 1D memo (b0dfbcf) was removed. The 1D seek path is single-bucket, so SEEK-BULK-01 does not apply. Mutation results: removing the memo fails the new 1D guard only. Scan starting from the end of the tape fails the locality test and the 1D guard. Disabling the bulk skip fails seekBulkRebuild test 1. Removing the forced rebuild fails seekBulkRebuild test 1.
+    Measured: fix reads 3631 tape cells for a 60-minute 1D catch-up (budget 8200).
+  implication: Future edits that undo either part of the fix now fail npm test. Real-browser specs still run only on the user's machine.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
