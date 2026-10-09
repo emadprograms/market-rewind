@@ -110,6 +110,93 @@ export function PlaybackBar({
   }, [bufferedTicks, masterData, currentTime, sessionTicker]);
 
   const [jumpTimeText, setJumpTimeText] = useState('');
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  const [hoverPercent, setHoverPercent] = useState<number>(0);
+  const [isHovering, setIsHovering] = useState<boolean>(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const timelineMarks = useMemo(() => {
+    if (minTime === null || maxTime === null || minTime >= maxTime) return [];
+    const durationMs = maxTime - minTime;
+
+    let intervalMs = 3600000;
+    if (durationMs <= 5 * 60 * 1000) {
+      intervalMs = 60 * 1000;
+    } else if (durationMs <= 15 * 60 * 1000) {
+      intervalMs = 2 * 60 * 1000;
+    } else if (durationMs <= 30 * 60 * 1000) {
+      intervalMs = 5 * 60 * 1000;
+    } else if (durationMs <= 60 * 60 * 1000) {
+      intervalMs = 10 * 60 * 1000;
+    } else if (durationMs <= 2 * 3600 * 1000) {
+      intervalMs = 15 * 60 * 1000;
+    } else if (durationMs <= 5 * 3600 * 1000) {
+      intervalMs = 30 * 60 * 1000;
+    } else if (durationMs <= 12 * 3600 * 1000) {
+      intervalMs = 60 * 60 * 1000;
+    } else if (durationMs <= 24 * 3600 * 1000) {
+      intervalMs = 2 * 3600 * 1000;
+    } else {
+      intervalMs = 4 * 3600 * 1000;
+    }
+
+    const tz = getTzForTicker(sessionTicker);
+    const formatMark = (ms: number) => {
+      return new Date(ms).toLocaleTimeString('en-US', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    };
+
+    const marks: Array<{ timeMs: number; percent: number; label: string; isMajor: boolean }> = [];
+
+    // Start mark
+    marks.push({
+      timeMs: minTime,
+      percent: 0,
+      label: formatMark(minTime),
+      isMajor: true,
+    });
+
+    // Intermediate marks aligned to intervalMs
+    const firstIntervalTime = Math.ceil(minTime / intervalMs) * intervalMs;
+    for (let t = firstIntervalTime; t < maxTime; t += intervalMs) {
+      if (t > minTime) {
+        const pct = ((t - minTime) / durationMs) * 100;
+        if (pct >= 6 && pct <= 94) {
+          marks.push({
+            timeMs: t,
+            percent: pct,
+            label: formatMark(t),
+            isMajor: true,
+          });
+        }
+      }
+    }
+
+    // End mark
+    marks.push({
+      timeMs: maxTime,
+      percent: 100,
+      label: formatMark(maxTime),
+      isMajor: true,
+    });
+
+    return marks;
+  }, [minTime, maxTime, sessionTicker]);
+
+  const handleTrackMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!trackRef.current || minTime === null || maxTime === null || minTime >= maxTime) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const offsetX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const ratio = rect.width > 0 ? offsetX / rect.width : 0;
+    const pct = ratio * 100;
+    const time = minTime + ratio * (maxTime - minTime);
+    setHoverPercent(pct);
+    setHoverTime(Math.floor(time / 1000) * 1000);
+  };
 
   const sliderValue = (minTime !== null && maxTime !== null && currentTime !== null)
     ? Math.max(minTime, Math.min(currentTime, maxTime))
@@ -312,60 +399,188 @@ export function PlaybackBar({
 
       {/* Time-based scrubber slider */}
       {canPlay && minTime !== null && maxTime !== null && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', maxWidth: '420px' }}>
-          <input
-            type="range"
-            data-testid="playback-time-slider"
-            aria-label="Time-based playback slider"
-            min={minTime}
-            max={maxTime}
-            step={1000}
-            value={sliderValue}
-            onChange={handleSliderChange}
-            title={`Replay Time: ${formatTimeOnly(sliderValue)} (${currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/${totalTicks} ticks)`}
-            style={{ width: '100%', accentColor: '#2962ff', cursor: 'pointer' }}
-          />
-          <span 
-            data-testid="playback-time-label"
-            title={`Current: ${formatTimeOnly(sliderValue)} | End: ${formatTimeOnly(maxTime)}`}
-            style={{ fontSize: '11px', color: '#787b86', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}
+        <div 
+          className="playback-seek-container"
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '10px', 
+            flex: 1, 
+            minWidth: '240px' 
+          }}
+        >
+          {/* Main Scrubber Track Wrapper with Markers & Hover Tooltip */}
+          <div
+            ref={trackRef}
+            className="playback-scrubber-wrapper"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              flex: 1,
+              position: 'relative',
+              minWidth: '160px',
+              padding: '2px 0',
+            }}
+            onMouseEnter={() => setIsHovering(true)}
+            onMouseLeave={() => setIsHovering(false)}
+            onMouseMove={handleTrackMouseMove}
           >
-            {formatTimeOnly(sliderValue)} / {formatTimeOnly(maxTime)}
-          </span>
-          <form 
-            onSubmit={handleJumpSubmit}
-            style={{ display: 'flex', alignItems: 'center' }}
-          >
+            {/* Hover timestamp tooltip & guide line */}
+            {isHovering && hoverTime !== null && (
+              <>
+                <div
+                  data-testid="playback-hover-timestamp"
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% + 4px)',
+                    left: `${hoverPercent}%`,
+                    transform: 'translateX(-50%)',
+                    backgroundColor: '#1e222d',
+                    color: '#2962ff',
+                    border: '1px solid #2962ff',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                    borderRadius: '3px',
+                    padding: '1px 5px',
+                    fontSize: '10px',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    pointerEvents: 'none',
+                    zIndex: 100,
+                  }}
+                >
+                  {formatTimeOnly(hoverTime)}
+                </div>
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: '12px',
+                    left: `${hoverPercent}%`,
+                    width: '1px',
+                    backgroundColor: 'rgba(41, 98, 255, 0.4)',
+                    pointerEvents: 'none',
+                    zIndex: 5,
+                  }}
+                />
+              </>
+            )}
+
             <input
-              type="text"
-              data-testid="time-jump-input"
-              aria-label="Jump to time HH:MM:SS"
-              placeholder="HH:MM:SS"
-              value={jumpTimeText}
-              onChange={(e) => setJumpTimeText(e.target.value)}
+              type="range"
+              list="playback-time-markers"
+              data-testid="playback-time-slider"
+              aria-label="Time-based playback slider"
+              min={minTime}
+              max={maxTime}
+              step={1000}
+              value={sliderValue}
+              onChange={handleSliderChange}
+              title={`Replay Time: ${formatTimeOnly(sliderValue)} (${currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/${totalTicks} ticks)`}
               style={{
-                width: '64px',
-                height: '20px',
-                padding: '2px 4px',
-                fontSize: '10px',
-                fontFamily: 'JetBrains Mono, monospace',
-                backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                border: '1px solid #2a2e39',
-                borderRadius: '3px',
-                color: '#d1d4dc',
-                textAlign: 'center',
+                width: '100%',
+                accentColor: '#2962ff',
+                cursor: 'pointer',
+                margin: 0,
+                height: '14px',
               }}
-              title="Jump to specific time (e.g. 09:30:00 or 10:15)"
             />
-          </form>
-          {/* Subtle tick counter display */}
-          <span 
-            data-testid="tick-counter" 
-            title="Current tick / total buffered ticks"
-            style={{ fontSize: '9px', color: '#555865', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}
-          >
-            {currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/{totalTicks}
-          </span>
+
+            {/* Datalist for browser native ticks */}
+            <datalist id="playback-time-markers">
+              {timelineMarks.map((m) => (
+                <option key={m.timeMs} value={m.timeMs} label={m.label} />
+              ))}
+            </datalist>
+
+            {/* Visual timestamp marks along the seek track */}
+            <div
+              data-testid="playback-timeline-marks"
+              style={{
+                position: 'relative',
+                width: '100%',
+                height: '11px',
+                marginTop: '1px',
+                pointerEvents: 'none',
+                userSelect: 'none',
+              }}
+            >
+              {timelineMarks.map((mark, idx) => (
+                <div
+                  key={mark.timeMs}
+                  data-testid={`timeline-mark-${idx}`}
+                  style={{
+                    position: 'absolute',
+                    left: `${mark.percent}%`,
+                    transform: mark.percent === 0 ? 'none' : mark.percent === 100 ? 'translateX(-100%)' : 'translateX(-50%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: mark.percent === 0 ? 'flex-start' : mark.percent === 100 ? 'flex-end' : 'center',
+                    fontSize: '9px',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    color: '#787b86',
+                    lineHeight: 1,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '1px',
+                      height: '3px',
+                      backgroundColor: 'rgba(255,255,255,0.3)',
+                      marginBottom: '1px',
+                    }}
+                  />
+                  <span>{mark.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Time display, Jump form & tick counter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <span 
+              data-testid="playback-time-label"
+              title={`Current: ${formatTimeOnly(sliderValue)} | End: ${formatTimeOnly(maxTime)}`}
+              style={{ fontSize: '11px', color: '#787b86', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}
+            >
+              {formatTimeOnly(sliderValue)} / {formatTimeOnly(maxTime)}
+            </span>
+            <form 
+              onSubmit={handleJumpSubmit}
+              style={{ display: 'flex', alignItems: 'center' }}
+            >
+              <input
+                type="text"
+                data-testid="time-jump-input"
+                aria-label="Jump to time HH:MM:SS"
+                placeholder="HH:MM:SS"
+                value={jumpTimeText}
+                onChange={(e) => setJumpTimeText(e.target.value)}
+                style={{
+                  width: '64px',
+                  height: '20px',
+                  padding: '2px 4px',
+                  fontSize: '10px',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                  border: '1px solid #2a2e39',
+                  borderRadius: '3px',
+                  color: '#d1d4dc',
+                  textAlign: 'center',
+                }}
+                title="Jump to specific time (e.g. 09:30:00 or 10:15)"
+              />
+            </form>
+            {/* Subtle tick counter display */}
+            <span 
+              data-testid="tick-counter" 
+              title="Current tick / total buffered ticks"
+              style={{ fontSize: '9px', color: '#555865', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}
+            >
+              {currentTickIndex >= 0 ? currentTickIndex + 1 : 0}/{totalTicks}
+            </span>
+          </div>
         </div>
       )}
 
