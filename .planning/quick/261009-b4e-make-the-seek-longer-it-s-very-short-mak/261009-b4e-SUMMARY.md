@@ -9,9 +9,11 @@ date: "2026-10-09"
 # Quick Task 261009-b4e: Extend Playback Seek Bar and Mark Timestamps
 
 ## Summary of Changes
-1. **Extended Seek Bar**:
+1. **Extended Seek Bar & Session Bounds**:
    - Removed the restrictive `maxWidth: '420px'` limitation on `.playback-seek-container`.
    - Set container to `flex: 1` with `minWidth: '240px'`, and track wrapper to `flex: 1`, allowing the seek bar to expand dynamically to use all available horizontal space in `PlaybackBar.tsx` between the transport controls and speed/tape controls (expanding the slider width from ~140px to ~600-1100px depending on screen resolution).
+   - Anchored seek start to `08:30` ET (allowing users to scrub back up to 8:30 AM from the default 09:10 load-in time).
+   - Anchored seek end to Market Close (`16:00` ET), preventing post-market ticks from extending the seek bar domain.
 
 2. **Marked Timestamps Along the Seek Bar**:
    - Implemented dynamic timeline marks calculation adapting to session duration (hourly marks for full-day sessions, sub-hour intervals for shorter sessions).
