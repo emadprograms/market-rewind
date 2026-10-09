@@ -63,7 +63,7 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
     expect(options && options.length).toBeGreaterThan(2);
   });
 
-  it('renders visual timestamp marks along the seek track including start, end, 09:20, and 09:30 marks', () => {
+  it('renders visual timestamp marks along the seek track including 08:30 start, 16:00 close, 09:20, and 09:30 marks', () => {
     render(
       <PlaybackBar
         totalRealized={0}
@@ -78,7 +78,8 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
     const marksContainer = screen.getByTestId('playback-timeline-marks');
     expect(marksContainer).toBeInTheDocument();
 
-    // Both 09:20 and 09:30 marks must be present in America/New_York
+    // 08:30 start, 09:20 pre-market, 09:30 open, and 16:00 close marks must be present
+    expect(marksContainer.textContent).toContain('08:30');
     expect(marksContainer.textContent).toContain('09:20');
     expect(marksContainer.textContent).toContain('09:30');
     expect(marksContainer.textContent).toContain('16:00');
@@ -92,15 +93,17 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
     expect(marksContainer.textContent).toContain('15:00');
   });
 
-  it('explicitly marks both 09:20 and 09:30 when session starts before 09:20 (e.g. 09:10)', () => {
+  it('anchors seek start at 08:30 and ends at market close 16:00 even with post-market ticks', () => {
+    const t0830 = isoToMs('2026-09-25 12:30:00.000');
     const t0910 = isoToMs('2026-09-25 13:10:00.000');
-    const earlyTicks: MarketTick[] = [
-      { time: '2026-09-25 13:10:00.000', symbol: 'SPY', price: 499.0, volume: 10 },
-      { time: '2026-09-25 13:20:00.000', symbol: 'SPY', price: 500.0, volume: 100 },
-      { time: '2026-09-25 13:30:00.000', symbol: 'SPY', price: 501.0, volume: 5000 },
+    const t1600 = isoToMs('2026-09-25 20:00:00.000');
+    const postMarketTicks: MarketTick[] = [
+      { time: '2026-09-25 13:10:00.000', symbol: 'SPY', price: 500.0, volume: 100 },
       { time: '2026-09-25 20:00:00.000', symbol: 'SPY', price: 505.0, volume: 2000 },
+      // Post-market ticks at 17:30 ET (21:30 UTC)
+      { time: '2026-09-25 21:30:00.000', symbol: 'SPY', price: 506.0, volume: 100 },
     ];
-    usePlaybackStore.getState().setBufferedTicks(earlyTicks);
+    usePlaybackStore.getState().setBufferedTicks(postMarketTicks);
     usePlaybackStore.getState().setCurrentTime(t0910);
     usePlaybackStore.getState().seekTickTime(t0910);
 
@@ -115,12 +118,13 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
       />
     );
 
-    const marksContainer = screen.getByTestId('playback-timeline-marks');
-    expect(marksContainer).toBeInTheDocument();
-    expect(marksContainer.textContent).toContain('09:10');
-    expect(marksContainer.textContent).toContain('09:20');
-    expect(marksContainer.textContent).toContain('09:30');
-    expect(marksContainer.textContent).toContain('16:00');
+    const slider = screen.getByTestId('playback-time-slider') as HTMLInputElement;
+    // Seek domain starts at 08:30 (allows backing up from default 09:10 load)
+    expect(Number(slider.min)).toBe(t0830);
+    // Seek domain ends at market close 16:00 (not post-market 17:30)
+    expect(Number(slider.max)).toBe(t1600);
+    // Value remains anchored at 09:10 load in time
+    expect(Number(slider.value)).toBe(t0910);
   });
 
   it('displays hover timestamp preview on mouse move over scrubber wrapper', () => {
@@ -157,21 +161,21 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
 
     const hoverBadge = screen.getByTestId('playback-hover-timestamp');
     expect(hoverBadge).toBeInTheDocument();
-    // 50% between 09:20 and 16:00 is ~12:40 ET
-    expect(hoverBadge.textContent).toContain('12:40');
+    // 50% between 08:30 and 16:00 is ~12:15 ET
+    expect(hoverBadge.textContent).toContain('12:15');
 
     // Mouse leave removes the hover preview
     fireEvent.mouseLeave(scrubberWrapper);
     expect(screen.queryByTestId('playback-hover-timestamp')).toBeNull();
   });
 
-  it('adapts timestamp mark intervals for short sessions', () => {
-    // 15-minute session: 09:30 to 09:45
+  it('adapts timestamp mark intervals for short sessions on non-equity tickers', () => {
+    // 15-minute session: 09:30 to 09:45 on 24/7 crypto ticker BTC
     const shortStart = isoToMs('2026-09-25 13:30:00.000');
     const shortEnd = isoToMs('2026-09-25 13:45:00.000');
     const shortTicks: MarketTick[] = [
-      { time: '2026-09-25 13:30:00.000', symbol: 'SPY', price: 500.0, volume: 100 },
-      { time: '2026-09-25 13:45:00.000', symbol: 'SPY', price: 502.0, volume: 500 },
+      { time: '2026-09-25 13:30:00.000', symbol: 'BTC', price: 60000.0, volume: 1 },
+      { time: '2026-09-25 13:45:00.000', symbol: 'BTC', price: 60100.0, volume: 5 },
     ];
     usePlaybackStore.getState().setBufferedTicks(shortTicks);
     usePlaybackStore.getState().setCurrentTime(shortStart);
@@ -182,7 +186,7 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
         totalRealized={0}
         totalUnrealized={0}
         isDbLoaded={true}
-        sessionTicker="SPY"
+        sessionTicker="BTC"
         onResetToOpen={vi.fn()}
         minStepMinutes={1}
       />
@@ -190,9 +194,9 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
 
     const marksContainer = screen.getByTestId('playback-timeline-marks');
     expect(marksContainer).toBeInTheDocument();
-    expect(marksContainer.textContent).toContain('09:30');
-    expect(marksContainer.textContent).toContain('09:45');
-    // For 15 mins, 2-minute interval yields intermediate marks like 09:32, 09:34, etc.
-    expect(marksContainer.textContent).toContain('09:32');
+    expect(marksContainer.textContent).toContain('13:30');
+    expect(marksContainer.textContent).toContain('13:45');
+    // For 15 mins, 2-minute interval yields intermediate marks like 13:32, 13:34, etc.
+    expect(marksContainer.textContent).toContain('13:32');
   });
 });

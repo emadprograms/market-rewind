@@ -52,27 +52,58 @@ export function PlaybackBar({
   }>({ sessionKey: '', min: null, max: null });
 
   const { minTime, maxTime } = useMemo(() => {
+    const tz = getTzForTicker(sessionTicker);
+    const dataTime = bufferedTicks[0]?.time ?? masterData[0]?.time ?? (currentTime !== null ? new Date(currentTime).toISOString() : '');
+    const dateStr = dataTime 
+      ? (dataTime.includes('T') ? new Date(dataTime.replace(' ', 'T')).toLocaleDateString('en-CA', { timeZone: tz }) : dataTime.split(' ')[0])
+      : (currentTime !== null ? new Date(currentTime).toLocaleDateString('en-CA', { timeZone: tz }) : '');
+
+    const getMsForTimeStr = (date: string, hhMm: string): number => {
+      if (tz === 'America/New_York') {
+        const utcStr = getUtcTimeFromEt(date, hhMm);
+        return new Date(utcStr.replace(' ', 'T') + 'Z').getTime();
+      } else {
+        return new Date(`${date}T${hhMm}:00Z`).getTime();
+      }
+    };
+
+    const isUsEquity = tz === 'America/New_York';
+    const marketPreStartMs = (dateStr && isUsEquity) ? getMsForTimeStr(dateStr, '08:30') : null;
+    const marketCloseMs = (dateStr && isUsEquity) ? getMsForTimeStr(dateStr, '16:00') : null;
+
     let min: number | null = null;
     let max: number | null = null;
 
-    if (bufferedTicks.length > 0) {
+    if (marketPreStartMs !== null) {
+      min = marketPreStartMs;
+    } else if (bufferedTicks.length > 0) {
       min = isoToMs(bufferedTicks[0].time);
-      max = isoToMs(bufferedTicks[bufferedTicks.length - 1].time);
     } else if (masterData.length > 0) {
       min = isoToMs(masterData[0].time);
-      max = isoToMs(masterData[masterData.length - 1].time);
     }
 
+    if (bufferedTicks.length > 0) {
+      const firstTickMs = isoToMs(bufferedTicks[0].time);
+      if (min === null || firstTickMs < min) min = firstTickMs;
+    }
     if (currentTime !== null) {
       if (min !== null) min = Math.min(min, currentTime);
       else min = currentTime;
-
-      if (max !== null) max = Math.max(max, currentTime);
-      else max = currentTime;
     }
 
-    const dataTime = bufferedTicks[0]?.time ?? masterData[0]?.time ?? (currentTime !== null ? new Date(currentTime).toISOString() : '');
-    const dateStr = dataTime ? dataTime.replace('T', ' ').split(' ')[0] : '';
+    if (marketCloseMs !== null) {
+      max = marketCloseMs;
+    } else if (bufferedTicks.length > 0) {
+      max = isoToMs(bufferedTicks[bufferedTicks.length - 1].time);
+    } else if (masterData.length > 0) {
+      max = isoToMs(masterData[masterData.length - 1].time);
+    }
+
+    // Only allow max to exceed market close if currentTime is explicitly past market close
+    if (currentTime !== null && max !== null && currentTime > max) {
+      max = currentTime;
+    }
+
     const currentSessionKey = `${sessionTicker}_${dateStr}`;
 
     if (!dataTime && currentTime === null) {
@@ -92,7 +123,11 @@ export function PlaybackBar({
       }
       if (max !== null) {
         if (sessionBoundsRef.current.max !== null) {
-          max = Math.max(max, sessionBoundsRef.current.max);
+          if (marketCloseMs !== null) {
+            max = currentTime !== null && currentTime > marketCloseMs ? currentTime : marketCloseMs;
+          } else {
+            max = Math.max(max, sessionBoundsRef.current.max);
+          }
         }
         sessionBoundsRef.current.max = Math.floor(max / 1000) * 1000;
       }
@@ -161,8 +196,9 @@ export function PlaybackBar({
       });
     };
 
-    const t920 = getMsForTimeStr('09:20');
-    const t930 = getMsForTimeStr('09:30');
+    const isUsEquity = tz === 'America/New_York';
+    const t920 = isUsEquity ? getMsForTimeStr('09:20') : -1;
+    const t930 = isUsEquity ? getMsForTimeStr('09:30') : -1;
 
     // Build raw candidates
     const rawTimes = new Set<number>();

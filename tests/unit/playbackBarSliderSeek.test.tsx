@@ -6,6 +6,7 @@ import { usePlaybackStore, isoToMs } from '../../src/store/usePlaybackStore';
 import type { MarketTick } from '../../src/types';
 
 describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
+  const time830Ms = new Date('2026-09-08T12:30:00Z').getTime();
   const time920Ms = new Date('2026-09-08T13:20:00Z').getTime();
   const time930Ms = new Date('2026-09-08T13:30:00Z').getTime();
   const time1015Ms = new Date('2026-09-08T14:15:00Z').getTime();
@@ -36,7 +37,7 @@ describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
     });
   });
 
-  it('renders slider with correct minTime and maxTime spanning 9:20 AM to 4:00 PM', () => {
+  it('renders slider with correct minTime (08:30) and maxTime (16:00)', () => {
     const { getByTestId } = render(
       <PlaybackBar
         totalRealized={0}
@@ -49,7 +50,7 @@ describe('PlaybackBar Slider & Timeline Seeking Behavior', () => {
     );
 
     const slider = getByTestId('playback-time-slider') as HTMLInputElement;
-    expect(Number(slider.min)).toBe(time920Ms);
+    expect(Number(slider.min)).toBe(time830Ms);
     expect(Number(slider.max)).toBe(time1600Ms);
     expect(Number(slider.value)).toBe(time920Ms);
   });

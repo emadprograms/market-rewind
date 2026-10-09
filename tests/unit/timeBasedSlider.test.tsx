@@ -12,6 +12,7 @@ describe('Time-Based Playback Slider Unit Tests', () => {
   // 09:29:00 ET = 13:29:00 UTC
   // 09:30:00 ET = 13:30:00 UTC (Market Open)
   // 16:00:00 ET = 20:00:00 UTC (Market Close)
+  const t0830 = isoToMs('2026-09-25 12:30:00.000');
   const t0920 = isoToMs('2026-09-25 13:20:00.000');
   const t0922 = isoToMs('2026-09-25 13:22:00.000');
   const t0925 = isoToMs('2026-09-25 13:25:00.000');
@@ -49,8 +50,8 @@ describe('Time-Based Playback Slider Unit Tests', () => {
     expect(slider).toBeInTheDocument();
     expect(slider.type).toBe('range');
 
-    // Slider min and max should be Unix ms timestamps corresponding to session range
-    expect(Number(slider.min)).toBe(t0920);
+    // Slider min starts at 08:30 ET and max ends at market close 16:00 ET
+    expect(Number(slider.min)).toBe(t0830);
     expect(Number(slider.max)).toBe(t1600);
     expect(Number(slider.value)).toBe(t0920);
     expect(Number(slider.step)).toBe(1000); // 1-second resolution
@@ -146,8 +147,8 @@ describe('Time-Based Playback Slider Unit Tests', () => {
     );
 
     const slider = screen.getByTestId('playback-time-slider') as HTMLInputElement;
-    // Slider min should be 09:20:00 because currentTime was initialized to 09:20:00
-    expect(Number(slider.min)).toBe(t0920);
+    // Slider min allows seeking back to 08:30:00 while value sits at initial currentTime 09:20:00
+    expect(Number(slider.min)).toBe(t0830);
     expect(Number(slider.value)).toBe(t0920);
   });
 });
