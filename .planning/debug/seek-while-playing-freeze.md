@@ -358,6 +358,14 @@ started: After quick task 261007-nsp ("non-pause seeking", 2026-10-07) made
     Measured: fix reads 3631 tape cells for a 60-minute 1D catch-up (budget 8200).
   implication: Future edits that undo either part of the fix now fail npm test. Real-browser specs still run only on the user's machine.
 
+- timestamp: 2026-10-09T00:00:00Z
+  checked: "Static guard tests/unit/canonicalAnchorGuard.test.ts for the 09:10 anchor, and a CI workflow .github/workflows/tests.yml (frontend: tsc, vitest, build; backend: pytest on a synthetic lake). Mutation-checked the anchor guard by moving the default to 09:20 in three places."
+  found: |
+    Anchor guard: 6 tests pass. Mutants caught: session default 09:20 (1 test), dateReset clock expectation 09:20:00 (2 tests), 09:20 in a journey spec (1 test).
+    Backend pytest on the sandbox (synthetic lake, duckdb/aiohttp/pyarrow only): 232 passed, 2 skipped, matches the user's run.
+    Local: vitest 101 files / 604 passed / 2 skipped; tsc exit 0; vite build exit 0; playwright --list 107 tests in 27 files.
+  implication: Future changes that undo the cause-1/cause-2 guards or move the anchor to 09:20 fail CI. Playwright specs still need the operator's browser and tick lake. The lockfile is git-ignored, so CI resolves dependencies from ranges.
+
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
 
