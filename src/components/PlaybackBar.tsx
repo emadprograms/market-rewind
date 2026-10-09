@@ -141,6 +141,17 @@ export function PlaybackBar({
     }
 
     const tz = getTzForTicker(sessionTicker);
+    const dateStr = new Date(minTime).toLocaleDateString('en-CA', { timeZone: tz });
+
+    const getMsForTimeStr = (hhMm: string): number => {
+      if (tz === 'America/New_York') {
+        const utcStr = getUtcTimeFromEt(dateStr, hhMm);
+        return new Date(utcStr.replace(' ', 'T') + 'Z').getTime();
+      } else {
+        return new Date(`${dateStr}T${hhMm}:00Z`).getTime();
+      }
+    };
+
     const formatMark = (ms: number) => {
       return new Date(ms).toLocaleTimeString('en-US', {
         timeZone: tz,
@@ -150,39 +161,73 @@ export function PlaybackBar({
       });
     };
 
-    const marks: Array<{ timeMs: number; percent: number; label: string; isMajor: boolean }> = [];
+    const t920 = getMsForTimeStr('09:20');
+    const t930 = getMsForTimeStr('09:30');
 
-    // Start mark
-    marks.push({
-      timeMs: minTime,
-      percent: 0,
-      label: formatMark(minTime),
-      isMajor: true,
-    });
+    // Build raw candidates
+    const rawTimes = new Set<number>();
+    rawTimes.add(minTime);
+    rawTimes.add(maxTime);
 
-    // Intermediate marks aligned to intervalMs
+    if (t920 >= minTime && t920 <= maxTime) {
+      rawTimes.add(t920);
+    }
+    if (t930 >= minTime && t930 <= maxTime) {
+      rawTimes.add(t930);
+    }
+
+    // Intermediate regular marks
     const firstIntervalTime = Math.ceil(minTime / intervalMs) * intervalMs;
     for (let t = firstIntervalTime; t < maxTime; t += intervalMs) {
       if (t > minTime) {
-        const pct = ((t - minTime) / durationMs) * 100;
-        if (pct >= 6 && pct <= 94) {
-          marks.push({
-            timeMs: t,
-            percent: pct,
-            label: formatMark(t),
-            isMajor: true,
-          });
-        }
+        rawTimes.add(t);
       }
     }
 
-    // End mark
-    marks.push({
-      timeMs: maxTime,
-      percent: 100,
-      label: formatMark(maxTime),
-      isMajor: true,
-    });
+    const sortedTimes = Array.from(rawTimes).sort((a, b) => a - b);
+    const essentialTimes = new Set<number>([minTime, maxTime]);
+    if (t920 >= minTime && t920 <= maxTime) essentialTimes.add(t920);
+    if (t930 >= minTime && t930 <= maxTime) essentialTimes.add(t930);
+
+    const marks: Array<{
+      timeMs: number;
+      percent: number;
+      label: string;
+      isMajor: boolean;
+      isKeyMilestone?: boolean;
+      isStaggered?: boolean;
+      color?: string;
+    }> = [];
+
+    for (let i = 0; i < sortedTimes.length; i++) {
+      const t = sortedTimes[i];
+      const pct = ((t - minTime) / durationMs) * 100;
+      const isEssential = essentialTimes.has(t);
+
+      // Non-essential intermediate marks skip if too close to edges or previous mark
+      if (!isEssential) {
+        if (pct < 5 || pct > 95) continue;
+        const prev = marks[marks.length - 1];
+        if (prev && (pct - prev.percent) < 4) continue;
+      }
+
+      const prev = marks[marks.length - 1];
+      // Stagger if very close (< 4.5% distance) to previous mark so labels don't collide
+      const isStaggered = Boolean(prev && (pct - prev.percent) < 4.5 && !prev.isStaggered);
+
+      const is930 = t === t930;
+      const is920 = t === t920;
+
+      marks.push({
+        timeMs: t,
+        percent: pct,
+        label: formatMark(t),
+        isMajor: isEssential,
+        isKeyMilestone: is920 || is930,
+        isStaggered,
+        color: is930 ? '#26a69a' : is920 ? '#2962ff' : undefined,
+      });
+    }
 
     return marks;
   }, [minTime, maxTime, sessionTicker]);
@@ -500,7 +545,7 @@ export function PlaybackBar({
               style={{
                 position: 'relative',
                 width: '100%',
-                height: '11px',
+                height: '15px',
                 marginTop: '1px',
                 pointerEvents: 'none',
                 userSelect: 'none',
@@ -513,21 +558,23 @@ export function PlaybackBar({
                   style={{
                     position: 'absolute',
                     left: `${mark.percent}%`,
+                    top: mark.isStaggered ? '5px' : '0px',
                     transform: mark.percent === 0 ? 'none' : mark.percent === 100 ? 'translateX(-100%)' : 'translateX(-50%)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: mark.percent === 0 ? 'flex-start' : mark.percent === 100 ? 'flex-end' : 'center',
                     fontSize: '9px',
                     fontFamily: 'JetBrains Mono, monospace',
-                    color: '#787b86',
+                    fontWeight: mark.isKeyMilestone ? 700 : 400,
+                    color: mark.color || '#787b86',
                     lineHeight: 1,
                   }}
                 >
                   <span
                     style={{
-                      width: '1px',
-                      height: '3px',
-                      backgroundColor: 'rgba(255,255,255,0.3)',
+                      width: mark.isKeyMilestone ? '2px' : '1px',
+                      height: mark.isStaggered ? '5px' : '3px',
+                      backgroundColor: mark.color || (mark.isMajor ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.2)'),
                       marginBottom: '1px',
                     }}
                   />

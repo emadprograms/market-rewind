@@ -63,7 +63,7 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
     expect(options && options.length).toBeGreaterThan(2);
   });
 
-  it('renders visual timestamp marks along the seek track including start and end times', () => {
+  it('renders visual timestamp marks along the seek track including start, end, 09:20, and 09:30 marks', () => {
     render(
       <PlaybackBar
         totalRealized={0}
@@ -78,8 +78,9 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
     const marksContainer = screen.getByTestId('playback-timeline-marks');
     expect(marksContainer).toBeInTheDocument();
 
-    // Start mark should be 09:20 and end mark should be 16:00 in America/New_York
+    // Both 09:20 and 09:30 marks must be present in America/New_York
     expect(marksContainer.textContent).toContain('09:20');
+    expect(marksContainer.textContent).toContain('09:30');
     expect(marksContainer.textContent).toContain('16:00');
 
     // Intermediate hour marks should also be present (10:00, 11:00, 12:00, etc.)
@@ -89,6 +90,37 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
     expect(marksContainer.textContent).toContain('13:00');
     expect(marksContainer.textContent).toContain('14:00');
     expect(marksContainer.textContent).toContain('15:00');
+  });
+
+  it('explicitly marks both 09:20 and 09:30 when session starts before 09:20 (e.g. 09:10)', () => {
+    const t0910 = isoToMs('2026-09-25 13:10:00.000');
+    const earlyTicks: MarketTick[] = [
+      { time: '2026-09-25 13:10:00.000', symbol: 'SPY', price: 499.0, volume: 10 },
+      { time: '2026-09-25 13:20:00.000', symbol: 'SPY', price: 500.0, volume: 100 },
+      { time: '2026-09-25 13:30:00.000', symbol: 'SPY', price: 501.0, volume: 5000 },
+      { time: '2026-09-25 20:00:00.000', symbol: 'SPY', price: 505.0, volume: 2000 },
+    ];
+    usePlaybackStore.getState().setBufferedTicks(earlyTicks);
+    usePlaybackStore.getState().setCurrentTime(t0910);
+    usePlaybackStore.getState().seekTickTime(t0910);
+
+    render(
+      <PlaybackBar
+        totalRealized={0}
+        totalUnrealized={0}
+        isDbLoaded={true}
+        sessionTicker="SPY"
+        onResetToOpen={vi.fn()}
+        minStepMinutes={1}
+      />
+    );
+
+    const marksContainer = screen.getByTestId('playback-timeline-marks');
+    expect(marksContainer).toBeInTheDocument();
+    expect(marksContainer.textContent).toContain('09:10');
+    expect(marksContainer.textContent).toContain('09:20');
+    expect(marksContainer.textContent).toContain('09:30');
+    expect(marksContainer.textContent).toContain('16:00');
   });
 
   it('displays hover timestamp preview on mouse move over scrubber wrapper', () => {
