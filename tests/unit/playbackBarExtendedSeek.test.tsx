@@ -63,7 +63,7 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
     expect(options && options.length).toBeGreaterThan(2);
   });
 
-  it('renders visual timestamp marks along the seek track including 08:30 start, 16:00 close, 09:27, and 09:30 marks', () => {
+  it('renders visual timestamp marks along the seek track including 08:30 start, 16:00 close, and 09:30 marks', () => {
     render(
       <PlaybackBar
         totalRealized={0}
@@ -78,11 +78,11 @@ describe('Extended Playback Seek Bar & Marked Timestamps', () => {
     const marksContainer = screen.getByTestId('playback-timeline-marks');
     expect(marksContainer).toBeInTheDocument();
 
-    // 08:30 start, 09:27 milestone, 09:30 open, and 16:00 close marks must be present
+    // 08:30 start, 09:30 open, and 16:00 close marks must be present (09:27 removed)
     expect(marksContainer.textContent).toContain('08:30');
-    expect(marksContainer.textContent).toContain('09:27');
     expect(marksContainer.textContent).toContain('09:30');
     expect(marksContainer.textContent).toContain('16:00');
+    expect(marksContainer.textContent).not.toContain('09:27');
 
     // Intermediate hour marks should also be present (10:00, 11:00, 12:00, etc.)
     expect(marksContainer.textContent).toContain('10:00');

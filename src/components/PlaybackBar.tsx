@@ -197,7 +197,6 @@ export function PlaybackBar({
     };
 
     const isUsEquity = tz === 'America/New_York';
-    const t927 = isUsEquity ? getMsForTimeStr('09:27') : -1;
     const t930 = isUsEquity ? getMsForTimeStr('09:30') : -1;
 
     // Build raw candidates
@@ -205,9 +204,6 @@ export function PlaybackBar({
     rawTimes.add(minTime);
     rawTimes.add(maxTime);
 
-    if (t927 >= minTime && t927 <= maxTime) {
-      rawTimes.add(t927);
-    }
     if (t930 >= minTime && t930 <= maxTime) {
       rawTimes.add(t930);
     }
@@ -222,7 +218,6 @@ export function PlaybackBar({
 
     const sortedTimes = Array.from(rawTimes).sort((a, b) => a - b);
     const essentialTimes = new Set<number>([minTime, maxTime]);
-    if (t927 >= minTime && t927 <= maxTime) essentialTimes.add(t927);
     if (t930 >= minTime && t930 <= maxTime) essentialTimes.add(t930);
 
     const marks: Array<{
@@ -252,16 +247,15 @@ export function PlaybackBar({
       const isStaggered = Boolean(prev && (pct - prev.percent) < 4.5 && !prev.isStaggered);
 
       const is930 = t === t930;
-      const is927 = t === t927;
 
       marks.push({
         timeMs: t,
         percent: pct,
         label: formatMark(t),
         isMajor: isEssential,
-        isKeyMilestone: is927 || is930,
+        isKeyMilestone: is930,
         isStaggered,
-        color: is930 ? '#26a69a' : is927 ? '#2962ff' : undefined,
+        color: is930 ? '#26a69a' : undefined,
       });
     }
 
