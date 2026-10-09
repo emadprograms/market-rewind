@@ -51,7 +51,7 @@ test.describe('JOURNEY 12 — Replay Convergence & Temporal Strictness', () => {
     await expect(card).toHaveAttribute('data-ticker', 'NVDA', { timeout: 20_000 });
     await expect(card).toHaveAttribute('data-bars-count', /^[1-9]\d*$/, { timeout: 20_000 });
 
-    // Verify temporal containment: last rendered bar strictly adheres to the 09:20 anchor without future leaks
+    // Verify temporal containment: last rendered bar strictly adheres to the 09:10 anchor without future leaks
     const bar = await readBarData(card);
     expect(bar.lastBarTime).toBeTruthy();
     const etClock = utcToEtClock(bar.lastBarTime!);

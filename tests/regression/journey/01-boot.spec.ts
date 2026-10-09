@@ -29,12 +29,12 @@ test.describe('JOURNEY 01 — Open the website & backend connection', () => {
     expect(pageErrors).toEqual([]);
   });
 
-  test('default session parameters are the 09:20 ET anchor and SPY', async ({ page }) => {
+  test('default session parameters are the 09:10 ET anchor and SPY', async ({ page }) => {
     await openWebsite(page);
     await expect(page.getByText('Configure Session')).toBeVisible({ timeout: 30_000 });
 
-    // Default entry time is 09:20 (the replay anchor).
-    await expect(page.locator('.session-card input[type="time"]')).toHaveValue('09:20');
+    // Default entry time is 09:10 (the replay anchor).
+    await expect(page.locator('.session-card input[type="time"]')).toHaveValue('09:10');
 
     // A default target date is pre-selected.
     const dateValue = await page.locator('.session-card input[type="date"]').inputValue();

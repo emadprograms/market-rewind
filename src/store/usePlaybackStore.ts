@@ -20,6 +20,15 @@ interface PlaybackState {
   currentTick: MarketTick | null;
   totalTicks: number;
 
+  /**
+   * Monotonic counter bumped by every explicit playhead move (seek, step, scrub, time jump).
+   * It is the only way to distinguish a temporal *discontinuity* from a frame-sized playback
+   * advance: both change `currentTime`, but a discontinuity must be rendered by a bulk
+   * snapshot rebuild instead of by replaying each jumped-over tick. Never bumped by
+   * `advanceSimulationTime`, so a per-frame call cannot trigger a React rebuild.
+   */
+  seekEpoch: number;
+
   // Actions
   setIsLoadingTicks: (loading: boolean) => void;
   setReplayMode: (mode: ReplayMode) => void;
@@ -145,6 +154,138 @@ export const getBarSynthesizedPrice = (bar: RawBar, targetTimeMs: number): numbe
   }
 };
 
+/**
+ * Shared seek core: the state patch that moves the playhead to `targetMs`.
+ *
+ * `bumpSeekEpoch` marks the move as an explicit *discontinuity* (user seek, step, scrub or
+ * time jump) rather than a frame-sized playback advance. Consumers read `seekEpoch` to tell
+ * the two apart because they must be rendered differently: a discontinuity is rebuilt in
+ * bulk from the candle snapshot, whereas replaying every jumped-over tick one at a time is
+ * O(elapsed ticks) synchronous work inside a store subscriber -- thousands of chart
+ * primitive writes for a single 3-minute step on a dense tape, which is what froze the tab.
+ * `advanceSimulationTime`'s internal rewind branch reuses this core with the flag off, so a
+ * per-frame call can never trigger a React rebuild.
+ */
+const computeSeekPatch = (
+  state: PlaybackState,
+  targetMs: number,
+  bumpSeekEpoch: boolean
+): Partial<PlaybackState> => {
+  const { bufferedTicks, ticksBySymbol, masterData, isPaused } = state;
+  const seekPatch = bumpSeekEpoch ? { seekEpoch: state.seekEpoch + 1 } : {};
+  const lastTickMs = bufferedTicks.length > 0 ? isoToMs(bufferedTicks[bufferedTicks.length - 1].time) : null;
+  const lastBarMs = masterData.length > 0 ? isoToMs(masterData[masterData.length - 1].time) + 60000 : null;
+  const maxMs = (lastTickMs !== null && lastBarMs !== null) ? Math.max(lastTickMs, lastBarMs) : (lastTickMs ?? lastBarMs);
+  const reachedEnd = maxMs !== null && targetMs >= maxMs;
+
+  if (bufferedTicks.length === 0) {
+    let synthTick: MarketTick | null = null;
+    let updatedLatest: Record<string, MarketTick> = {};
+    if (masterData.length > 0) {
+      const bar = findBarAtOrBefore(masterData, targetMs);
+      if (bar) {
+        const sym = (bar.symbol || Object.keys(ticksBySymbol)[0] || 'SPY').toUpperCase();
+        const price = getBarSynthesizedPrice(bar, targetMs);
+        synthTick = {
+          time: msToIso(targetMs),
+          price: Number(price.toFixed(4)),
+          volume: bar.volume || 1,
+          symbol: sym,
+          session: (bar.session as any) || 'REG',
+          source: 'STREAMING',
+          isSynthesized: true,
+        };
+        if (synthTick) updatedLatest[sym] = synthTick;
+      }
+    }
+    return {
+      ...seekPatch,
+      currentTime: targetMs,
+      currentTickIndex: -1,
+      currentTick: synthTick,
+      latestTickBySymbol: updatedLatest,
+      isPaused: reachedEnd ? true : isPaused,
+    };
+  }
+
+  const firstTickMs = isoToMs(bufferedTicks[0].time);
+  if (targetMs < firstTickMs) {
+    let synthTick: MarketTick | null = null;
+    let updatedLatest: Record<string, MarketTick> = {};
+    if (masterData.length > 0) {
+      const bar = findBarAtOrBefore(masterData, targetMs);
+      if (bar) {
+        const sym = (bar.symbol || bufferedTicks[0].symbol || 'SPY').toUpperCase();
+        const price = getBarSynthesizedPrice(bar, targetMs);
+        synthTick = {
+          time: msToIso(targetMs),
+          price: Number(price.toFixed(4)),
+          volume: bar.volume || 1,
+          symbol: sym,
+          session: (bar.session as any) || 'REG',
+          source: 'STREAMING',
+          isSynthesized: true,
+        };
+        if (synthTick) updatedLatest[sym] = synthTick;
+      }
+    }
+    return {
+      ...seekPatch,
+      currentTickIndex: -1,
+      currentTick: synthTick,
+      latestTickBySymbol: updatedLatest,
+      currentTime: targetMs,
+      isPaused,
+    };
+  }
+
+
+  // Binary search for the last tick occurring at or before targetMs (tMs <= targetMs)
+  let low = 0;
+  let high = bufferedTicks.length - 1;
+  let targetIndex = 0;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const midMs = isoToMs(bufferedTicks[mid].time);
+    if (midMs <= targetMs) {
+      targetIndex = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const targetTick = bufferedTicks[targetIndex] || null;
+
+  // Scan backwards from targetIndex to efficiently populate the latest tick for each symbol
+  const updatedLatest: Record<string, MarketTick> = {};
+  const knownSymbols = Object.keys(ticksBySymbol);
+  const neededSymbolsCount = knownSymbols.length > 0 ? knownSymbols.length : Infinity;
+  let foundCount = 0;
+
+  for (let i = targetIndex; i >= 0; i--) {
+    const t = bufferedTicks[i];
+    if (t && t.symbol) {
+      const sym = t.symbol.toUpperCase();
+      if (!updatedLatest[sym]) {
+        updatedLatest[sym] = t;
+        foundCount++;
+        if (foundCount >= neededSymbolsCount) break;
+      }
+    }
+  }
+
+  return {
+    ...seekPatch,
+    currentTickIndex: targetIndex,
+    currentTick: targetTick,
+    latestTickBySymbol: updatedLatest,
+    currentTime: targetMs,
+    isPaused: reachedEnd ? true : isPaused,
+  };
+};
+
 export const usePlaybackStore = create<PlaybackState>((set, get) => ({
 
   replayMode: 'tick',
@@ -161,6 +302,7 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   currentTickIndex: 0,
   currentTick: null,
   totalTicks: 0,
+  seekEpoch: 0,
 
   setIsLoadingTicks: (loading) => set({ isLoadingTicks: loading }),
   setReplayMode: (mode) => set({ replayMode: mode }),
@@ -383,7 +525,9 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
 
     const currentTickTime = (currentTickIndex >= 0 && bufferedTicks[currentTickIndex]) ? isoToMs(bufferedTicks[currentTickIndex].time) : 0;
     if (currentTickIndex >= 0 && targetTimeMs < currentTickTime) {
-      get().seekTickTime(targetTimeMs);
+      // Internal rewind inside a per-frame advance: reuse the seek core but do NOT bump
+      // seekEpoch -- a frame must never trigger a React snapshot rebuild.
+      set((state) => computeSeekPatch(state, targetTimeMs, false));
       return;
     }
 
@@ -445,13 +589,14 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
           if (nextTick && nextTick.symbol) {
             updatedLatest[nextTick.symbol.toUpperCase()] = nextTick;
           }
-          set({
+          set((state) => ({
+            seekEpoch: state.seekEpoch + 1,
             currentTickIndex: nextIndex,
             currentTick: nextTick,
             latestTickBySymbol: updatedLatest,
             currentTime: nextTickMs,
             isPaused,
-          });
+          }));
         }
       }
       return;
@@ -494,13 +639,14 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             updatedLatest[t.symbol.toUpperCase()] = t;
           }
         }
-        set({
+        set((state) => ({
+          seekEpoch: state.seekEpoch + 1,
           currentTickIndex: prevIndex,
           currentTick: prevTick,
           latestTickBySymbol: updatedLatest,
           currentTime: isoToMs(prevTick.time),
           isPaused,
-        });
+        }));
       }
       return;
     }
@@ -543,130 +689,20 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
         updatedLatest[t.symbol.toUpperCase()] = t;
       }
     }
-    set({
+    set((state) => ({
+      seekEpoch: state.seekEpoch + 1,
       currentTickIndex: clampedIndex,
       currentTick: targetTick,
       latestTickBySymbol: updatedLatest,
       currentTime: isoToMs(targetTick.time),
       isPaused,
-    });
+    }));
   },
 
   seekTickTime: (time) => {
-    const { bufferedTicks, ticksBySymbol, masterData, isPaused } = get();
     const targetMs = typeof time === 'number' ? time : isoToMs(time);
-    const lastTickMs = bufferedTicks.length > 0 ? isoToMs(bufferedTicks[bufferedTicks.length - 1].time) : null;
-    const lastBarMs = masterData.length > 0 ? isoToMs(masterData[masterData.length - 1].time) + 60000 : null;
-    const maxMs = (lastTickMs !== null && lastBarMs !== null) ? Math.max(lastTickMs, lastBarMs) : (lastTickMs ?? lastBarMs);
-    const reachedEnd = maxMs !== null && targetMs >= maxMs;
-
-    if (bufferedTicks.length === 0) {
-      let synthTick: MarketTick | null = null;
-      let updatedLatest: Record<string, MarketTick> = {};
-      if (masterData.length > 0) {
-        const bar = findBarAtOrBefore(masterData, targetMs);
-        if (bar) {
-          const sym = (bar.symbol || Object.keys(ticksBySymbol)[0] || 'SPY').toUpperCase();
-          const price = getBarSynthesizedPrice(bar, targetMs);
-          synthTick = {
-            time: msToIso(targetMs),
-            price: Number(price.toFixed(4)),
-            volume: bar.volume || 1,
-            symbol: sym,
-            session: (bar.session as any) || 'REG',
-            source: 'STREAMING',
-            isSynthesized: true,
-          };
-          if (synthTick) updatedLatest[sym] = synthTick;
-        }
-      }
-      set({
-        currentTime: targetMs,
-        currentTickIndex: -1,
-        currentTick: synthTick,
-        latestTickBySymbol: updatedLatest,
-        isPaused: reachedEnd ? true : isPaused,
-      });
-      return;
-    }
-
-    const firstTickMs = isoToMs(bufferedTicks[0].time);
-    if (targetMs < firstTickMs) {
-      let synthTick: MarketTick | null = null;
-      let updatedLatest: Record<string, MarketTick> = {};
-      if (masterData.length > 0) {
-        const bar = findBarAtOrBefore(masterData, targetMs);
-        if (bar) {
-          const sym = (bar.symbol || bufferedTicks[0].symbol || 'SPY').toUpperCase();
-          const price = getBarSynthesizedPrice(bar, targetMs);
-          synthTick = {
-            time: msToIso(targetMs),
-            price: Number(price.toFixed(4)),
-            volume: bar.volume || 1,
-            symbol: sym,
-            session: (bar.session as any) || 'REG',
-            source: 'STREAMING',
-            isSynthesized: true,
-          };
-          if (synthTick) updatedLatest[sym] = synthTick;
-        }
-      }
-      set({
-        currentTickIndex: -1,
-        currentTick: synthTick,
-        latestTickBySymbol: updatedLatest,
-        currentTime: targetMs,
-        isPaused,
-      });
-      return;
-    }
-
-
-    // Binary search for the last tick occurring at or before targetMs (tMs <= targetMs)
-    let low = 0;
-    let high = bufferedTicks.length - 1;
-    let targetIndex = 0;
-
-    while (low <= high) {
-      const mid = (low + high) >> 1;
-      const midMs = isoToMs(bufferedTicks[mid].time);
-      if (midMs <= targetMs) {
-        targetIndex = mid;
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
-
-    const targetTick = bufferedTicks[targetIndex] || null;
-
-    // Scan backwards from targetIndex to efficiently populate the latest tick for each symbol
-    const updatedLatest: Record<string, MarketTick> = {};
-    const knownSymbols = Object.keys(ticksBySymbol);
-    const neededSymbolsCount = knownSymbols.length > 0 ? knownSymbols.length : Infinity;
-    let foundCount = 0;
-
-    for (let i = targetIndex; i >= 0; i--) {
-      const t = bufferedTicks[i];
-      if (t && t.symbol) {
-        const sym = t.symbol.toUpperCase();
-        if (!updatedLatest[sym]) {
-          updatedLatest[sym] = t;
-          foundCount++;
-          if (foundCount >= neededSymbolsCount) break;
-        }
-      }
-    }
-
-    set({
-      currentTickIndex: targetIndex,
-      currentTick: targetTick,
-      latestTickBySymbol: updatedLatest,
-      currentTime: targetMs,
-      isPaused: reachedEnd ? true : isPaused,
-    });
+    set((state) => computeSeekPatch(state, targetMs, true));
   },
-
   reset: () => {
     set({
       currentTime: null,

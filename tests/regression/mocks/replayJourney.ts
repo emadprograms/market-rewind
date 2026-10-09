@@ -69,7 +69,7 @@ export async function waitForBackendConnected(page: Page): Promise<void> {
 export interface ReplayRequest {
   ticker?: string;
   date: string;
-  entryTime?: string; // ET "HH:MM"; defaults to the app's 09:20 anchor
+  entryTime?: string; // ET "HH:MM"; defaults to the app's 09:10 anchor
 }
 
 /** Fill the "Configure Session" card (ticker, target date, optional entry time). */
@@ -103,8 +103,8 @@ export async function startReplay(
     timeout: 40_000,
   });
 
-  // Replay clock anchored (defaults to the 09:20 ET entry point).
-  const anchor = opts.anchorEt ?? '09:20:00';
+  // Replay clock anchored (defaults to the 09:10 ET entry point).
+  const anchor = opts.anchorEt ?? '09:10:00';
   await expect(page.locator('.time-display')).toContainText(anchor, { timeout: 40_000 });
 }
 
@@ -117,7 +117,7 @@ export async function beginReplay(
   const handle = await openWebsite(page, options);
   await waitForBackendConnected(page);
   await enterReplayDate(page, req);
-  await startReplay(page, { ticker: req.ticker, anchorEt: req.entryTime ? `${req.entryTime}:00` : '09:20:00' });
+  await startReplay(page, { ticker: req.ticker, anchorEt: req.entryTime ? `${req.entryTime}:00` : '09:10:00' });
   return handle;
 }
 
@@ -222,7 +222,7 @@ export async function pressPause(page: Page): Promise<void> {
 }
 
 export async function setSpeed(page: Page, value: string): Promise<void> {
-  await page.locator('.playback-bar select').selectOption(value);
+  await page.getByTestId('playback-speed-select').selectOption(value);
 }
 
 export function scrubberCounter(page: Page): Locator {

@@ -5,7 +5,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
  * All tests connect directly to the streaming DuckDB service (localhost:8765).
  */
 
-export const SEED_DATE = '2026-09-25';
+export const SEED_DATE = '2026-10-07';
 export const SEED_SYMBOLS = ['AAPL', 'MSFT', 'TSLA', 'AMD'] as const;
 
 /** The root `.chart-card` element for the chart at `index` (layout '2v' → 2 charts). */

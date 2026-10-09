@@ -1,0 +1,68 @@
+name: Tests
+
+# Runs the checks that need no tick lake and no browser on every pull request and on pushes to
+# main or to arena/* branches. Playwright specs need Chromium and the real tick lake, so they stay
+# on the operator's machine (see docs/reviews/seek-while-playing-freeze-verification-brief.md).
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'arena/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (type check, unit tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # package-lock.json is git-ignored, so versions resolve within the package.json ranges.
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type check (src)
+        run: npx tsc --noEmit
+
+      - name: Unit and integration tests (vitest)
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+  backend:
+    name: Backend (pytest, synthetic lake)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: pip install pytest duckdb aiohttp pyarrow
+
+      # The conftest builds its own synthetic lake. TICK_LAKE_ROOT is not set, so the
+      # operator-only real-lake tests skip.
+      - name: Run pytest
+        env:
+          PYTHONPATH: .
+        run: python -m pytest backend/streaming_service/tests -q -p no:cacheprovider

@@ -98,13 +98,25 @@ export function useChartData({
     updateStaticState(usePlaybackStore.getState());
 
     let prevTicks = usePlaybackStore.getState().ticksBySymbol?.[sym];
+    let prevSeekEpoch = usePlaybackStore.getState().seekEpoch;
     const unsub = usePlaybackStore.subscribe((state) => {
       const currentTicks = state.ticksBySymbol?.[sym];
       const ticksChanged = currentTicks !== prevTicks;
       if (ticksChanged) {
         prevTicks = currentTicks;
       }
-      if (state.isPaused || ticksChanged) {
+      // SEEK-REBUILD-01: an explicit playhead move (seek / step / scrub / time jump) is a
+      // temporal discontinuity, not a frame of playback. It must refresh React state even
+      // while playing, so the candle snapshot below is recomputed and the chart is rebuilt
+      // in bulk. Without this the only path that can move the chart during a
+      // seek-while-playing is the per-tick catch-up in useChartLifecycle subscriber 6, which
+      // is O(elapsed ticks) primitive writes -- and on a rewind it drops every tick, leaving
+      // future candles on screen.
+      const seekChanged = state.seekEpoch !== prevSeekEpoch;
+      if (seekChanged) {
+        prevSeekEpoch = state.seekEpoch;
+      }
+      if (state.isPaused || ticksChanged || seekChanged) {
         updateStaticState(state);
       }
     });

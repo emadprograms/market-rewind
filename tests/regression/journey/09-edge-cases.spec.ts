@@ -33,8 +33,8 @@ test.describe('JOURNEY 09 — Edge cases & resilience', () => {
     // 2026-09-05 is a Saturday.
     await beginReplay(page, { ticker: 'SPY', date: '2026-09-05' });
 
-    // Clock anchors at the weekend 09:20 ET.
-    await expect(page.locator('.time-display')).toContainText('09:20:00');
+    // Clock anchors at the weekend 09:10 ET.
+    await expect(page.locator('.time-display')).toContainText('09:10:00');
 
     // No ticks buffered for a non-trading day.
     const state = await readPlaybackState(page);
@@ -62,7 +62,7 @@ test.describe('JOURNEY 09 — Edge cases & resilience', () => {
     await openWebsite(page, { emptyMarket: true });
     await waitForBackendConnected(page);
     await enterReplayDate(page, { ticker: 'SPY', date: TARGET });
-    await startReplay(page, { ticker: 'SPY', anchorEt: '09:20:00' });
+    await startReplay(page, { ticker: 'SPY', anchorEt: '09:10:00' });
 
     // "Market Closed / No Data" guidance is shown.
     await expect(page.getByText('Market Closed / No Data')).toBeVisible({ timeout: 15_000 });

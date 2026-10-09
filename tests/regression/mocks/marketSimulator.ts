@@ -17,7 +17,7 @@
  *
  * Time handling mirrors the app exactly (see src/lib/timezones.ts):
  *   • ticks/candles are stamped in UTC ("YYYY-MM-DD HH:MM:SS[.mmm]")
- *   • the "09:20 ET" entry anchor and the RTH window are converted ET→UTC
+ *   • the "09:10 ET" entry anchor and the RTH window are converted ET→UTC
  *     using a DST-aware offset, so the data lines up with the app's cursor.
  */
 
@@ -93,7 +93,7 @@ const HOLIDAYS = new Set<string>([
 ]);
 
 /** Entry anchor (ET) the app defaults to and the RTH close. */
-const ET_OPEN = '09:20';
+const ET_OPEN = '09:10';
 const ET_RTH_OPEN = '09:30';
 const ET_CLOSE = '16:00';
 
@@ -233,7 +233,7 @@ function buildDay(symbol: string, date: string): DayMarket {
     b.count += 1;
   };
 
-  // Dense tick-by-tick walk from the 09:20 anchor through the RTH close.
+  // Dense tick-by-tick walk from the 09:10 anchor through the RTH close.
   // Ticks span the pre-open window (for the tape + forming candle), but completed
   // minute bars are only built from the regular session (09:30 ET onward) so the
   // historical chart's completed candles start at the RTH open.

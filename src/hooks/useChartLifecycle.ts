@@ -19,6 +19,120 @@ const getTickMs = (t: any): number => {
   return new Date(str.replace(' ', 'T') + (str.includes('Z') ? '' : 'Z')).getTime();
 };
 
+/**
+ * Tick-independent part of the 1D bucket aggregation.
+ *
+ * Previously this ran once per catch-up tick. For a 60-minute forward seek on a dense session that
+ * is ~9,000 ticks into 12 daily-bucket updates, and the forming-minute scan started at the END of
+ * the full buffered tape, walking past every future tick on each call. Both are functions of
+ * (bucket, evaluation time), so they are computed once and memoised by the caller.
+ *
+ * `lastBarClose` is null when no bar or forming tick set it, so the caller can fall back to the
+ * current tick exactly as the original code did.
+ */
+export type DailyBucketAggregate = {
+  completedVol: number;
+  maxHigh: number;
+  minLow: number;
+  lastBarClose: number | null;
+  firstBarOpen: number | undefined;
+  foundAny: boolean;
+  formingMinuteVol: number;
+};
+
+/**
+ * The per-tick part of the 1D aggregation: O(1), and the only place a tick's own price or volume
+ * enters the bucket values. Shared by subscriber 6 and by the tests, so there is one
+ * implementation to verify rather than a copy in the test that can drift from the hook.
+ */
+export const applyDailyTickFallback = (
+  agg: DailyBucketAggregate,
+  tick: { price: number },
+  tickVol: number,
+  symbolTicks: any[] | undefined,
+  isSynthetic: boolean,
+): { maxHigh: number; minLow: number; lastBarClose: number; formingMinuteVol: number } => {
+  let maxHigh = agg.maxHigh;
+  let minLow = agg.minLow;
+  let formingMinuteVol = agg.formingMinuteVol;
+  // null means no bar or forming tick set it, so it falls back to this tick, as before.
+  let lastBarClose = agg.lastBarClose ?? tick.price;
+  // Only when there are no buffered ticks for this symbol.
+  if (!isSynthetic && !(symbolTicks && symbolTicks.length > 0) && tick.price) {
+    lastBarClose = tick.price;
+    maxHigh = Math.max(maxHigh, tick.price);
+    minLow = Math.min(minLow, tick.price);
+    formingMinuteVol = tickVol;
+  }
+  return { maxHigh, minLow, lastBarClose, formingMinuteVol };
+};
+
+export const aggregateDailyBucket = (
+  dailyIndexRef: any,
+  masterData: any[],
+  sym: string,
+  ticker: string,
+  bucketTime: number,
+  evalTimeMs: number,
+  isSynthetic: boolean,
+  symbolTicks: any[] | undefined,
+): DailyBucketAggregate => {
+  let completedVol = 0;
+  let maxHigh = -Infinity;
+  let minLow = Infinity;
+  let lastBarClose: number | null = null;
+  let firstBarOpen: number | undefined = undefined;
+  let foundAny = false;
+
+  const bucketBars = masterData.length > 0
+    ? (resolveDailyIndex(dailyIndexRef, masterData, sym, ticker, '1D').byBucket.get(bucketTime) || [])
+    : [];
+
+  for (const entry of bucketBars) {
+    const bar = entry.bar;
+    const barMs = entry.barMs;
+    if (barMs <= evalTimeMs) {
+      if (firstBarOpen === undefined) {
+        firstBarOpen = bar.open;
+      }
+      foundAny = true;
+      const isForming = barMs + 60000 > evalTimeMs;
+      if (isForming) {
+        maxHigh = Math.max(maxHigh, bar.open);
+        minLow = Math.min(minLow, bar.open);
+        lastBarClose = bar.open;
+      } else {
+        completedVol += (bar.volume || 0);
+        maxHigh = Math.max(maxHigh, bar.high);
+        minLow = Math.min(minLow, bar.low);
+        lastBarClose = bar.close;
+      }
+    }
+  }
+
+  // Forming minute from buffered real ticks. Scan backwards from the last tick at or before the
+  // evaluation time, not from the end of the tape: the tape includes every future tick, and the
+  // old start point walked all of them on every call.
+  let formingMinuteVol = 0;
+  if (!isSynthetic && symbolTicks && symbolTicks.length > 0) {
+    const currentMinuteStartMs = Math.floor(evalTimeMs / 60000) * 60000;
+    const lastElapsedIdx = findFirstTickAfter(symbolTicks, evalTimeMs) - 1;
+    for (let i = lastElapsedIdx; i >= 0; i--) {
+      const t = symbolTicks[i];
+      const tMs = getTickMs(t);
+      if (tMs < currentMinuteStartMs) break;
+      if (tMs <= evalTimeMs && isRthTick(t, ticker)) {
+        formingMinuteVol += (t.volume !== undefined && t.volume !== null ? t.volume : 1.0);
+        maxHigh = Math.max(maxHigh, t.price);
+        minLow = Math.min(minLow, t.price);
+        lastBarClose = t.price;
+      }
+    }
+  }
+
+  return { completedVol, maxHigh, minLow, lastBarClose, firstBarOpen, foundAny, formingMinuteVol };
+};
+
 const findFirstTickAfter = (ticks: any[], targetMs: number): number => {
   let low = 0;
   let high = ticks.length - 1;
@@ -375,6 +489,10 @@ export function useChartLifecycle({
     bucketTime: -1,
     minutes: new Map(),
   });
+  // SEEK-BULK-01: set by the playback subscriber when it skips a multi-bucket seek batch. The
+  // next snapshot rebuild must then use setData, not the incremental append path, which would
+  // write one candle per bucket again.
+  const forceFullRebuildRef = useRef(false);
   // Daily bar buckets, rebuilt once per session load instead of rescanned per tick.
   // See src/lib/dailyIndex.ts for the measurements that motivated this.
   const dailyIndexRef = useRef<DailyIndex | null>(null);
@@ -492,11 +610,14 @@ export function useChartLifecycle({
       const formatted: any[] = chartData.map(formatBar);
       const hasPendingPrepend = pendingHistoryPrependRef.current !== null;
 
+      const forceFullRebuild = forceFullRebuildRef.current;
+      forceFullRebuildRef.current = false;
+
       let updatedIncrementally = false;
 
       // Incremental candle update:
       // When in same context, no history prepend, and we have a rendered last candle whose timestamp exists in formatted data
-      if (isSameContext && !hasPendingPrepend && lastCandleRef.current && lastDataCountRef.current > 0) {
+      if (isSameContext && !hasPendingPrepend && !forceFullRebuild && lastCandleRef.current && lastDataCountRef.current > 0) {
         const lastTime = lastCandleRef.current.time;
         let matchIdx = -1;
         for (let i = formatted.length - 1; i >= 0; i--) {
@@ -704,7 +825,21 @@ export function useChartLifecycle({
 
     const sym = ticker.toUpperCase();
 
+    // SEEK-BULK-01: the epoch this subscriber last saw. Read on every call, including the early
+    // returns below, so a seek made while paused is consumed by the paused rebuild and cannot
+    // leak into a later playing frame.
+    let seenSeekEpoch = usePlaybackStore.getState().seekEpoch;
     const unsubscribe = usePlaybackStore.subscribe((state) => {
+      const seekJumped = state.seekEpoch !== seenSeekEpoch;
+      seenSeekEpoch = state.seekEpoch;
+      // SEEK-REBUILD-01: An explicit playhead move (seek, step, scrub, time jump) is a
+      // temporal *discontinuity*, not elapsed playback. Subscriber 6 cannot render a rewind
+      // at all -- the monotonic `bucketTime < lastCandle.time` guard below drops every rewound
+      // tick, leaving candles from *after* the playhead on the series -- so `useChartData`
+      // now refreshes React state on `seekEpoch` and effect 3 rebuilds the series in bulk
+      // from the authoritative snapshot. A seek that crosses more than one bucket skips the
+      // catch-up entirely (SEEK-BULK-01, below). A single-bucket seek, or any playback frame,
+      // still runs the catch-up, coalesced to one write per bucket by INGEST-06.
       // REV-SYNC-02 & REV-SYNC-03: Temporal discontinuity detection (rewind during pause or playback)
       if (state.currentTime !== null && state.currentTime !== undefined) {
         if (lastConsumedTimeRef.current > state.currentTime) {
@@ -796,6 +931,52 @@ export function useChartLifecycle({
         lastConsumedTimeRef.current = state.currentTime;
       }
 
+      // SEEK-BULK-01: a seek that crosses more than one bucket is not played back. Writing it per
+      // bucket costs O(buckets) primitive writes (about 12 for an hour on the 5-minute chart). The
+      // seek already bumped seekEpoch, so useChartData refreshes the snapshot and effect 3 rebuilds
+      // the series with one setData per series. Playback frames without a seek still take the
+      // per-bucket path below, so a real stall still renders.
+      if (seekJumped) {
+        const bucketsSpanned = new Set(
+          newlyElapsedTicks.map((t) => getBucketTime(getTickMs(t), timeframe))
+        ).size;
+        if (bucketsSpanned > 1) {
+          forceFullRebuildRef.current = true;
+          syntheticBucketVolumesRef.current = { bucketTime: -1, minutes: new Map() };
+          return;
+        }
+      }
+
+      // INGEST-06: Coalesce chart-primitive writes per candle bucket. Every branch below
+      // merges the tick into its bucket's candle and then rewrites that candle, so a tape at
+      // 20+ prints/second -- or any high speed multiplier, where one frame elapses seconds of
+      // tape -- issues one candlestick write plus one volume write per tick for intermediate
+      // states that are never visible. Queueing the write and flushing when the bucket changes
+      // (or when the batch ends) produces identical final series content with O(buckets)
+      // writes instead of O(ticks), which is what keeps a frame inside its 16ms budget.
+      let queuedPrice: any = null;
+      let queuedVolume: any = null;
+      const queueUpdate = (bar: any, vol: any) => {
+        if (queuedPrice !== null && queuedPrice.time !== bar.time) {
+          initPriceSeriesRef.current!.update(queuedPrice);
+          initVolumeSeriesRef.current!.update(queuedVolume);
+        }
+        queuedPrice = bar;
+        queuedVolume = vol;
+      };
+      const flushQueuedUpdates = () => {
+        if (queuedPrice === null) return;
+        initPriceSeriesRef.current!.update(queuedPrice);
+        initVolumeSeriesRef.current!.update(queuedVolume);
+        queuedPrice = null;
+        queuedVolume = null;
+      };
+
+      // SEEK-COST-01: memo for the daily-bucket aggregate. It depends on the bucket and the
+      // evaluation time, not on the individual tick, so it is computed once per distinct pair.
+      let dailyAggKey: string | null = null;
+      let dailyAgg: DailyBucketAggregate | null = null;
+
       // Process newly elapsed ticks in order
       for (const tick of newlyElapsedTicks) {
         const tickTimeMs = getTickMs(tick);
@@ -805,66 +986,18 @@ export function useChartLifecycle({
 
         if (timeframe === '1D') {
           // LIVE-VOL-01: Unified daily chart policy for both real ticks and synthetic fallback
-          const masterData = state.masterData || [];
-          let completedVol = 0;
-          let maxHigh = -Infinity;
-          let minLow = Infinity;
-          let lastBarClose = tick.price;
-          let firstBarOpen = undefined;
-          let foundAny = false;
-
           const evalTimeMs = state.currentTime && state.currentTime > tickTimeMs ? state.currentTime : tickTimeMs;
-
-          // Bucket membership and per-bar facts are tick-invariant, so they are computed
-          // once per session load rather than once per bar per tick (see dailyIndex.ts).
-          // The tick-dependent `barMs <= evalTimeMs` test is still applied here.
-          const bucketBars = masterData.length > 0
-            ? (resolveDailyIndex(dailyIndexRef, masterData, sym, ticker, timeframe).byBucket.get(bucketTime) || [])
-            : [];
-
-          for (const entry of bucketBars) {
-            const bar = entry.bar;
-            const barMs = entry.barMs;
-            if (barMs <= evalTimeMs) {
-              if (firstBarOpen === undefined) {
-                firstBarOpen = bar.open;
-              }
-              foundAny = true;
-              const isForming = barMs + 60000 > evalTimeMs;
-              if (isForming) {
-                maxHigh = Math.max(maxHigh, bar.open);
-                minLow = Math.min(minLow, bar.open);
-                lastBarClose = bar.open;
-              } else {
-                completedVol += (bar.volume || 0);
-                maxHigh = Math.max(maxHigh, bar.high);
-                minLow = Math.min(minLow, bar.low);
-                lastBarClose = bar.close;
-              }
-            }
+          const aggKey = `${bucketTime}|${evalTimeMs}|${isSynthetic ? 1 : 0}`;
+          if (dailyAgg === null || dailyAggKey !== aggKey) {
+            dailyAgg = aggregateDailyBucket(
+              dailyIndexRef, state.masterData || [], sym, ticker, bucketTime, evalTimeMs, isSynthetic, symbolTicks,
+            );
+            dailyAggKey = aggKey;
           }
-
-          // Incorporate elapsed trades from forming minute for real ticks
-          let formingMinuteVol = 0;
-          if (!isSynthetic && symbolTicks && symbolTicks.length > 0) {
-            const currentMinuteStartMs = Math.floor(evalTimeMs / 60000) * 60000;
-            for (let i = symbolTicks.length - 1; i >= 0; i--) {
-              const t = symbolTicks[i];
-              const tMs = getTickMs(t);
-              if (tMs < currentMinuteStartMs) break;
-              if (tMs <= evalTimeMs && isRthTick(t, ticker)) {
-                formingMinuteVol += (t.volume !== undefined && t.volume !== null ? t.volume : 1.0);
-                maxHigh = Math.max(maxHigh, t.price);
-                minLow = Math.min(minLow, t.price);
-                lastBarClose = t.price;
-              }
-            }
-          } else if (!isSynthetic && tick.price) {
-            lastBarClose = tick.price;
-            maxHigh = Math.max(maxHigh, tick.price);
-            minLow = Math.min(minLow, tick.price);
-            formingMinuteVol = tickVol;
-          }
+          const agg: DailyBucketAggregate = dailyAgg;
+          const { completedVol, firstBarOpen, foundAny } = agg;
+          const { maxHigh, minLow, lastBarClose, formingMinuteVol } =
+            applyDailyTickFallback(agg, tick, tickVol, symbolTicks, isSynthetic);
 
           const fallbackOpen = foundAny ? firstBarOpen! : tick.price;
           const totalVol = foundAny
@@ -893,21 +1026,22 @@ export function useChartLifecycle({
           }
           lastCandleRef.current = newCandle;
 
-          initPriceSeriesRef.current.update({
-            time: bucketTime as any,
-            open: newCandle.open,
-            high: newCandle.high,
-            low: newCandle.low,
-            close: newCandle.close,
-          });
-
-          initVolumeSeriesRef.current.update({
-            time: bucketTime as any,
-            value: newCandle.volume,
-            color: newCandle.close >= newCandle.open
-              ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
-              : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
-          });
+          queueUpdate(
+            {
+              time: bucketTime as any,
+              open: newCandle.open,
+              high: newCandle.high,
+              low: newCandle.low,
+              close: newCandle.close,
+            },
+            {
+              time: bucketTime as any,
+              value: newCandle.volume,
+              color: newCandle.close >= newCandle.open
+                ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+                : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+            }
+          );
           continue;
         }
 
@@ -931,19 +1065,20 @@ export function useChartLifecycle({
           };
           lastCandleRef.current = firstCandle;
 
-          initPriceSeriesRef.current.update({
-            time: bucketTime as any,
-            open: firstCandle.open,
-            high: firstCandle.high,
-            low: firstCandle.low,
-            close: firstCandle.close,
-          });
-
-          initVolumeSeriesRef.current.update({
-            time: bucketTime as any,
-            value: firstCandle.volume,
-            color: themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a',
-          });
+          queueUpdate(
+            {
+              time: bucketTime as any,
+              open: firstCandle.open,
+              high: firstCandle.high,
+              low: firstCandle.low,
+              close: firstCandle.close,
+            },
+            {
+              time: bucketTime as any,
+              value: firstCandle.volume,
+              color: themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a',
+            }
+          );
           continue;
         }
 
@@ -972,21 +1107,22 @@ export function useChartLifecycle({
             lastCandle.volume = Number((lastCandle.volume + tickVol).toFixed(4));
           }
 
-          initPriceSeriesRef.current.update({
-            time: bucketTime as any,
-            open: lastCandle.open,
-            high: lastCandle.high,
-            low: lastCandle.low,
-            close: lastCandle.close,
-          });
-
-          initVolumeSeriesRef.current.update({
-            time: bucketTime as any,
-            value: lastCandle.volume,
-            color: lastCandle.close >= lastCandle.open
-              ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
-              : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
-          });
+          queueUpdate(
+            {
+              time: bucketTime as any,
+              open: lastCandle.open,
+              high: lastCandle.high,
+              low: lastCandle.low,
+              close: lastCandle.close,
+            },
+            {
+              time: bucketTime as any,
+              value: lastCandle.volume,
+              color: lastCandle.close >= lastCandle.open
+                ? (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a')
+                : (themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.5)' : '#ef5350'),
+            }
+          );
         } else {
           // New candle bucket!
           let initVol = tickVol;
@@ -1014,21 +1150,24 @@ export function useChartLifecycle({
             cardEl.setAttribute('data-last-bar-time', isoTime);
           }
 
-          initPriceSeriesRef.current.update({
-            time: bucketTime as any,
-            open: newCandle.open,
-            high: newCandle.high,
-            low: newCandle.low,
-            close: newCandle.close,
-          });
-
-          initVolumeSeriesRef.current.update({
-            time: bucketTime as any,
-            value: newCandle.volume,
-            color: themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a',
-          });
+          queueUpdate(
+            {
+              time: bucketTime as any,
+              open: newCandle.open,
+              high: newCandle.high,
+              low: newCandle.low,
+              close: newCandle.close,
+            },
+            {
+              time: bucketTime as any,
+              value: newCandle.volume,
+              color: themeRef.current === 'light' ? 'rgba(0, 0, 0, 0.15)' : '#26a69a',
+            }
+          );
         }
       }
+
+      flushQueuedUpdates();
     });
 
     return () => {
