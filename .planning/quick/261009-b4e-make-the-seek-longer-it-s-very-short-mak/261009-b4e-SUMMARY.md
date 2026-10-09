@@ -17,7 +17,7 @@ date: "2026-10-09"
 
 2. **Marked Timestamps Along the Seek Bar**:
    - Implemented dynamic timeline marks calculation adapting to session duration (hourly marks for full-day sessions, sub-hour intervals for shorter sessions).
-   - Explicitly marked key trading session milestones: `09:27` (milestone in blue) and `09:30` (Market Open in green, staggered with distinct accent tick line) whenever covered by the session bounds.
+   - Explicitly marked key trading session milestone: `09:30` (Market Open in green `#26a69a` with distinct accent tick line) whenever covered by the session bounds (pre-market 09:20/09:27 marks removed per user request).
    - Marked start time (0%) and end time (100%) as well as intermediate milestone timestamps (e.g. 10:00, 11:00, 12:00, 13:00, 14:00, 15:00) with vertical tick lines and labels formatted in the session ticker's timezone.
    - Connected `<datalist id="playback-time-markers">` to `<input type="range" list="playback-time-markers">` for native browser tick alignment.
 
