@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, ListFilter } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, ListFilter, ArrowRight } from 'lucide-react';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { getTzForTicker, getTzLabel, getUtcTimeFromEt } from '../lib/timezones';
 
@@ -12,6 +12,8 @@ interface PlaybackBarProps {
   minStepMinutes: number;
   isTapeOpen?: boolean;
   onToggleTape?: () => void;
+  onNextSymbol?: () => void;
+  nextSymbol?: string;
 }
 
 export function PlaybackBar({
@@ -23,6 +25,8 @@ export function PlaybackBar({
   minStepMinutes,
   isTapeOpen = false,
   onToggleTape,
+  onNextSymbol,
+  nextSymbol,
 }: PlaybackBarProps) {
   const currentTime = usePlaybackStore((state) => state.currentTime);
   const isPaused = usePlaybackStore((state) => state.isPaused);
@@ -470,6 +474,38 @@ export function PlaybackBar({
             <option value={0}>1 tick</option>
           </select>
         </div>
+
+        {/* Next Symbol Button */}
+        {onNextSymbol && (
+          <button
+            className="btn-icon"
+            onClick={onNextSymbol}
+            data-testid="next-symbol-btn"
+            title={nextSymbol ? `Next Symbol: ${nextSymbol} (Space)` : "Next Symbol (Space)"}
+            aria-label={nextSymbol ? `Next Symbol: ${nextSymbol}` : "Next Symbol"}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              color: '#d1d4dc',
+              border: '1px solid #2a2e39',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              marginLeft: '4px',
+              userSelect: 'none',
+              flexShrink: 0,
+            }}
+          >
+            <ArrowRight size={14} />
+            <span>NEXT SYMBOL</span>
+          </button>
+        )}
       </div>
 
       {/* Time-based scrubber slider */}

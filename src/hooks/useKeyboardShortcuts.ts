@@ -122,12 +122,13 @@ export function useKeyboardShortcuts({
         const currentSetTicker = setTickerRef.current;
         if (currentTickers.length > 0 && currentSetTicker) {
           const currentIndex = currentTickers.indexOf(currentTickerRef.current);
+          let nextIndex = 0;
           if (currentIndex !== -1) {
-            let nextIndex = e.shiftKey ? currentIndex - 1 : currentIndex + 1;
+            nextIndex = e.shiftKey ? currentIndex - 1 : currentIndex + 1;
             if (nextIndex >= currentTickers.length) nextIndex = 0;
             if (nextIndex < 0) nextIndex = currentTickers.length - 1;
-            currentSetTicker(currentTickers[nextIndex]);
           }
+          currentSetTicker(currentTickers[nextIndex]);
         }
         return;
       }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Activity } from 'lucide-react';
 
 // Hooks
@@ -73,8 +73,38 @@ export default function App() {
     if (group !== 'none' && state.groupTickers[group]) {
       return state.groupTickers[group];
     }
-    return state.tickers[activeId] || sessionTicker;
+    const defaultTicker = (layoutMode === '4' && activeId === '3' && tickers.includes('SPY')) ? 'SPY' : sessionTicker;
+    return state.tickers[activeId] || defaultTicker;
   });
+
+  const currentActiveTicker = activeChartTicker || sessionTicker;
+  const nextSymbol = useMemo(() => {
+    if (!tickers || tickers.length === 0) return '';
+    const currentIndex = tickers.indexOf(currentActiveTicker);
+    let nextIndex = 0;
+    if (currentIndex !== -1) {
+      nextIndex = (currentIndex + 1) % tickers.length;
+    }
+    return tickers[nextIndex] || '';
+  }, [tickers, currentActiveTicker]);
+
+  const handleNextSymbol = useCallback(() => {
+    if (!tickers || tickers.length === 0) return;
+    const current = activeChartTicker || sessionTicker;
+    const currentIndex = tickers.indexOf(current);
+    let nextIndex = 0;
+    if (currentIndex !== -1) {
+      nextIndex = (currentIndex + 1) % tickers.length;
+    }
+    const next = tickers[nextIndex];
+    if (!next) return;
+
+    const chartIdToUpdate = selectedChartId !== null && selectedChartId !== undefined ? selectedChartId : 0;
+    handleTickerChange(chartIdToUpdate, next);
+    if (!isSessionStarted) {
+      setSessionTicker(next);
+    }
+  }, [tickers, activeChartTicker, sessionTicker, selectedChartId, handleTickerChange, isSessionStarted, setSessionTicker]);
 
   const {
     totalRealized,
@@ -292,6 +322,8 @@ export default function App() {
           minStepMinutes={minStepMinutes}
           isTapeOpen={isTapeOpen}
           onToggleTape={() => setIsTapeOpen(!isTapeOpen)}
+          onNextSymbol={handleNextSymbol}
+          nextSymbol={nextSymbol}
         />
         <PlaybackManager />
       </div>

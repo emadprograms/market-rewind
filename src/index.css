@@ -234,6 +234,11 @@ body {
   .gutter-h {
     height: 16px;
   }
+
+  [data-testid="next-symbol-btn"] {
+    padding: 6px 12px;
+    min-height: 32px;
+  }
 }
 
 /* Assign areas for complex Grid-3 variants */
