@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-11T23:41:01.740Z",
+  "generated_at": "2026-10-11T23:49:03.735Z",
   "analysis_version": 1,
   "source": {
     "data_dir": "docs/research/capital-demo-order-data",
-    "bundle_count": 6,
+    "bundle_count": 10,
     "network_calls": 0
   },
   "provenance_legend": {
@@ -313,6 +313,78 @@
         "working_orders": [],
         "observed_at": null
       }
+    },
+    {
+      "run_id": "2026-10-11T23-42-28-127Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 1,
+      "event_roles": {
+        "CLOCK_PROBE": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T23-42-34-289Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 1,
+      "event_roles": {
+        "CLOCK_PROBE": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T23-42-52-804Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 1,
+      "event_roles": {
+        "CLOCK_PROBE": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T23-42-57-824Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 1,
+      "event_roles": {
+        "CLOCK_PROBE": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
     }
   ],
   "reconciliation": {
@@ -379,7 +451,7 @@
   },
   "stream_coverage": {
     "event_types": {
-      "REST_REQUEST": 79
+      "REST_REQUEST": 83
     },
     "confirmation_frames_captured": 0,
     "interpretation": "No confirmation-stream frames were captured. The collector sends confirms.subscribe but drops non-quote/non-confirmation frames, including subscription errors. Real-time fill notifications were NOT verified."
