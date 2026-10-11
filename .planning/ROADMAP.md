@@ -1,6 +1,6 @@
 # Milestone v6.0 Roadmap: Offline Order Simulator (Mock Capital.com Terminal)
 
-**6 phases** | **38 requirements mapped** | All covered ✓
+**6 phases** | **40 requirements mapped** | All covered ✓
 
 Phase numbering continues from v5.0 (which ended at 42). Source plan:
 `docs/research/capital-order-simulator-implementation-plan.md`. Research: `.planning/research/`.

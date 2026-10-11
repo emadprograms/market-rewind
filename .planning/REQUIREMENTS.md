@@ -115,4 +115,4 @@ Explicitly excluded from this milestone (with rationale):
 | SIM-UI-01..06 | 47 | Pending |
 | SIM-VERIFY-01, SIM-VERIFY-02 | 48 | Pending |
 
-**Total:** 38 requirements across 8 categories, mapped to 6 phases (43–48).
+**Total:** 40 requirements across 8 categories, mapped to 6 phases (43–48).

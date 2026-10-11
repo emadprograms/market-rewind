@@ -9,7 +9,8 @@
     "plan_check": true,
     "verifier": true,
     "nyquist_validation": true,
-    "auto_advance": true
+    "auto_advance": true,
+    "ai_integration_phase": true
   },
   "plan_review": {
     "source_grounding": true
