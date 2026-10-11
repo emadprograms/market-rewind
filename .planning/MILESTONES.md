@@ -27,6 +27,12 @@
 
 **Git range:** `feat(phase-39)` → `feat(phase-42)` (`9968e9e` → `8446652`)
 
+**Close-out:** archived late on 2026-10-12. The milestone was implemented and all four phases verified on 2026-10-06, but the archival step never ran — no `v5.0-*` archive files, no `v5.0` git tag, ROADMAP.md left un-collapsed, and `.planning/REQUIREMENTS.md` left in place. This close-out completed that archival.
+
+**Known verification overrides:** 1 newly acknowledged, 0 carried forward.
+- **LAKE-VERIFY-02 (Playwright journey suite).** Phase 42's report was filed with the non-schema status `passed_with_documented_environment_block`; it was normalized to `passed` on close so `audit-open` could parse it, with the block preserved verbatim in `status_note` and section 4 of that report. The sandbox cannot run the journey suite (no obtainable browser binary), so the journey result rests on the maintainer-machine run, not on sandbox evidence. Remediation: `npx playwright install chromium && npm run test:journey`.
+- `.planning/debug/seek-while-playing-freeze` was closed as `resolved_superseded` rather than human-verified. Its fix chain is shipped in the repository, but the browser-effect measurement it was waiting on was never produced; that claim remains unmeasured and must not be quoted as measured.
+
 ---
 
 ## v4.3 Live Data Stabilization and Testing (Shipped: 2026-09-30)
