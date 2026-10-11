@@ -6,18 +6,18 @@ Market Rewind is a high-performance local-first market replay and charting analy
 ## Core Value
 High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, real-time candle aggregation directly from `streaming.duckdb`, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
 
-## Current Milestone: Milestone v5.0 — Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
+## Current Milestone: Milestone v6.0 — Offline Order Simulator (Mock Capital.com Terminal)
 
-**Goal:** Re-architect Market Rewind's backend and data access layer from the deprecated disk-backed `streaming.duckdb` file to Data Harvester's zero-dependency Partitioned Parquet Tick Lake architecture in strict adherence to the Repo B Read Contract (`docs/contracts/repo_b_tick_lake_contract.md` v1.5.0).
+**Goal:** Build an offline order terminal where market, limit, and stop orders are submitted against the replayed bid/ask tape and experience real transmission and execution delays, so that a delay changes execution behaviour rather than merely animating a button.
 
 **Target features:**
-- Zero `data-harvester` library imports: standalone in-memory DuckDB reader (`duckdb.connect(":memory:")`) with strict memory and thread bounds.
-- Filesystem-level partition directory resolution and pruning (`ticks/symbol=<ENCODED_SYMBOL>/date=<YYYY-MM-DD>/*.parquet`) with uppercase hex percent-encoding for `[A-Za-z0-9_-]` safe set.
-- Dual-schema compatibility: Schema v1 (`price`, `volume`, `bid`, `ask`) and Schema v2 / new rows (`bid_price`, `ask_price`).
-- Deterministic OHLCV candle aggregation with `arg_min` / `arg_max` tie-breaking over `(timestamp, ingest_id)`.
-- Reverse-chronological order flow tape queries and maintenance guard checking (`_maintenance/in_progress.json`).
-- Dynamic lake root discovery (`TICK_LAKE_ROOT` env var, fallback to `data/tick_lake` symlink/relative path) and fail-fast structured exception taxonomy.
-- Full test suite alignment: update backend service and test suites to validate against the real Parquet tick lake with 100% green tests.
+- Market, resting limit, and resting stop entry orders (BUY and SELL) with submit-time and broker-arrival validation.
+- Pending-order cancellation and amendment with transmission delay and visible race outcomes, including a cancel that loses to a trigger.
+- Explicit position close, ordinary attached stop loss, and take profit with correct close-side bid/ask rules and gap handling.
+- Order list, position list, chart markers, and a per-order event timeline separating price waiting, economic execution, and client observation.
+- Editable latency profiles — Training (default, illustrative), BTCUSD BUY pilot response reference, and zero-delay comparison — each with parameter provenance labels.
+- A pure deterministic engine (`src/lib/orderSimulator/`) driven entirely by replay-market time, evaluating every crossed tick with no wall-clock timers.
+- Offline pilot evidence audit producing derived fixtures, plus collector repairs so a later Stage 2 calibration can run. No broker access, credentials, or demo/live trades.
 
 ## Validated Requirements
 - ✓ Basic market replay engine (v1.0)
@@ -46,6 +46,7 @@ High-fidelity, deterministic tick-by-tick market replay with sub-second timefram
 - ✓ **REV-SCRUB-01 & REV-VERIFY-01**: Scrubber Premarket Retention & 70-Suite Verification (v4.1)
 - ✓ **CONV-TEST / CONV-VOL / CONV-DAILY / CONV-VERIFY**: Replay State Machine Convergence (v4.2)
 - ✓ **LIVE-TEST / LIVE-VOL / LIVE-CONTEXT / LIVE-ORDER / LIVE-VERIFY**: Live Data Stabilization & Review Fixes (v4.3)
+- ✓ **LAKE-READ / LAKE-RESAMPLE / LAKE-API / LAKE-VERIFY**: Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance) — 13 requirements (v5.0)
 
 ## Key Decisions
 
@@ -59,6 +60,9 @@ High-fidelity, deterministic tick-by-tick market replay with sub-second timefram
 | Universal Market Timeline | Replay clock must advance global market time rather than an individual symbol's tick buffer, enabling multi-chart setups (e.g. AAPL + AMD) to progress in parallel like a real trading session. | — Adopted in v3.1 |
 | Strict Temporal Query Boundaries | Never fall back to unconstrained tape endpoints or future dates. If no data exists for a day (e.g. holiday), the UI explicitly indicates the session is closed rather than loading subsequent days. | — Adopted in v3.1 |
 | Test-First Playwright & Unit Hardening | Write reproducible Playwright and Vitest tests proving the failures and establishing expected behaviors before making core architectural changes. | — Adopted in v3.1 |
+| Zero New Runtime Dependencies for the Simulator | The engine must produce identical events from identical inputs, so any dependency that reintroduces wall-clock coupling or hidden state is disqualifying. An inline `(fireTime, tieBreakSeq)` heap and scaled-integer price arithmetic cover the need without adding supply-chain or determinism risk. | — Adopted in v6.0 |
+| Independent Positions, No Netting | The pilot never established Capital.com's hedging mode, and netting rules were never specified or tested. Each entry opens a position with explicit closes; implicit counter-order netting is removed from the realistic path. | — Adopted in v6.0 |
+| Latency as Labeled Profiles, Never a Fitted Distribution | Three BUY samples (one per order type, weekend demo) cannot establish variance. Profiles carry `OBSERVED_SAMPLE` / `DOCUMENTED_RULE` / `TRAINING_ASSUMPTION` provenance, and the pilot response envelopes are cited as reference cards rather than implemented as measurements. | — Adopted in v6.0 |
 
 ## Evolution
 
@@ -78,4 +82,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-06 after starting Milestone v5.0*
+*Last updated: 2026-10-12 after starting Milestone v6.0*

@@ -1,23 +1,23 @@
 ---
 gsd_state_version: "1.0"
-milestone: v5.0
-milestone_name: "Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)"
-status: Awaiting next milestone
-last_updated: "2026-10-11T23:27:07.716Z"
-last_activity: 2026-10-11
-last_activity_desc: Milestone v5.0 completed and archived
-state_head: 417a93b2170faa7c4970a1ab6b5090d42bab844b
+milestone: v6.0
+milestone_name: "Offline Order Simulator (Mock Capital.com Terminal)"
+status: In progress
+last_updated: "2026-10-12T00:10:00.000Z"
+last_activity: 2026-10-12
+last_activity_desc: Milestone v6.0 started — research, requirements and roadmap defined
+state_head: 0736e99
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-## Milestone: v5.0 — Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
+## Milestone: v6.0 — Offline Order Simulator (Mock Capital.com Terminal)
 
 ### Completed Milestones
 
@@ -39,14 +39,14 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, dynamic Parquet tick lake resampling, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** Re-architecting from retired `streaming.duckdb` to Data Harvester's zero-import Partitioned Parquet Tick Lake reader adhering to Repo B Read Contract v1.5.0.
+**Current focus:** Building an offline order terminal whose transmission and execution delays change execution outcomes. Source plan: `docs/research/capital-order-simulator-implementation-plan.md`; research: `.planning/research/`.
 
 ## Current Position
 
-Phase: Milestone v5.0 complete
+Phase: Not started — roadmap defined (phases 43–48)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-11 — Milestone v5.0 completed and archived
+Status: In progress
+Last activity: 2026-10-12 — Milestone v6.0 started (research, requirements, roadmap)
 
 ### Quick Tasks Completed
 
@@ -55,4 +55,11 @@ Last activity: 2026-10-11 — Milestone v5.0 completed and archived
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Begin Phase 43 with /gsd-plan-phase 43 (or /gsd-discuss-phase 43 first)
+
+## Deferred Items
+
+| Item | Carry-forward | Rationale |
+|------|---------------|-----------|
+| Playwright journey suite cannot run in-sandbox (no obtainable browser binary) | From v5.0 (LAKE-VERIFY-02 override) | Adds NSS/browser deps unavailable here; run `npx playwright install chromium && npm run test:journey` on a machine with a browser. Phase 48 must disclose rather than claim a pass. |
+| Stage 2 latency calibration | Deferred to a later milestone | v6.0 repairs the collector but executes nothing against Capital.com. |
