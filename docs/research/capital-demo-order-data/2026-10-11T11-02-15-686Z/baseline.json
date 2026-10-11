@@ -1,0 +1,43 @@
+{
+  "timestamp_utc": "2026-10-11T11:02:19.546Z",
+  "accounts": {
+    "accounts": [
+      {
+        "accountId": "acc_demo_419aa2a2",
+        "accountName": "Account",
+        "status": "ENABLED",
+        "accountType": "CFD",
+        "preferred": true,
+        "balance": {
+          "balance": 40502.79,
+          "deposit": 40502.79,
+          "profitLoss": 0,
+          "available": 40502.79
+        },
+        "currency": "USD",
+        "symbol": "$"
+      },
+      {
+        "accountId": "acc_demo_16800636",
+        "accountName": "Account 1",
+        "status": "ENABLED",
+        "accountType": "CFD",
+        "preferred": false,
+        "balance": {
+          "balance": 968.66,
+          "deposit": 968.66,
+          "profitLoss": 0,
+          "available": 968.66
+        },
+        "currency": "USD",
+        "symbol": "$"
+      }
+    ]
+  },
+  "positions": {
+    "positions": []
+  },
+  "workingOrders": {
+    "workingOrders": []
+  }
+}

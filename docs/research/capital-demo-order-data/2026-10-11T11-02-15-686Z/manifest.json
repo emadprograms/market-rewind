@@ -1,0 +1,207 @@
+{
+  "run_id": "2026-10-11T11-02-15-686Z",
+  "timestamp_utc": "2026-10-11T11:02:56.960Z",
+  "environment": "DEMO",
+  "demo_rest_origin": "https://demo-api-capital.backend-capital.com",
+  "demo_streaming_url": "wss://api-streaming-capital.backend-capital.com/connect",
+  "pseudonymous_account": "acc_demo_419aa2a2",
+  "clock_calibration": {
+    "pre": {
+      "samples": [
+        {
+          "probe": 1,
+          "rtt_ms": 421.81120800971985,
+          "t_send_wall": 1791716535687,
+          "t_recv_wall": 1791716536110,
+          "serverTimeMs": 1791716536306,
+          "offset_ms": 407.5,
+          "uncertainty_ms": 210.90560400485992
+        },
+        {
+          "probe": 2,
+          "rtt_ms": 350.070042014122,
+          "t_send_wall": 1791716536110,
+          "t_recv_wall": 1791716536461,
+          "serverTimeMs": 1791716536659,
+          "offset_ms": 373.5,
+          "uncertainty_ms": 175.035021007061
+        },
+        {
+          "probe": 3,
+          "rtt_ms": 123.34008300304413,
+          "t_send_wall": 1791716536461,
+          "t_recv_wall": 1791716536584,
+          "serverTimeMs": 1791716536786,
+          "offset_ms": 263.5,
+          "uncertainty_ms": 61.670041501522064
+        },
+        {
+          "probe": 4,
+          "rtt_ms": 123.71483302116394,
+          "t_send_wall": 1791716536584,
+          "t_recv_wall": 1791716536848,
+          "serverTimeMs": 1791716537051,
+          "offset_ms": 335,
+          "uncertainty_ms": 61.85741651058197
+        },
+        {
+          "probe": 5,
+          "rtt_ms": 124.40120899677277,
+          "t_send_wall": 1791716536848,
+          "t_recv_wall": 1791716537108,
+          "serverTimeMs": 1791716537311,
+          "offset_ms": 333,
+          "uncertainty_ms": 62.20060449838638
+        },
+        {
+          "probe": 6,
+          "rtt_ms": 126.92095899581909,
+          "t_send_wall": 1791716537108,
+          "t_recv_wall": 1791716537374,
+          "serverTimeMs": 1791716537575,
+          "offset_ms": 334,
+          "uncertainty_ms": 63.460479497909546
+        },
+        {
+          "probe": 7,
+          "rtt_ms": 126.22041690349579,
+          "t_send_wall": 1791716537374,
+          "t_recv_wall": 1791716537636,
+          "serverTimeMs": 1791716537836,
+          "offset_ms": 331,
+          "uncertainty_ms": 63.110208451747894
+        },
+        {
+          "probe": 8,
+          "rtt_ms": 123.88408303260803,
+          "t_send_wall": 1791716537636,
+          "t_recv_wall": 1791716537895,
+          "serverTimeMs": 1791716538098,
+          "offset_ms": 332.5,
+          "uncertainty_ms": 61.942041516304016
+        },
+        {
+          "probe": 9,
+          "rtt_ms": 123.72108399868011,
+          "t_send_wall": 1791716537895,
+          "t_recv_wall": 1791716538159,
+          "serverTimeMs": 1791716538363,
+          "offset_ms": 336,
+          "uncertainty_ms": 61.86054199934006
+        },
+        {
+          "probe": 10,
+          "rtt_ms": 128.7917079925537,
+          "t_send_wall": 1791716538159,
+          "t_recv_wall": 1791716538426,
+          "serverTimeMs": 1791716538625,
+          "offset_ms": 332.5,
+          "uncertainty_ms": 64.39585399627686
+        }
+      ],
+      "minRtt": 123.34008300304413,
+      "medianRtt": 126.22041690349579,
+      "medianOffset": 334
+    },
+    "post": {
+      "samples": [
+        {
+          "probe": 1,
+          "rtt_ms": 321.6321671009064,
+          "t_send_wall": 1791716573589,
+          "t_recv_wall": 1791716573911,
+          "serverTimeMs": 1791716574115,
+          "offset_ms": 365,
+          "uncertainty_ms": 160.8160835504532
+        },
+        {
+          "probe": 2,
+          "rtt_ms": 126.2132499217987,
+          "t_send_wall": 1791716573911,
+          "t_recv_wall": 1791716574037,
+          "serverTimeMs": 1791716574239,
+          "offset_ms": 265,
+          "uncertainty_ms": 63.10662496089935
+        },
+        {
+          "probe": 3,
+          "rtt_ms": 124.04304194450378,
+          "t_send_wall": 1791716574037,
+          "t_recv_wall": 1791716574297,
+          "serverTimeMs": 1791716574499,
+          "offset_ms": 332,
+          "uncertainty_ms": 62.02152097225189
+        },
+        {
+          "probe": 4,
+          "rtt_ms": 128.10233402252197,
+          "t_send_wall": 1791716574297,
+          "t_recv_wall": 1791716574563,
+          "serverTimeMs": 1791716574764,
+          "offset_ms": 334,
+          "uncertainty_ms": 64.05116701126099
+        },
+        {
+          "probe": 5,
+          "rtt_ms": 126.32308304309845,
+          "t_send_wall": 1791716574563,
+          "t_recv_wall": 1791716574822,
+          "serverTimeMs": 1791716575021,
+          "offset_ms": 328.5,
+          "uncertainty_ms": 63.161541521549225
+        },
+        {
+          "probe": 6,
+          "rtt_ms": 128.2335420846939,
+          "t_send_wall": 1791716574822,
+          "t_recv_wall": 1791716575087,
+          "serverTimeMs": 1791716575287,
+          "offset_ms": 332.5,
+          "uncertainty_ms": 64.11677104234695
+        },
+        {
+          "probe": 7,
+          "rtt_ms": 125.11333394050598,
+          "t_send_wall": 1791716575087,
+          "t_recv_wall": 1791716575346,
+          "serverTimeMs": 1791716575547,
+          "offset_ms": 330.5,
+          "uncertainty_ms": 62.55666697025299
+        },
+        {
+          "probe": 8,
+          "rtt_ms": 128.13724994659424,
+          "t_send_wall": 1791716575346,
+          "t_recv_wall": 1791716575612,
+          "serverTimeMs": 1791716575812,
+          "offset_ms": 333,
+          "uncertainty_ms": 64.06862497329712
+        },
+        {
+          "probe": 9,
+          "rtt_ms": 126.10741591453552,
+          "t_send_wall": 1791716575612,
+          "t_recv_wall": 1791716575872,
+          "serverTimeMs": 1791716576072,
+          "offset_ms": 330,
+          "uncertainty_ms": 63.05370795726776
+        },
+        {
+          "probe": 10,
+          "rtt_ms": 126.47962498664856,
+          "t_send_wall": 1791716575872,
+          "t_recv_wall": 1791716576133,
+          "serverTimeMs": 1791716576334,
+          "offset_ms": 331.5,
+          "uncertainty_ms": 63.23981249332428
+        }
+      ],
+      "minRtt": 124.04304194450378,
+      "medianRtt": 126.47962498664856,
+      "medianOffset": 332
+    }
+  },
+  "order_count": 3,
+  "unresolved_positions": [],
+  "unresolved_working_orders": []
+}

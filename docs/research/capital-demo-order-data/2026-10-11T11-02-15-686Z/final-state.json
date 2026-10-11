@@ -1,0 +1,130 @@
+{
+  "timestamp_utc": "2026-10-11T11:02:56.958Z",
+  "accounts": {
+    "accounts": [
+      {
+        "accountId": "acc_demo_419aa2a2",
+        "accountName": "Account",
+        "status": "ENABLED",
+        "accountType": "CFD",
+        "preferred": true,
+        "balance": {
+          "balance": 40502.78,
+          "deposit": 40502.79,
+          "profitLoss": -0.01,
+          "available": 40501.95
+        },
+        "currency": "USD",
+        "symbol": "$"
+      },
+      {
+        "accountId": "acc_demo_16800636",
+        "accountName": "Account 1",
+        "status": "ENABLED",
+        "accountType": "CFD",
+        "preferred": false,
+        "balance": {
+          "balance": 968.66,
+          "deposit": 968.66,
+          "profitLoss": 0,
+          "available": 968.66
+        },
+        "currency": "USD",
+        "symbol": "$"
+      }
+    ]
+  },
+  "positions": {
+    "positions": [
+      {
+        "position": {
+          "contractSize": 1,
+          "createdDate": "2026-10-11T14:02:26.040",
+          "createdDateUTC": "2026-10-11T11:02:26.040",
+          "dealId": "00000000-69b0-7ecf-03b5-c3980055311e",
+          "dealReference": "p_00000000-69b0-7ecf-03b5-c3980055311e",
+          "workingOrderId": "00000000-69b0-7ecc-03b5-c3980055311e",
+          "size": 0.0001,
+          "leverage": 20,
+          "upl": -0.004985,
+          "direction": "BUY",
+          "level": 82946.85,
+          "currency": "USD",
+          "guaranteedStop": false
+        },
+        "market": {
+          "instrumentName": "Bitcoin/USD",
+          "instrumentId": 2604592722433220,
+          "expiry": "-",
+          "epic": "BTCUSD",
+          "symbol": "BTC/USD",
+          "instrumentType": "CRYPTOCURRENCIES",
+          "marketStatus": "TRADEABLE",
+          "lotSize": 1,
+          "high": 83121.9,
+          "low": 82686.55,
+          "percentageChange": -0.04,
+          "netChange": 475.05,
+          "bid": 82897,
+          "offer": 82947,
+          "updateTime": "2026-10-11T14:02:55.516",
+          "updateTimeUTC": "2026-10-11T11:02:55.516",
+          "delayTime": 0,
+          "streamingPricesAvailable": true,
+          "scalingFactor": 1,
+          "marketModes": [
+            "REGULAR"
+          ],
+          "pipPosition": 0,
+          "tickSize": 0.05
+        }
+      },
+      {
+        "position": {
+          "contractSize": 1,
+          "createdDate": "2026-10-11T14:02:44.904",
+          "createdDateUTC": "2026-10-11T11:02:44.904",
+          "dealId": "00000000-69b0-8037-03b5-c3980055311e",
+          "dealReference": "p_00000000-69b0-8037-03b5-c3980055311e",
+          "workingOrderId": "00000000-69b0-802d-03b5-c3980055311e",
+          "size": 0.0001,
+          "leverage": 20,
+          "upl": -0.00511,
+          "direction": "BUY",
+          "level": 82948.1,
+          "currency": "USD",
+          "guaranteedStop": false
+        },
+        "market": {
+          "instrumentName": "Bitcoin/USD",
+          "instrumentId": 2604592722433220,
+          "expiry": "-",
+          "epic": "BTCUSD",
+          "symbol": "BTC/USD",
+          "instrumentType": "CRYPTOCURRENCIES",
+          "marketStatus": "TRADEABLE",
+          "lotSize": 1,
+          "high": 83121.9,
+          "low": 82686.55,
+          "percentageChange": -0.04,
+          "netChange": 475.05,
+          "bid": 82897,
+          "offer": 82947,
+          "updateTime": "2026-10-11T14:02:55.516",
+          "updateTimeUTC": "2026-10-11T11:02:55.516",
+          "delayTime": 0,
+          "streamingPricesAvailable": true,
+          "scalingFactor": 1,
+          "marketModes": [
+            "REGULAR"
+          ],
+          "pipPosition": 0,
+          "tickSize": 0.05
+        }
+      }
+    ]
+  },
+  "workingOrders": {
+    "workingOrders": []
+  }
+}
