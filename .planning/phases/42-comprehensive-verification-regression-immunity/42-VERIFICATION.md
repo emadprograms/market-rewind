@@ -1,6 +1,7 @@
 ---
 phase: 42-comprehensive-verification-regression-immunity
-status: passed_with_documented_environment_block
+status: passed
+status_note: "Normalized from `passed_with_documented_environment_block` (outside the GSD closed set) during the v5.0 milestone close-out on 2026-10-12. Both must_haves are `passed`. The Playwright journey suite remains environment-blocked in the sandbox; the gap is carried forward as a verification override in MILESTONES.md. Full disclosure retained in section 4 below."
 verified_at: 2026-10-06
 reverified: 2026-10-06 (round 3 — found and fixed one real defect + three coverage gaps)
 must_haves:

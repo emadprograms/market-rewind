@@ -45,3 +45,6 @@ htmlcov/
 logs/
 .run/
 *.app/
+
+# GSD Core (local agent framework install)
+.agents/
