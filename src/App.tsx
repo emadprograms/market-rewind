@@ -20,6 +20,7 @@ import { PlaybackBar } from './components/PlaybackBar';
 import { PlaybackManager } from './components/PlaybackManager';
 import { TimeAndSales } from './components/TimeAndSales';
 import { ConnectionSetupCard } from './components/ConnectionSetupCard';
+import { TradeDesk } from './components/tradeDesk/TradeDesk';
 
 export default function App() {
   const { 
@@ -128,6 +129,8 @@ export default function App() {
   const setBufferedTicks = usePlaybackStore((state) => state.setBufferedTicks);
 
   const [isTapeOpen, setIsTapeOpen] = useState(false);
+  // The simulated trading desk: ticket, activity, timeline and settings (v6.0, SIM-UI-01..06).
+  const [isDeskOpen, setIsDeskOpen] = useState(false);
 
   const sessionGenRef = useRef(0);
   // Keep latest selectedDate/entryTime in refs to avoid stale closure when
@@ -303,6 +306,13 @@ export default function App() {
             )}
           </div>
 
+          {isDeskOpen && (
+            <TradeDesk
+              symbol={(activeChartTicker || sessionTicker || '').toUpperCase()}
+              onClose={() => setIsDeskOpen(false)}
+            />
+          )}
+
           {/* Time & Sales Order Flow Drawer */}
           {isTapeOpen && (
             <TimeAndSales
@@ -325,6 +335,30 @@ export default function App() {
           onNextSymbol={handleNextSymbol}
           nextSymbol={nextSymbol}
         />
+        {!isDeskOpen && (
+          <button
+            type="button"
+            onClick={() => setIsDeskOpen(true)}
+            aria-label="Open the simulated trading desk"
+            data-testid="open-trade-desk"
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              zIndex: 4000,
+              background: '#111c33',
+              color: '#e2e8f0',
+              border: '1px solid #334155',
+              borderRadius: '4px',
+              padding: '4px 10px',
+              fontSize: '11px',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              cursor: 'pointer',
+            }}
+          >
+            Trade desk
+          </button>
+        )}
         <PlaybackManager />
       </div>
     </div>

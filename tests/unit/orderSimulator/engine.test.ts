@@ -300,3 +300,78 @@ describe('order simulator — size validation', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// The engine's clock cannot rewrite the past
+// ---------------------------------------------------------------------------
+
+describe('order simulator — an instruction is judged against the market it actually met', () => {
+  /**
+   * Regression: a quote delivered ahead of the scheduler used to be visible to an instruction that
+   * had not yet arrived, so a validly placed stop was rejected for sitting on the wrong side of a
+   * price that had not happened yet. The broker now re-validates against the quote as of the moment
+   * it processes the instruction, falling back to the quote the order recorded when it was placed.
+   */
+  it('does not refuse a validly placed stop because a later price arrived early', () => {
+    const engine = makeEngine();
+    seedQuote(engine); // bid 100.00 / ask 100.50
+
+    const submitted = engine.submitOrder({ symbol: 'BTCUSD', side: 'BUY', type: 'STOP', size: 0.01, level: 102 });
+    expect(submitted.accepted).toBe(true);
+
+    // A quote from 300 ms in the future is delivered before the scheduler has run the arrival.
+    engine.onQuote({ symbol: 'BTCUSD', bid: 102.0, ask: 102.05, replayMs: 300, seq: 2 });
+    engine.runUntilIdle();
+
+    const order = engine.view().orders[0];
+    // The stop was placed above the market it was placed against, so it is accepted and works.
+    expect(order.state).toBe('FILLED');
+    expect(order.rejectReason).toBeNull();
+    // And it executed at the price that actually satisfied it.
+    expect(engine.view().fills[0].price).toBe(102.05);
+  });
+
+  it('still refuses an invalid placement at the client, before anything is sent', () => {
+    const engine = makeEngine();
+    seedQuote(engine);
+
+    // A BUY stop below the market is wrong no matter when it is judged, and the ticket's own rules
+    // catch it: no instruction is created at all.
+    const submitted = engine.submitOrder({ symbol: 'BTCUSD', side: 'BUY', type: 'STOP', size: 0.01, level: 95 });
+    expect(submitted.accepted).toBe(false);
+    expect(submitted.clientError).toMatch(/above the market/);
+    engine.runUntilIdle();
+    expect(engine.view().orders).toHaveLength(0);
+  });
+
+  it('lets the broker refuse an instruction the market has moved past by the time it arrives', () => {
+    const engine = makeEngine();
+    seedQuote(engine); // 100.00 / 100.50
+
+    // Valid where it was placed: the stop sits above the market.
+    const submitted = engine.submitOrder({ symbol: 'BTCUSD', side: 'BUY', type: 'STOP', size: 0.01, level: 102 });
+    expect(submitted.accepted).toBe(true);
+
+    // The market gaps up through the level before the instruction arrives. Now a BUY stop at 102
+    // would fire instantly on arrival, which is not a stop at all — the broker refuses it.
+    engine.onQuote({ symbol: 'BTCUSD', bid: 103.0, ask: 103.05, replayMs: 50, seq: 2 });
+    engine.runUntilIdle();
+
+    const order = engine.view().orders[0];
+    expect(order.state).toBe('REJECTED');
+    expect(order.rejectReason).toBe('INVALID_PLACEMENT');
+  });
+
+  it('keeps the quote the order was placed against', () => {
+    const engine = makeEngine();
+    seedQuote(engine);
+    engine.submitOrder({ symbol: 'BTCUSD', side: 'BUY', type: 'LIMIT', size: 0.01, level: 99 });
+
+    const order = engine.view().orders[0];
+    // The order carries the market it was priced against, so a later refusal can be explained.
+    expect(order.submittedQuote).not.toBeNull();
+    expect(order.submittedQuote!.bid).toBe(BID);
+    expect(order.submittedQuote!.ask).toBe(ASK);
+    expect(order.submittedQuote!.replayMs).toBe(0);
+  });
+});

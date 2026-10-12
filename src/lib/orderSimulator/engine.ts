@@ -142,6 +142,20 @@ export class OrderSimulatorEngine {
     this.cascade(quote.symbol);
   }
 
+  /**
+   * The last quote for a symbol at or before `atMs`, or null if none was seen that early.
+   *
+   * Only the most recent quote is retained, which is sufficient because a quote can never be observed
+   * out of order: `onQuote` refuses a timestamp before the engine clock, so the retained quote is
+   * always the newest one, and any quote newer than `atMs` means the retained quote is not it — in
+   * which case this returns null and the caller falls back to what the order itself recorded.
+   */
+  private quoteAsOf(symbol: string, atMs: ReplayMs): Quote | null {
+    const latest = this.lastQuoteBySymbol.get(symbol.toUpperCase()) ?? null;
+    if (!latest) return null;
+    return latest.replayMs <= atMs ? latest : null;
+  }
+
   private cascade(symbol: string): void {
     for (const order of this.ordersById.values()) {
       if (order.symbol.toUpperCase() !== symbol.toUpperCase()) continue;
@@ -519,7 +533,10 @@ export class OrderSimulatorEngine {
       }
 
       this.nowMs = Math.max(this.nowMs, next.fireAtMs);
-      this.handleAction(next.payload);
+      // The action's own fire time is passed alongside it. `nowMs` is a high-water mark and may sit
+      // ahead of a still-queued action (a quote that arrived early jumps the clock), so an action
+      // that needs to know *when it was due* must be told rather than infer it from the clock.
+      this.handleAction(next.payload, next.fireAtMs);
     }
   }
 
@@ -545,20 +562,23 @@ export class OrderSimulatorEngine {
       }
 
       this.nowMs = Math.max(this.nowMs, next.fireAtMs);
-      this.handleAction(next.payload);
+      // The action's own fire time is passed alongside it. `nowMs` is a high-water mark and may sit
+      // ahead of a still-queued action (an early quote jumps the clock), so an action that needs to
+      // know *when it was due* must be told rather than infer it from the clock.
+      this.handleAction(next.payload, next.fireAtMs);
     }
     if (Number.isFinite(targetMs)) {
       this.nowMs = Math.max(this.nowMs, targetMs);
     }
   }
 
-  private handleAction(action: ScheduledAction): void {
+  private handleAction(action: ScheduledAction, dueAtMs: ReplayMs = this.nowMs): void {
     switch (action.kind) {
       case 'COMMAND_ARRIVAL':
-        this.onCommandArrival(action.requestId, action.orderId);
+        this.onCommandArrival(action.requestId, action.orderId, dueAtMs);
         return;
       case 'ACCEPT_ORDER':
-        this.onAcceptOrder(action.orderId);
+        this.onAcceptOrder(action.orderId, dueAtMs);
         return;
       case 'ELIGIBLE':
         this.onEligible(action.orderId);
@@ -577,7 +597,7 @@ export class OrderSimulatorEngine {
     }
   }
 
-  private onCommandArrival(requestId: RequestId, orderId: OrderId): void {
+  private onCommandArrival(requestId: RequestId, orderId: OrderId, dueAtMs: ReplayMs = this.nowMs): void {
     const cancelRequest = this.pendingCancels.get(orderId);
     if (cancelRequest !== undefined && cancelRequest === requestId) {
       this.pendingCancels.delete(orderId);
@@ -598,7 +618,11 @@ export class OrderSimulatorEngine {
 
     this.emit('COMMAND_ARRIVED', requestId, orderId, null, { symbol: order.symbol, type: order.type });
     const acceptance = this.profile.acceptanceMs.value;
-    this.scheduler.schedule(this.nowMs + acceptance, { kind: 'ACCEPT_ORDER', requestId, orderId });
+    // Scheduled from the arrival's own due time, not from the clock. The clock is a high-water mark
+    // and may already be past this instant (an early quote jumps it), but an instruction that was
+    // due at t=100 was due at t=100 — processing it late must not move its whole lifecycle forward
+    // and re-price it against a market that had not been reached yet.
+    this.scheduler.schedule(dueAtMs + acceptance, { kind: 'ACCEPT_ORDER', requestId, orderId });
   }
 
   private applyCancel(orderId: OrderId, requestId: RequestId): void {
@@ -659,12 +683,18 @@ export class OrderSimulatorEngine {
     });
   }
 
-  private onAcceptOrder(orderId: OrderId): void {
+  private onAcceptOrder(orderId: OrderId, acceptedAtMs: ReplayMs = this.nowMs): void {
     const order = this.ordersById.get(orderId);
     if (!order || order.state !== 'SUBMITTED') return;
 
     const rules = this.rulesFor(order.symbol);
-    const quote = this.lastQuoteBySymbol.get(order.symbol.toUpperCase()) ?? null;
+    // The quote the broker can see *when it processes this instruction*. A quote that postdates the
+    // acceptance has not happened yet as far as this instruction is concerned: without this, an
+    // instruction is refused for being on the wrong side of a price from its own future, and a
+    // validly placed stop is rejected by a later tick. In the session's ordered delivery the as-of
+    // quote IS the latest quote, so this changes nothing in the ordinary path; it only removes the
+    // ability of a jumped clock to rewrite the past.
+    const quote = this.quoteAsOf(order.symbol, acceptedAtMs) ?? order.submittedQuote ?? null;
     if (!quote) {
       order.state = 'REJECTED';
       order.terminalAt = this.nowMs;
@@ -1249,9 +1279,13 @@ export class OrderSimulatorEngine {
       unrealized += this.realizedOn({ ...p, entryPrice: p.entryPrice }, closePrice, p.openSize);
     }
 
+    const quotes: Record<string, Quote> = {};
+    for (const [symbol, quote] of this.lastQuoteBySymbol) quotes[symbol] = quote;
+
     return {
       sessionId: this.sessionId,
       nowMs: this.nowMs,
+      lastQuoteBySymbol: quotes,
       orders: Array.from(this.ordersById.values()),
       positions,
       fills: [...this.fills],

@@ -31,6 +31,15 @@ export interface AccountStoreState {
   /** Bumped whenever the engine produces a new event, so views can re-render. */
   revision: number;
   notices: readonly string[];
+  /**
+   * Whether playback is currently stalled for want of market data.
+   *
+   * Kept as state rather than inferred from the notice log: the log is an append-only audit trail,
+   * so the newest line in it is not necessarily what is happening now. A freeze that has been
+   * resolved must stop being displayed.
+   */
+  frozen: boolean;
+  frozenReason: string | null;
 
   // -- the only mutators: engine commands -----------------------------------
   openPosition: (input: {
@@ -84,6 +93,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => {
     totals: projectAccountTotals(session.state()),
     revision: 0,
     notices: [],
+    frozen: false,
+    frozenReason: null,
 
     configure: ({ instruments: nextInstruments, profile: nextProfile, sessionId }) => {
       if (nextInstruments) instruments = nextInstruments;
@@ -163,16 +174,17 @@ export const useAccountStore = create<AccountStoreState>((set, get) => {
     },
 
     advanceTo: (targetMs, reason) => {
-      session.advanceTo(targetMs, reason ?? 'PLAY');
+      const report = session.advanceTo(targetMs, reason ?? 'PLAY');
       // Notices are part of the account's observable state: a freeze, a refused branch or a late
-      // tape page has to reach the user, not stay inside the session.
-      set({ notices: [...session.notices] });
+      // tape page has to reach the user, not stay inside the session. `frozen` is the *current*
+      // condition, so a stall stops being announced once it is over.
+      set({ notices: [...session.notices], frozen: report.frozen, frozenReason: report.frozenReason });
       publish();
     },
 
     seekTo: (targetMs) => {
-      session.seekTo(targetMs);
-      set({ notices: [...session.notices] });
+      const report = session.seekTo(targetMs);
+      set({ notices: [...session.notices], frozen: report.frozen, frozenReason: report.frozenReason });
       publish();
     },
 

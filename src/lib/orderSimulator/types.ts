@@ -311,6 +311,8 @@ export interface AccountState {
   readonly orders: readonly Order[];
   readonly positions: readonly Position[];
   readonly fills: readonly Fill[];
+  /** The latest quote the engine has seen for each symbol, for display and for the ticket. */
+  readonly lastQuoteBySymbol: Readonly<Record<string, Quote>>;
   /** Realised PnL across the whole account. Counted once per position. */
   readonly realizedPnl: number;
   /** Unrealised PnL valued at the close side (long→bid, short→ask). */
