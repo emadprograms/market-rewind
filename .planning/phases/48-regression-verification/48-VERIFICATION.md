@@ -142,6 +142,25 @@ each is applied and reverted within a single command block.
    more symbols than the account is configured for, so the journey mock serves `PLTR` without
    configuring it, and the browser spec asserts the refusal on that symbol end to end.
 
+2. **Four further browser failures were chased as far as a browserless environment allows.** Two
+   are now provably spec bugs and were fixed; two remain open and need the error text from a run.
+
+   | Test | Finding | Status |
+   |---|---|---|
+   | `04-temporal-isolation` › single-stepping forward | It asserted the replay clock `startsWith('09:2')`. The anchor is 09:10:00 and the mock emits one tick per second, so five steps land at 09:10:05 — the assertion **could not be satisfied by correct behaviour**. Now asserts `'09:1'`, which is what "still in the opening minutes" always meant. | Fixed |
+   | `06-live-replay` › the live price badge | It matched `/\$(\d+…)/` against `.playback-bar`, which renders profit-and-loss figures and elapsed replay time and **contains no price and no dollar sign at all** (`grep -c price` = 0). Retargeted to the tape's own price cell — the surface the test's name describes — and to the stream actually advancing. | Fixed |
+   | `05-playback-transport` › single-tick step | Asserts `index + 1` after one step. The step controls exist with the expected titles and stepping demonstrably works (the 04 failure showed the index advancing), so the likely cause is the cursor moving on its own between the read and the click — a timing assumption in the test. Not provable without a browser. | **Open** |
+   | `06-live-replay` › tape close button | The button exists (`title="Close Tape"`, `onClick={onClose}`) and the panel is conditionally rendered, so closing unmounts it. No static defect found; the failure is in runtime behaviour that cannot be observed here. | **Open** |
+
+3. **A hole in the test strategy was found and closed while fixing the above.** Nothing in this
+   repository parsed the Playwright specs: `vitest` does not collect them and `tsc` accepts them as
+   ordinary TypeScript. An unescaped apostrophe in one test title therefore broke
+   `15-simulated-terminal.spec.ts` at parse time, which made Playwright abandon discovery of the
+   **whole suite — 82 tests across 15 files, all gone** — while vitest, tsc and the build stayed
+   green. `tests/regression/journeyDiscovery.test.ts` now runs `playwright --list` and fails on a
+   syntax error or an implausibly small suite. Verified by reintroducing the apostrophe: the guard
+   fails naming the file and line.
+
    Net effect on this milestone: the browser layer is **not verified**, and one of its new specs is
    known-bad as written. Everything else in this document stands.
 2. **Four browser trading tests are known-stale and marked `test.fixme`** rather than left failing:

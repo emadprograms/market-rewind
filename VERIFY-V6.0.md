@@ -133,8 +133,8 @@ PY
 
 | Metric | Expected |
 |---|---|
-| Test files | 119 |
-| Tests | 982 total = **980 passed, 2 skipped, 0 failed** |
+| Test files | 120 |
+| Tests | 991 total = **989 passed, 2 skipped, 0 failed** |
 | Suite duration | roughly 150–260 s on a normal machine |
 
 **The 2 skips must be explainable, not mysterious.** They are in

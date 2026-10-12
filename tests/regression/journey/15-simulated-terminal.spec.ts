@@ -80,7 +80,7 @@ test.describe('JOURNEY 15 — the simulated trading terminal', () => {
     await expect(page.getByTestId('ticket-bid')).toHaveCount(0);
   });
 
-  test('an equity chart trades on its own price grid, never Bitcoin's', async ({ page }) => {
+  test('an equity chart trades on its own price grid, never the Bitcoin one', async ({ page }) => {
     // The other half of the pair above. This spec used to run everything on SPY and fail, because the
     // account had rules for BTCUSD alone; equities are now configured with their own rules, so a SPY
     // chart must work — and must show a whole-cent tick and whole-share size rather than BTCUSD's
