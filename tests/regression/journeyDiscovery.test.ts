@@ -36,3 +36,27 @@ describe('the browser journey suite parses, and still contains its tests', () =>
     expect(Number(tests)).toBeGreaterThanOrEqual(80);
   });
 });
+
+describe('the journey suite tests the server it actually starts', () => {
+  it('points baseURL at the same origin as its own web server', async () => {
+    // Both were once correct in isolation and wrong together: the server was moved to 3100 to stop
+    // the suite reusing a stale `vite preview` daemon on 3000, while `baseURL` stayed on 3000. So a
+    // fresh server was booted on 3100 and the browser was then sent to 3000 anyway, which is the
+    // exact hazard the move was meant to remove. Nothing caught it, because Playwright reports
+    // nothing when the two disagree — it simply tests somewhere else.
+    const { default: config } = await import('../../playwright.journey.config');
+    const resolved = typeof config === 'function' ? config({} as never) : config;
+
+    const baseURL = resolved.use?.baseURL;
+    const serverURL = resolved.webServer && !Array.isArray(resolved.webServer)
+      ? resolved.webServer.url
+      : undefined;
+
+    expect(baseURL, 'baseURL is not configured').toBeTruthy();
+    expect(serverURL, 'webServer.url is not configured').toBeTruthy();
+    expect(new URL(baseURL!).origin).toBe(new URL(serverURL!).origin);
+
+    // And it must not be the port the reporting environment had a stale server on.
+    expect(new URL(baseURL!).port).not.toBe('3000');
+  });
+});
