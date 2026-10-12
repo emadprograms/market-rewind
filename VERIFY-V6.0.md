@@ -184,8 +184,23 @@ TZ=Asia/Tokyo npx vitest run tests/verification/independentProbes.test.ts 2>&1 |
 
 ## 4. Mutation testing — do the tests actually catch bugs?
 
-These patches **deliberately break the engine**. Each one must be caught by at least one test. Run each
+These patches **deliberately break the engine**. Each must be caught by at least one test. Run each
 block exactly as written; each reverts itself at the end and prints how many tests failed.
+
+The builder measured these catches — use them to judge whether a catch is real or accidental. A
+mutation caught by **zero** tests is a finding: it means a documented guarantee is not covered.
+
+| Mutation | Intentional defect | Expected catch |
+|---|---|---|
+| M1 | A BUY stop triggers on the bid instead of the ask | ~8 tests |
+| M2 | Every trigger comparison drops equality (`<=`/`>=` become `<`/`>`) | ~10 tests |
+| M3 | Fill-notification delay becomes 0 ms, erasing the timeline | ~3 tests |
+| M4 | An out-of-order quote is accepted and rewinds the tape | 1 test |
+| M5 | An instruction is validated against a later price (the exact bug phase 48 fixed) | 1 test |
+| M6 | An order fills or is accepted with no quote at all | ~3 tests |
+
+A small drift in the counts is fine — the file lists and test order may differ on your machine. What
+matters is that each mutation is caught, and that the counts come from an actual run.
 
 > If any mutation reports `failed: 0`, that is a **serious finding**: it means a documented
 > guarantee is not actually covered. Report it and continue.
