@@ -16,6 +16,7 @@ import type {
   OrderState,
   Position,
   PositionId,
+  ProtectPositionInput,
   Quote,
   ReplayMs,
   RequestId,
@@ -197,6 +198,8 @@ export class OrderSimulatorEngine {
     switch (command.kind) {
       case 'SUBMIT':
         return this.dispatchSubmit(command.requestId, command.input);
+      case 'PROTECT':
+        return this.dispatchProtect(command.requestId, command.input);
       case 'CLOSE':
         return this.dispatchClose(command.requestId, command.input);
       case 'CANCEL':
@@ -298,6 +301,55 @@ export class OrderSimulatorEngine {
     return { requestId, accepted: true, orderId, clientError: null };
   }
 
+  /**
+   * Attach or replace protection on an already-open position.
+   *
+   * A protective instruction can only exist for a position that is open NOW, which is what stops a
+   * stop-loss from becoming live before its entry fills. Replacing a side invalidates the previous
+   * instruction on that side, so a position never carries two competing stops.
+   */
+  private dispatchProtect(requestId: RequestId, input: ProtectPositionInput): CommandOutcome {
+    const reject = (clientError: string): CommandOutcome => {
+      this.emit('REJECTED', requestId, null, input.positionId, { stage: 'CLIENT', reason: clientError });
+      return { requestId, accepted: false, orderId: null, clientError };
+    };
+
+    const position = this.positionsById.get(input.positionId);
+    if (!position) return reject(`No position with id ${input.positionId}.`);
+    if (position.state !== 'OPEN' || position.openSize <= 0) {
+      return reject(
+        `Position ${input.positionId} is ${position.state}: protection attaches only to an open position.`,
+      );
+    }
+
+    if (input.stopLoss === undefined && input.takeProfit === undefined) {
+      return reject('Protection requires at least one of stopLoss or takeProfit.');
+    }
+
+    // The size is already spoken for. Adding another instruction that could act on it would break
+    // the one-claim invariant, so this is refused rather than queued behind the close.
+    if (position.closeReservedBy) {
+      return reject(
+        `Position ${input.positionId} is already being closed by ${position.closeReservedBy}; ` +
+          'its size cannot take another protective instruction.',
+      );
+    }
+
+    const profile = this.profile;
+    if (input.stopLoss !== undefined) {
+      // BUGFIX: replacing a live member used to leave the old instruction WORKING while the position
+      // pointed at the new one, so two stops were live on one position and either could close it.
+      this.terminateMember(position.slOrderId, position, 'REPLACED');
+      this.attachExit(requestId, profile, position, 'STOP', input.stopLoss);
+    }
+    if (input.takeProfit !== undefined) {
+      this.terminateMember(position.tpOrderId, position, 'REPLACED');
+      this.attachExit(requestId, profile, position, 'LIMIT', input.takeProfit);
+    }
+
+    return { requestId, accepted: true, orderId: position.slOrderId ?? position.tpOrderId, clientError: null };
+  }
+
   private dispatchClose(requestId: RequestId, input: ClosePositionInput): CommandOutcome {
     const reject = (clientError: string): CommandOutcome => {
       this.emit('REJECTED', requestId, null, input.positionId, { stage: 'CLIENT', reason: clientError });
@@ -344,10 +396,17 @@ export class OrderSimulatorEngine {
     this.ordersById.set(orderId, order);
     position.closeReservedBy = orderId;
 
+    // SIM-ACCOUNT-04: an accepted close owns the position's remaining size, so the protective
+    // instructions are invalidated now rather than being left live to race the close. This is
+    // deliberate even though the close has not arrived yet: two closes on one position size is the
+    // outcome the requirement forbids, and a reservation is the only thing that prevents it.
+    const invalidated = this.invalidateExits(position, 'CLOSE_RESERVED');
+
     this.emit('COMMAND_SUBMITTED', requestId, orderId, position.positionId, {
       purpose: 'CLOSE',
       targetPositionId: position.positionId,
       note: 'Closes target the POSITION id, never an order id.',
+      invalidatedExits: invalidated,
     });
 
     this.scheduler.schedule(this.nowMs + this.profile.travelMs.value, {
@@ -733,6 +792,14 @@ export class OrderSimulatorEngine {
 
     order.triggeredAt = this.nowMs;
     order.state = 'TRIGGERED';
+
+    // SIM-ACCOUNT-04: the latch reserves the close. From this instant the position's size belongs to
+    // this exit, so a competing manual close must be refused rather than filling alongside it.
+    const position = order.positionId ? this.positionsById.get(order.positionId) : undefined;
+    if (position && (order.purpose === 'STOP_LOSS' || order.purpose === 'TAKE_PROFIT')) {
+      position.closeReservedBy = order.orderId;
+    }
+
     this.emit('TRIGGERED', order.requestId, order.orderId, order.positionId, {
       symbol: order.symbol,
       side: order.side,
@@ -864,10 +931,10 @@ export class OrderSimulatorEngine {
 
     const attachments = (order as Order & { attachments?: { stopLoss?: number; takeProfit?: number } }).attachments;
     if (attachments?.stopLoss !== undefined) {
-      this.attachExit(order, position, 'STOP', attachments.stopLoss);
+      this.attachExit(order.requestId, order.profileSnapshot, position, 'STOP', attachments.stopLoss);
     }
     if (attachments?.takeProfit !== undefined) {
-      this.attachExit(order, position, 'LIMIT', attachments.takeProfit);
+      this.attachExit(order.requestId, order.profileSnapshot, position, 'LIMIT', attachments.takeProfit);
     }
   }
 
@@ -875,12 +942,18 @@ export class OrderSimulatorEngine {
    * Attach a stop-loss or take-profit. The exit side is always OPPOSITE the position, and the
    * trigger kind is chosen from the attachment's meaning — not inherited from the entry order.
    */
-  private attachExit(entryOrder: Order, position: Position, kind: 'STOP' | 'LIMIT', level: number): void {
+  private attachExit(
+    requestId: RequestId,
+    profileSnapshot: LatencyProfile,
+    position: Position,
+    kind: 'STOP' | 'LIMIT',
+    level: number,
+  ): void {
     const tick = this.tickRulesBySymbol.get(position.symbol.toUpperCase())!;
     try {
       priceToTicks(level, tick);
     } catch (err) {
-      this.emit('REJECTED', entryOrder.requestId, entryOrder.orderId, position.positionId, {
+      this.emit('REJECTED', requestId, null, position.positionId, {
         stage: 'ATTACHMENT',
         reason: err instanceof Error ? err.message : 'Invalid attachment level',
         kind,
@@ -894,7 +967,7 @@ export class OrderSimulatorEngine {
     if (quote) {
       const verdict = validatePlacement(kind, exitSide, level, quote);
       if (!verdict.ok) {
-        this.emit('REJECTED', entryOrder.requestId, entryOrder.orderId, position.positionId, {
+        this.emit('REJECTED', requestId, null, position.positionId, {
           stage: 'ATTACHMENT',
           reason: verdict.reason,
           kind,
@@ -908,7 +981,7 @@ export class OrderSimulatorEngine {
     const purpose: OrderPurpose = kind === 'STOP' ? 'STOP_LOSS' : 'TAKE_PROFIT';
     const exitOrder: Order = {
       orderId,
-      requestId: entryOrder.requestId,
+      requestId,
       sessionId: this.sessionId,
       symbol: position.symbol,
       side: exitSide,
@@ -926,14 +999,14 @@ export class OrderSimulatorEngine {
       triggeredAt: null,
       terminalAt: null,
       rejectReason: null,
-      profileSnapshot: entryOrder.profileSnapshot,
+      profileSnapshot,
       submittedQuote: quote ? { ...quote } : null,
     };
     this.ordersById.set(orderId, exitOrder);
     if (kind === 'STOP') position.slOrderId = orderId;
     else position.tpOrderId = orderId;
 
-    this.emit('WORKING', entryOrder.requestId, orderId, position.positionId, {
+    this.emit('WORKING', requestId, orderId, position.positionId, {
       purpose,
       side: exitSide,
       level,
@@ -942,6 +1015,52 @@ export class OrderSimulatorEngine {
 
     // An exit attached while the market already satisfies it must fire on the next evaluation.
     this.scheduler.schedule(this.nowMs + this.profile.dispatchMs.value, { kind: 'ELIGIBLE', orderId });
+  }
+
+  /**
+   * End a single member of a protective group, whether or not it can still act.
+   * Used when a side is replaced, so a position never carries two instructions for the same side.
+   */
+  private terminateMember(orderId: OrderId | null, position: Position, cause: string): void {
+    if (!orderId) return;
+    const member = this.ordersById.get(orderId);
+    if (!member) return;
+    if (member.state === 'WORKING' || member.state === 'ACCEPTED') {
+      member.state = 'CANCELLED';
+      member.terminalAt = this.nowMs;
+      this.emit('CANCELLED', member.requestId, member.orderId, position.positionId, {
+        cause,
+        note: 'Superseded by a replacement instruction on the same side.',
+      });
+    }
+    if (position.slOrderId === orderId) position.slOrderId = null;
+    if (position.tpOrderId === orderId) position.tpOrderId = null;
+  }
+
+  /**
+   * Cancel every live exit attached to a position, returning the ids that were invalidated.
+   * A position's protective group is a single claim on its size, so activating one member — or
+   * declaring the size spoken for by a manual close — invalidates the rest.
+   */
+  private invalidateExits(position: Position, cause: string): OrderId[] {
+    const invalidated: OrderId[] = [];
+    for (const id of [position.slOrderId, position.tpOrderId]) {
+      if (!id) continue;
+      const exit = this.ordersById.get(id);
+      if (!exit) continue;
+      if (exit.state === 'WORKING' || exit.state === 'ACCEPTED') {
+        exit.state = 'CANCELLED';
+        exit.terminalAt = this.nowMs;
+        invalidated.push(id);
+        this.emit('CANCELLED', exit.requestId, exit.orderId, position.positionId, {
+          cause,
+          note: 'The position’s size is claimed once; this instruction can no longer act on it.',
+        });
+      }
+    }
+    position.slOrderId = null;
+    position.tpOrderId = null;
+    return invalidated;
   }
 
   private releaseAttachments(order: Order): void {
@@ -961,6 +1080,7 @@ export class OrderSimulatorEngine {
     position.realizedPnl = roundToDecimals(position.realizedPnl + realized, 6);
     position.openSize = roundToDecimals(position.openSize - order.size, 8);
     position.state = position.openSize <= 0 ? 'CLOSED' : 'OPEN';
+    position.closeReservedBy = null;
 
     const other = order.purpose === 'STOP_LOSS' ? position.tpOrderId : position.slOrderId;
     if (order.purpose === 'STOP_LOSS') position.slOrderId = null;
@@ -1048,6 +1168,21 @@ export class OrderSimulatorEngine {
       this.emit('REJECTED', requestId, orderId, positionId, {
         stage: 'BROKER',
         reason: `Position ${positionId} is ${position ? position.state : 'missing'} and cannot be closed.`,
+      });
+      return;
+    }
+
+    // Another instruction already owns this position's size — typically an exit that latched in the
+    // instant between submission and arrival. Filling both would close the same size twice.
+    if (position.closeReservedBy && position.closeReservedBy !== orderId) {
+      order.state = 'REJECTED';
+      order.terminalAt = this.nowMs;
+      order.rejectReason = 'INSTRUCTION_CONSUMED';
+      this.emit('REJECTED', requestId, orderId, positionId, {
+        stage: 'BROKER',
+        reason:
+          `Position ${positionId} is already being closed by ${position.closeReservedBy}. ` +
+          'A position’s size is claimed once, so this close is refused rather than sharing it.',
       });
       return;
     }

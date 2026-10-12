@@ -499,6 +499,31 @@ export class ReplaySession {
     return outcome;
   }
 
+  /**
+   * Attach or replace protection on an open position, recorded in the command log so a rewind
+   * branches it like any other instruction rather than leaving it applied to a rebuilt account.
+   */
+  attachProtection(positionId: PositionId, protection: { stopLoss?: number | null; takeProfit?: number | null }): CommandOutcome {
+    const input = {
+      positionId,
+      ...(protection.stopLoss !== undefined && protection.stopLoss !== null ? { stopLoss: protection.stopLoss } : {}),
+      ...(protection.takeProfit !== undefined && protection.takeProfit !== null
+        ? { takeProfit: protection.takeProfit }
+        : {}),
+    };
+    const outcome = this.engine.dispatch({
+      kind: 'PROTECT',
+      requestId: `R-PROTECT-${this.commandSeq + 1}` as RequestId,
+      input,
+    });
+    this.commands.push({
+      commandSeq: ++this.commandSeq,
+      atMs: this.cursorMs,
+      command: { kind: 'PROTECT', requestId: outcome.requestId, input },
+    });
+    return outcome;
+  }
+
   cancelOrder(orderId: OrderId): CommandOutcome {
     const outcome = this.engine.cancelOrder(orderId);
     this.record({ kind: 'CANCEL', requestId: outcome.requestId, input: { orderId } });

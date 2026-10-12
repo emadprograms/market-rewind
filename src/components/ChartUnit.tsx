@@ -211,11 +211,9 @@ export default function ChartUnit({
           currentPrice={currentPrice}
           tradeBadgeRef={tradeBadgeRef}
           onCloseTrade={() => {
-            if (typeof trade.closeTrade === 'function') {
-              trade.closeTrade();
-            } else {
-              trade.setActiveTrade(null);
-            }
+            // Closes are engine commands addressed by POSITION id. There is no local
+            // `setActiveTrade(null)` escape hatch any more: a badge cannot erase economic state.
+            trade.closePosition();
           }}
           isHydrated={chart.isHydrated}
           theme={theme}

@@ -235,6 +235,18 @@ export interface ClosePositionInput {
   readonly positionId: PositionId;
 }
 
+/**
+ * Attach or replace protection on a position that is already open.
+ *
+ * This exists because protection is opt-in: an entry may be opened bare and protected later. It is a
+ * command rather than a side effect so that a rewind branches it like any other instruction.
+ */
+export interface ProtectPositionInput {
+  readonly positionId: PositionId;
+  readonly stopLoss?: number;
+  readonly takeProfit?: number;
+}
+
 export interface CancelOrderInput {
   readonly orderId: OrderId;
 }
@@ -247,6 +259,7 @@ export interface AmendOrderInput {
 
 export type Command =
   | { readonly kind: 'SUBMIT'; readonly requestId: RequestId; readonly input: SubmitOrderInput }
+  | { readonly kind: 'PROTECT'; readonly requestId: RequestId; readonly input: ProtectPositionInput }
   | { readonly kind: 'CLOSE'; readonly requestId: RequestId; readonly input: ClosePositionInput }
   | { readonly kind: 'CANCEL'; readonly requestId: RequestId; readonly input: CancelOrderInput }
   | { readonly kind: 'AMEND'; readonly requestId: RequestId; readonly input: AmendOrderInput };
