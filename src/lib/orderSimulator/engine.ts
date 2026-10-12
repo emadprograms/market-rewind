@@ -436,6 +436,35 @@ export class OrderSimulatorEngine {
   }
 
   /**
+   * Dispatch every scheduled action whose fire time is STRICTLY BEFORE `targetMs`, leaving `now`
+   * at its previous value.
+   *
+   * This is the other half of the chronological merge: at a given instant the caller first drains
+   * strictly-earlier work, then makes the quote available, then drains work due at that instant.
+   * Without this split, a command due at exactly T would be evaluated against a quote that also
+   * arrived at T but has not been delivered yet — or, worse, against the *next* frame's quote.
+   */
+  runUntilBefore(targetMs: ReplayMs): void {
+    let iterations = 0;
+    for (;;) {
+      const pending = this.scheduler.peek();
+      if (!pending || pending.fireAtMs >= targetMs) break;
+
+      const next = this.scheduler.next();
+      if (!next) break;
+
+      if (++iterations > this.maxIterations) {
+        throw new Error(
+          `runUntilBefore exceeded ${this.maxIterations} iterations in a single call. This indicates a scheduling loop bug.`,
+        );
+      }
+
+      this.nowMs = Math.max(this.nowMs, next.fireAtMs);
+      this.handleAction(next.payload);
+    }
+  }
+
+  /**
    * Dispatch every scheduled action whose fire time is at or before `targetMs`, then leave `now`
    * at `targetMs`. This is how a caller interleaves market data with instruction latency without
    * ever letting the engine read a wall clock.

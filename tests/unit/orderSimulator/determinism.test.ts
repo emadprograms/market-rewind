@@ -99,7 +99,9 @@ describe('order simulator — determinism', () => {
       // Strip comments so a doc comment that *mentions* a wall clock is not a violation.
       const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
       if (/\bDate\.now\s*\(/.test(code)) offenders.push(`${file}: Date.now`);
-      if (/\bnew\s+Date\s*\(/.test(code)) offenders.push(`${file}: new Date`);
+      // `new Date(value)` parses market-data timestamps and is deterministic; `new Date()` reads the
+      // ambient clock and is the thing that must never appear.
+      if (/\bnew\s+Date\s*\(\s*\)/.test(code)) offenders.push(`${file}: new Date()`);
       if (/\bperformance\.now\s*\(/.test(code)) offenders.push(`${file}: performance.now`);
       if (/\bhrtime\b/.test(code)) offenders.push(`${file}: process.hrtime`);
       if (/\bsetTimeout\s*\(|\bsetInterval\s*\(/.test(code)) offenders.push(`${file}: timer`);

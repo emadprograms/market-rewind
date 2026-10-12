@@ -43,6 +43,11 @@ export interface Quote {
    * deduplication key — never an array index.
    */
   readonly seq: number;
+  /**
+   * True when the bid/ask were derived from a single print rather than observed. A derived quote is
+   * a disclosed convention, never a measurement.
+   */
+  readonly derived?: boolean;
 }
 
 export type MovementReason =
