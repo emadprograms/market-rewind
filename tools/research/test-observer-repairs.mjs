@@ -381,5 +381,47 @@ console.log('\n9. Analyzer claim checks still pass end-to-end');
 }
 
 // ---------------------------------------------------------------------------
+console.log("\n9b. The analyzer's claims do not depend on the machine timezone");
+// ---------------------------------------------------------------------------
+{
+  // A defect an external verifier found, which every check above missed for a simple reason: this
+  // machine runs in UTC. The evidence contains timestamps WITHOUT a trailing `Z` — the server's
+  // `createdDateUTC` / `updateTimeUTC` fields — and `Date.parse` reads a bare ISO string as LOCAL
+  // time. On a UTC machine that is accidentally correct, so the claim checks passed here and the two
+  // subtraction claims came out as 209 ms and 52 ms as expected. On a UTC+3 machine the same evidence
+  // produced -10799791 ms and -10799948 ms, and the analyzer reported 17/19.
+  //
+  // The claim checks were therefore testing the machine's timezone rather than the evidence. The
+  // fix is in the analyzer's timestamp helper; this group runs the analyzer under timezones far from
+  // UTC in both directions, so "it passes here" can no longer mean "it passes because here is UTC".
+  const zones = [
+    ['Asia/Bahrain', '+03:00'], // where the defect was reported from
+    ['Pacific/Kiritimati', '+14:00'], // the largest positive offset in use
+    ['America/New_York', '-04:00'], // negative, and a DST zone
+  ];
+  for (const [zone, offset] of zones) {
+    const res = spawnSync(process.execPath, [ANALYZER, '--check'], {
+      cwd: REPO,
+      env: { ...process.env, TZ: zone },
+      encoding: 'utf8',
+      timeout: 60000,
+    });
+    const out = `${res.stdout || ''}${res.stderr || ''}`;
+    const m = out.match(/(\d+)\/(\d+) passed/);
+    check(
+      `analyzer claims hold under TZ=${zone} (${offset})`,
+      res.status === 0 && !!m && m[1] === m[2] && m[2] === '19',
+      `status=${res.status} tally=${m ? m[0] : 'none'}`,
+    );
+    // The two subtraction claims specifically: they are the ones the timezone skew corrupted.
+    check(
+      `timezone-sensitive subtraction claims hold under TZ=${zone}`,
+      !/FAIL\s+(mixed-clock|server-domain) subtraction/.test(out),
+      out.split('\n').filter((l) => /FAIL/.test(l)).slice(0, 2).join(' | ') || 'no FAIL lines',
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

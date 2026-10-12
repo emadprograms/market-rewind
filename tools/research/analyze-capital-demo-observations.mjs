@@ -60,10 +60,29 @@ const readJsonl = (file) =>
 
 const readJson = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null);
 
-const ms = (iso) => {
+/**
+ * Parse an ISO-8601 timestamp, treating one WITHOUT a timezone designator as UTC.
+ *
+ * Why this is not `Date.parse(iso)` directly: a bare string like `2026-10-11T11:02:44.904` is
+ * interpreted by `Date.parse` in the MACHINE'S LOCAL TIMEZONE. The evidence contains two families of
+ * timestamp and they are different clocks:
+ *
+ *   `createdDate` / `updateTime`        — server-local wall time (observed as UTC+3 in the pilot)
+ *   `createdDateUTC` / `updateTimeUTC`  — UTC, but serialised WITHOUT a trailing `Z`
+ *
+ * The previous version assumed every timestamp ended in `Z`, so the second family was silently read
+ * as local time. On a UTC machine the mixed-clock subtraction came out as 209 ms; on a UTC+3 machine
+ * it came out as -10799791 ms, and the analyzer reported 17/19 instead of 19/19. The claim check was
+ * therefore testing the machine's timezone, not the evidence.
+ *
+ * Every call site below passes a field whose name ends in `UTC`, so a missing designator means UTC.
+ * Callers that need server-local time must NOT use this helper without an explicit conversion.
+ */
+const msUtc = (iso) => {
   if (!iso) return NaN;
-  // Bundle timestamps are ISO-8601 with a trailing Z.
-  const t = Date.parse(iso.replace('Z', '+00:00'));
+  // Anchored already: a trailing `Z`, or an explicit ±HH:MM / ±HHMM offset.
+  const anchored = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso);
+  const t = Date.parse(anchored ? iso.replace('Z', '+00:00') : `${iso}Z`);
   return Number.isNaN(t) ? NaN : t;
 };
 
@@ -319,8 +338,8 @@ function analyseTiming(bundle, lifecycles) {
     };
 
     if (eligibleQuote) {
-      const recvMs = ms(eligibleQuote.t_recv_utc);
-      const createdMs = ms(createdUtc);
+      const recvMs = msUtc(eligibleQuote.t_recv_utc);
+      const createdMs = msUtc(createdUtc);
       const serverMs = eligibleQuote.server_timestamp_ms;
       timing.eligible_quote_to_position_ms = {
         mixed_clock: {
