@@ -56,9 +56,9 @@ git rev-parse HEAD                             # record this
 git ls-remote origin refs/heads/arena/d6be95e4-market-rewind
 git status --short                             # expect EMPTY
 
-# Every number below was measured at commit 5f3cfb6. Commits after it are expected to touch only
+# Every number below was measured at commit d161d8b. Commits after it are expected to touch only
 # this file. Prove that, so you know the numbers still describe the code in front of you:
-git diff --stat 5f3cfb6 HEAD -- . ':(exclude)VERIFY-V6.0.md'
+git diff --stat d161d8b HEAD -- . ':(exclude)VERIFY-V6.0.md'
 #    expect: NO OUTPUT. Output means the code changed after the measurements were taken — say so,
 #    and treat any mismatch below as unexplained until it is accounted for.
 ```
@@ -67,7 +67,7 @@ git diff --stat 5f3cfb6 HEAD -- . ':(exclude)VERIFY-V6.0.md'
 `git ls-remote`, the post-measurement diff above is empty, and `git status` is clean.
 
 If you are on `main`, stop: you are looking at the wrong commit and none of the expected results will
-appear. If `HEAD` is a commit that is not `5f3cfb6` but the diff above is empty, you are fine — the
+appear. If `HEAD` is a commit that is not `d161d8b` but the diff above is empty, you are fine — the
 branch has only had documentation added since.
 
 Provenance checks — record each result:
@@ -190,6 +190,31 @@ TZ=UTC        npx vitest run tests/verification/independentProbes.test.ts 2>&1 |
 TZ=Asia/Tokyo npx vitest run tests/verification/independentProbes.test.ts 2>&1 | grep 'PROBE P8'
 # expect the SAME digest in both lines, and in both runs of the same line
 ```
+
+---
+
+## 3b. Timezone independence (this section found a real bug)
+
+Run the analyzer under a timezone that is **not** UTC. This is not a formality: on 2026-10-12 an
+external verifier ran this milestone on a UTC+3 machine and found three failures that no check in the
+repository could have caught, because the repository's own machine runs in UTC.
+
+```bash
+for tz in UTC Asia/Bahrain Pacific/Kiritimati America/New_York; do
+  printf '%-20s %s\n' "$tz" "$(TZ=$tz node tools/research/analyze-capital-demo-observations.mjs --check 2>&1 | tail -1 | xargs)"
+done
+# expect: 19/19 passed on EVERY line, including the non-UTC ones.
+```
+
+The recorded evidence contains timestamps with **no trailing `Z`**: Capital.com returns
+`createdDate`/`updateTime` in server-local wall time (UTC+3 in the pilot) and `createdDateUTC`/
+`updateTimeUTC` in UTC but *without a timezone designator*. `Date.parse` reads a bare ISO string as
+**local** time, so on a UTC machine the bug is invisible and on any other machine the subtraction
+claims are wrong by that machine's offset (it was −10799791 ms instead of 209 ms at UTC+3).
+
+The repair suite's group 9b now runs the analyzer under UTC+03:00, UTC+14:00 and UTC−04:00 and fails
+if the tally is anything but 19/19 — which it does even when run from UTC. If any line above is not
+`19/19`, that guard has failed and this is a finding.
 
 ---
 
@@ -326,7 +351,7 @@ performance finding; anything in the same order of magnitude is fine.
 
 ```bash
 node tools/research/analyze-capital-demo-observations.mjs --check 2>&1 | tail -3   # expect: 19/19 passed
-node tools/research/test-observer-repairs.mjs 2>&1 | tail -3                        # expect: 42 passed, 0 failed
+node tools/research/test-observer-repairs.mjs 2>&1 | tail -3                        # expect: 48 passed, 0 failed
 node tools/research/test-demo-guard.mjs 2>&1 | tail -3                              # expect: 16/16 passed
 ```
 
@@ -419,6 +444,7 @@ Two things are already known and should not be mistaken for new bugs:
 | 4 `test.fixme` browser tests | Intentional; see §8 |
 | `Fill.priceChangeFromSubmitTicks` / `stopToFillDifferenceTicks` are **tick counts**, not currency | Documented naming rule (they were renamed from an ambiguous form) |
 | A tick-independent quote in `playbackBridge` is marked `derived: true` | Derived spread is disclosed, not presented as observed |
+| The analyzer treats a timestamp with no `Z` as UTC | The evidence mixes two clock families; this is deliberate, documented in `msUtc`, and guarded by repair-suite group 9b |
 
 ---
 
@@ -434,7 +460,7 @@ machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
    branch             = <name>
    HEAD               = <hash>
    origin branch tip  = <hash>          identical? yes/no
-   diff vs 5f3cfb6 excluding this file  = empty / <output>
+   diff vs d161d8b excluding this file  = empty / <output>
    git status (before/after) = <?> / <?>
    v6.0 tag           = present/absent
    evidence bundles   = <n>   tracked files = <n>
@@ -452,6 +478,9 @@ machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
    TZ=UTC    P8 digest = <…>
    TZ=Tokyo  P8 digest = <…>       identical? yes/no
    any probe whose value differs from the derivation in §3: <list or "none">
+
+3b. TIMEZONE
+   UTC=?/19  Asia/Bahrain=?/19  Pacific/Kiritimati=?/19  America/New_York=?/19   (all must be 19/19)
 
 4. MUTATION TESTING
    M1 caught by <n> test(s)     M2 <n>   M3 <n>   M4 <n>   M5 <n>   M6 <n>
@@ -493,6 +522,7 @@ not know, and unable to touch the network or a broker account. It is **verified*
 2. all nine probes match the hand-derivations in §3;
 3. every one of the six mutations is caught by at least one test;
 4. the recorded evidence is byte-unchanged, no new bundle appeared, and the offline switch refuses;
-5. the full suite and the build are clean.
+5. the analyzer's claims hold in every timezone tested, not just UTC (§3b);
+6. the full suite and the build are clean.
 
 Anything less is a finding, and a finding is the most useful thing you can hand back.
