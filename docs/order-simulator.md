@@ -179,6 +179,12 @@ The playhead is the account's clock. Nothing happens until time moves.
   artifact of the instrument's tick size, not an observation.
 - **One symbol = one set of instrument rules.** An instrument with no configured rules is refused
   rather than approximated with another symbol's tick size or step.
+- **The account follows the playhead, and that is a wire, not a property of the engine.** The account
+  store and the playback store are separate; `useAccountPlaybackSync` (mounted once in `App`) is what
+  moves the account's clock, through the store's `syncFromPlayback`. Without it the engine is correct
+  and completely inert: orders are accepted and never fill, the ticket has no quote, no badge appears.
+  The unit suite cannot catch its absence, because unit tests advance the engine themselves —
+  `tests/integration/accountPlaybackSync.test.tsx` is the test that does.
 - **`TRADEABLE_INSTRUMENTS` is the single source of truth** for what the account can trade: the ticket,
   the activity panel, the chart controls and the account store all read it, so they cannot disagree.
   BTCUSD's rules are `OBSERVED_SAMPLE` (the pilot measured it). The equity set — SPY, QQQ, AAPL, MSFT,

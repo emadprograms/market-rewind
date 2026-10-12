@@ -161,6 +161,32 @@ each is applied and reverted within a single command block.
    syntax error or an implausibly small suite. Verified by reintroducing the apostrophe: the guard
    fails naming the file and line.
 
+4. **The account had no clock, and only a browser could reveal it.** The chart playhead advanced and
+   streamed its tape while the simulated account sat motionless, because `useOrderSimulator` — the only
+   code that ever advanced a session from the playhead — had **no call site in the application**. It was
+   exercised exclusively by its own tests.
+
+   This is the defect behind the failures that the unit suite could not see: an accepted order never
+   filled, so no position opened, so no trade badge appeared, and the ticket showed em dashes because no
+   quote was ever delivered. Every one of the ~997 tests drives the engine by hand, which is precisely
+   why all of them passed: they were testing an engine, not an application.
+
+   Fixed by `syncFromPlayback` on the account store, delegating to the already-tested
+   `syncSessionToPlayback` bridge, plus `useAccountPlaybackSync` subscribing to the playback store and
+   mounted once in `App`. It publishes only when the account actually changed, so 25x playback does not
+   re-render per frame. `tests/integration/accountPlaybackSync.test.tsx` moves the playhead the way
+   `PlaybackManager` does and asserts the account followed; removing the subscription fails five of its
+   six tests.
+
+5. **The browser suite had been testing a stale build, and three more real bugs were behind the rest.**
+
+   | Finding | Detail |
+   |---|---|
+   | Stale build | The config used port 3000 with `reuseExistingServer: true`. A daemon serving an old `dist/` on that port was silently reused, so results described code that was not under test — one test flipped from failing to passing the moment `dist/` was rebuilt, with no source change. Now: dedicated port 3100, started fresh, `--strictPort`. |
+   | Unreachable step buttons | Step buttons are labelled from the current step size and `stepMinutes` defaults to 3, so "Step 1 Tick Forward" does not exist by default and every test that single-stepped waited 90 s for a locator that could never resolve. `setStepToTick` now selects the "1 tick" option first. |
+   | Unclickable tape close | The floating trade-desk button sat at `z-index: 4000` over the tape header at `z-index: 20`. The close button was physically unclickable; Playwright retried 173 times. The floating button is now hidden while the tape is open. |
+   | Wrong clock asserted | Anchors are stated in ET, but the display renders each instrument in its own zone (equities ET, crypto UTC), so asserting "09:10" against "13:10:00.000 UTC" fails on correct behaviour. `expectedDisplayClock` derives the expected reading from the app's own helper. |
+
    Net effect on this milestone: the browser layer is **not verified**, and one of its new specs is
    known-bad as written. Everything else in this document stands.
 2. **Four browser trading tests are known-stale and marked `test.fixme`** rather than left failing:

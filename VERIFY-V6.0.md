@@ -56,9 +56,9 @@ git rev-parse HEAD                             # record this
 git ls-remote origin refs/heads/arena/d6be95e4-market-rewind
 git status --short                             # expect EMPTY
 
-# Every number below was measured at commit d161d8b. Commits after it should touch only
+# Every number below was measured at commit 78d5ef7. Commits after it should touch only
 # documentation. Prove that, so you know the numbers still describe the code in front of you:
-git diff --stat d161d8b HEAD -- src tools tests
+git diff --stat 78d5ef7 HEAD -- src tools tests
 #    expect: NO OUTPUT. Anything listed here is code or a test that changed after the measurements
 #    were taken — say so, and treat any mismatch below as unexplained until it is accounted for.
 #    (This deliberately ignores documentation paths: comments about the numbers cannot invalidate
@@ -69,7 +69,7 @@ git diff --stat d161d8b HEAD -- src tools tests
 `git ls-remote`, the post-measurement diff above is empty, and `git status` is clean.
 
 If you are on `main`, stop: you are looking at the wrong commit and none of the expected results will
-appear. If `HEAD` is a commit that is not `d161d8b` but the diff above is empty, you are fine — the
+appear. If `HEAD` is a commit that is not `78d5ef7` but the diff above is empty, you are fine — the
 branch has only had documentation added since.
 
 Provenance checks — record each result:
@@ -133,8 +133,8 @@ PY
 
 | Metric | Expected |
 |---|---|
-| Test files | 120 |
-| Tests | 991 total = **989 passed, 2 skipped, 0 failed** |
+| Test files | 121 |
+| Tests | 997 total = **995 passed, 2 skipped, 0 failed** |
 | Suite duration | roughly 150–260 s on a normal machine |
 
 **The 2 skips must be explainable, not mysterious.** They are in
@@ -147,7 +147,7 @@ Breakdown, to be reported as-is:
 |---|---|
 | `tests/unit` | 698 |
 | `tests/regression` | 84 |
-| `tests/integration` | 85 |
+| `tests/integration` | 95 |
 | `tests/codex` | 48 |
 | `tests/performance` | 32 |
 | `tests/hooks` | 26 |
@@ -413,10 +413,28 @@ finding; a compile error would be.
 ## 8. Optional — browser journey suite
 
 ```bash
-npx playwright test -c playwright.journey.config.ts --list   # expect: 80 tests in 15 files
+npx playwright test -c playwright.journey.config.ts --list   # expect: 82 tests in 15 files
 npx playwright install chromium                              # may fail: no route to the CDN
 npx playwright test -c playwright.journey.config.ts          # only if the browser installed
 ```
+
+**If a previous run of this suite gave strange results, read this first.** The config used to target
+port 3000 with `reuseExistingServer: true`, which meant that anything already listening there — a
+`vite preview` daemon, a leftover tab's server, a stale `dist/` — was silently reused, and the suite
+then tested a build that predated the code. One reporting machine had exactly that: a daemon serving
+an old `dist/` on 3000, and a test that flipped from failing to passing the instant `dist/` was
+rebuilt, with no source change at all. The suite now starts its own server on **port 3100** with
+`--strictPort` and never reuses one, so a stale server cannot be tested and a busy port is an error
+rather than a silent substitution. If you are re-running an older checkout, check which port the
+config names before trusting any result.
+
+**Expect the trading specs to work now.** Until recently the simulated account had no clock at all:
+the chart playhead advanced and the account sat still, because the only code that ever moved a session
+from the playhead had no call site in the application. Orders were accepted and never filled, so no
+position opened, so no trade badge appeared; the ticket showed an em dash for bid and ask because no
+quote was ever delivered. That is fixed, and `tests/integration/accountPlaybackSync.test.tsx` fails if
+the wire is removed. If you see the old symptoms — a badge that never appears, a ticket stuck on `—` —
+say so loudly: it means the wire regressed, and it is the most valuable thing you could report.
 
 The builder could **not** run this (the browser binary was undownloadable in their environment), so
 **no browser result is currently proven either way.** If your machine can run it, this is the single
@@ -465,7 +483,7 @@ machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
    branch             = <name>
    HEAD               = <hash>
    origin branch tip  = <hash>          identical? yes/no
-   src/tools/tests vs d161d8b           = empty / <output>
+   src/tools/tests vs 78d5ef7            = empty / <output>
    git status (before/after) = <?> / <?>
    v6.0 tag           = present/absent
    evidence bundles   = <n>   tracked files = <n>
