@@ -56,11 +56,13 @@ git rev-parse HEAD                             # record this
 git ls-remote origin refs/heads/arena/d6be95e4-market-rewind
 git status --short                             # expect EMPTY
 
-# Every number below was measured at commit d161d8b. Commits after it are expected to touch only
-# this file. Prove that, so you know the numbers still describe the code in front of you:
-git diff --stat d161d8b HEAD -- . ':(exclude)VERIFY-V6.0.md'
-#    expect: NO OUTPUT. Output means the code changed after the measurements were taken — say so,
-#    and treat any mismatch below as unexplained until it is accounted for.
+# Every number below was measured at commit d161d8b. Commits after it should touch only
+# documentation. Prove that, so you know the numbers still describe the code in front of you:
+git diff --stat d161d8b HEAD -- src tools tests
+#    expect: NO OUTPUT. Anything listed here is code or a test that changed after the measurements
+#    were taken — say so, and treat any mismatch below as unexplained until it is accounted for.
+#    (This deliberately ignores documentation paths: comments about the numbers cannot invalidate
+#    the numbers, but a source change can.)
 ```
 
 **Requirement:** you are on the milestone branch, `HEAD` equals the branch tip reported by
@@ -461,7 +463,7 @@ machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
    branch             = <name>
    HEAD               = <hash>
    origin branch tip  = <hash>          identical? yes/no
-   diff vs d161d8b excluding this file  = empty / <output>
+   src/tools/tests vs d161d8b           = empty / <output>
    git status (before/after) = <?> / <?>
    v6.0 tag           = present/absent
    evidence bundles   = <n>   tracked files = <n>
