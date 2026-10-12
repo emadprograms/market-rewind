@@ -1,8 +1,10 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "I keep running into this issue where on my tab trying to seek forward or backward while the replay is playing immediately crashes the pages and makes it non responsive."
 created: 2026-10-08T04:50:00.000Z
-updated: 2026-10-08T14:30:00.000Z
+updated: 2026-10-12T00:00:00.000Z
+closed_as: resolved_superseded
+verified_in_commit: b5aaa213ece3308553d674b9407e1857c26ce0e2
 ---
 
 ## Current Focus
@@ -437,3 +439,26 @@ files_changed:
   - src/hooks/useChartLifecycle.ts
   - tests/unit/seekWhilePlayingFreeze.test.ts (new)
   - tests/integration/seekTimelineCandles.test.tsx (added real-hook seek-while-playing guard)
+
+---
+
+## Milestone Close Note (2026-10-12)
+
+Closed during the v5.0 milestone close-out. The fix chain (`4064b4b` … `4bd7ea3`) was merged and
+is present in `b5aaa21`: `seekEpoch` + `computeSeekPatch` in `src/store/usePlaybackStore.ts`, the
+`seekEpoch` refresh condition in `src/hooks/useChartData.ts`, and the bucket-level write
+coalescing plus the cause-C helpers (`aggregateDailyBucket`, `applyDailyTickFallback`,
+`findFirstTickAfter`) in `src/hooks/useChartLifecycle.ts`. All five changes and their guards are
+tracked in the repository.
+
+**Accepted at close (per maintainer decision):** the browser-effect measurement was never
+produced. `oracle.verification.e2e_browser` and `real_data_uat` remain `skipped`, and the human UAT
+script in `docs/reviews/seek-while-playing-freeze-verification-brief.md` §9 was not performed — the
+sandbox has no browser binary and no tick lake. This session is therefore closed as
+**resolved-superseded** rather than human-verified: the fix is shipped and guarded by the in-sandbox
+suites (5/5 freeze guard assertions, 5/5 mutants killed, revert-and-reconfirm reproduced the bug and
+the fix), but the *browser-effect claim* in `Current Focus.expecting` stays unmeasured and must not
+be quoted as measured.
+
+To re-open: run `bash tools/verify-seek-freeze-fix.sh --ab --quick` on a machine with the real
+environment (tick lake + DuckDB backend + Chromium) and record the output here.

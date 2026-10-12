@@ -13,6 +13,17 @@ import { defineConfig, devices } from '@playwright/test';
  * regression suite) so the two never fight over the dev server, and so the
  * journey suite can run in CI without market data.
  */
+/**
+ * The port this suite runs on, named once.
+ *
+ * `baseURL` and `webServer.url` must agree, and previously they did not: the server was moved to 3100
+ * to stop the suite reusing a stale `vite preview` daemon on 3000, while `baseURL` stayed on 3000 — so
+ * Playwright booted a fresh server on 3100 and then navigated the browser to 3000 anyway. The change
+ * looked like a fix and was not one. One constant, and a test that asserts the two agree.
+ */
+const JOURNEY_PORT = 3100;
+const JOURNEY_ORIGIN = `http://localhost:${JOURNEY_PORT}`;
+
 export default defineConfig({
   testDir: './tests/regression/journey',
   testMatch: '**/*.spec.ts',
@@ -25,16 +36,25 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 20_000 },
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: JOURNEY_ORIGIN,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'off',
   },
   // Boots the Vite dev server automatically; the API layer is fully mocked.
+  // A dedicated port, started fresh for every run, with a strict bind.
+  //
+  // This suite used to target port 3000 with `reuseExistingServer: !process.env.CI`. That is the
+  // usual convenience setting and it was actively harmful here: anything already listening on 3000 —
+  // in the reporting environment, a launchd daemon running `vite preview` with KeepAlive — was
+  // silently reused, so the suite tested a `dist/` bundle built before the code under test. Results
+  // looked like app failures and were in fact stale artefacts, and `--strictPort` avoids the milder
+  // version of the same trap, where Vite quietly moves to another port and the URL check passes
+  // against a server that is not the one being tested.
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    command: `npm run dev -- --port ${JOURNEY_PORT} --strictPort`,
+    url: JOURNEY_ORIGIN,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [

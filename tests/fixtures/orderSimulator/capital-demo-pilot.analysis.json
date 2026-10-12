@@ -1,0 +1,476 @@
+{
+  "generated_at": "2026-10-11T23:49:03.735Z",
+  "analysis_version": 1,
+  "source": {
+    "data_dir": "docs/research/capital-demo-order-data",
+    "bundle_count": 10,
+    "network_calls": 0
+  },
+  "provenance_legend": {
+    "OBSERVED": "OBSERVED",
+    "DERIVED_LOCAL": "DERIVED_LOCAL",
+    "DERIVED_MIXED_CLOCK": "DERIVED_MIXED_CLOCK",
+    "DERIVED_SERVER": "DERIVED_SERVER",
+    "UNAVAILABLE": "UNAVAILABLE"
+  },
+  "bundles": [
+    {
+      "run_id": "2026-10-11T11-00-50-497Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 10,
+      "event_roles": {
+        "CLOCK_PROBE": 10
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T11-00-58-781Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 6,
+      "event_roles": {
+        "SESSION": 1,
+        "INSTRUMENT": 5
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T11-01-06-656Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 4,
+      "event_roles": {
+        "SESSION": 1,
+        "ACCOUNTS": 1,
+        "SNAPSHOT_POSITIONS": 1,
+        "SNAPSHOT_WORKING_ORDERS": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T11-02-15-686Z",
+      "account_alias": "acc_demo_419aa2a2",
+      "environment": "DEMO",
+      "event_count": 47,
+      "event_roles": {
+        "CLOCK_PROBE": 20,
+        "SESSION": 1,
+        "ACCOUNTS": 2,
+        "SNAPSHOT_POSITIONS": 2,
+        "SNAPSHOT_WORKING_ORDERS": 2,
+        "INSTRUMENT": 10,
+        "ENTRY_MARKET": 1,
+        "CONFIRM": 4,
+        "CLOSE_POSITION": 1,
+        "ENTRY_PENDING": 2,
+        "CANCEL_WORKING_ORDER": 2
+      },
+      "quote_count": 46,
+      "ledger_count": 13,
+      "lifecycles": [
+        {
+          "sample_id": "MKT-BUY-892098977",
+          "order_type": "MARKET",
+          "direction": "BUY",
+          "epic": "BTCUSD",
+          "submission_event_id": "60f6f31c-e9cc-4dcf-9449-7d907b1443fa",
+          "submission_wire_path": "/positions",
+          "response_envelope_ms": 231.499,
+          "headers_latency_ms": 231.206,
+          "submission_status": 200,
+          "deal_reference": "o_cd56844e-5a0d-4fd4-a942-a197218e08b2",
+          "confirmation_event_id": "56066586-7934-42f5-bbcf-b928929e14c8",
+          "confirmation_status": "OPEN",
+          "confirmation_deal_status": "ACCEPTED",
+          "submission_deal_id": "00000000-69b0-7ecc-03b5-c3980055311e",
+          "affected_deal_ids": [
+            "00000000-69b0-7ecf-03b5-c3980055311e"
+          ],
+          "affected_deal_statuses": [
+            "OPENED"
+          ],
+          "resulting_position_deal_id": "00000000-69b0-7ecf-03b5-c3980055311e",
+          "resulting_position_created_utc": "2026-10-11T11:02:26.040",
+          "resulting_position_level": 82946.85,
+          "first_observed_position": {
+            "local_utc": "2026-10-11T11:02:56.685Z",
+            "monotonic_ms": 892130101.70625,
+            "response_ms": 150.7430409193039
+          },
+          "cancel_kind": "CLOSE_POSITION",
+          "cancel_event_id": "422234ae-29ed-4430-98c1-b4b7b839df7f",
+          "cancel_status": 404,
+          "cancel_error_code": "error.not-found.dealId",
+          "cancel_wire_path": "/positions/00000000-69b0-7ecc-03b5-c3980055311e",
+          "cancel_target_deal_id": "00000000-69b0-7ecc-03b5-c3980055311e",
+          "cancel_target_is_submission_deal_id": true
+        },
+        {
+          "sample_id": "LIMIT-BUY-892102048",
+          "order_type": "LIMIT",
+          "direction": "BUY",
+          "epic": "BTCUSD",
+          "submission_event_id": "97c55a6b-2be5-431b-9230-6d2d2191fb55",
+          "submission_wire_path": "/workingorders",
+          "response_envelope_ms": 203.837,
+          "headers_latency_ms": 203.493,
+          "submission_status": 200,
+          "deal_reference": "o_42bc91c0-646e-4924-9a3e-6c30427b58ec",
+          "confirmation_event_id": "7da7b576-8351-4dd1-a3c4-4e27828d9463",
+          "confirmation_status": "OPEN",
+          "confirmation_deal_status": "ACCEPTED",
+          "submission_deal_id": "00000000-69b0-7eeb-03b5-c3980055311e",
+          "affected_deal_ids": [
+            "00000000-69b0-7eeb-03b5-c3980055311e"
+          ],
+          "affected_deal_statuses": [
+            "OPENED"
+          ],
+          "resulting_position_deal_id": null,
+          "resulting_position_created_utc": null,
+          "resulting_position_level": null,
+          "first_observed_position": null,
+          "cancel_kind": "CANCEL_WORKING_ORDER",
+          "cancel_event_id": "84779f1c-f338-4bbc-8744-3db959f2b2a2",
+          "cancel_status": 200,
+          "cancel_error_code": null,
+          "cancel_wire_path": "/workingorders/00000000-69b0-7eeb-03b5-c3980055311e",
+          "cancel_target_deal_id": "00000000-69b0-7eeb-03b5-c3980055311e",
+          "cancel_target_is_submission_deal_id": true
+        },
+        {
+          "sample_id": "STOP-BUY-892115822",
+          "order_type": "STOP",
+          "direction": "BUY",
+          "epic": "BTCUSD",
+          "submission_event_id": "655c2917-22a9-4a96-a975-17409040366a",
+          "submission_wire_path": "/workingorders",
+          "response_envelope_ms": 204.384,
+          "headers_latency_ms": 203.96,
+          "submission_status": 200,
+          "deal_reference": "o_1e38c9ac-8a49-4724-bc51-2d1d219cfd6b",
+          "confirmation_event_id": "c6b54a3c-f55f-4fbf-bcb6-f32211c75104",
+          "confirmation_status": "OPEN",
+          "confirmation_deal_status": "ACCEPTED",
+          "submission_deal_id": "00000000-69b0-802d-03b5-c3980055311e",
+          "affected_deal_ids": [
+            "00000000-69b0-802d-03b5-c3980055311e"
+          ],
+          "affected_deal_statuses": [
+            "OPENED"
+          ],
+          "resulting_position_deal_id": "00000000-69b0-8037-03b5-c3980055311e",
+          "resulting_position_created_utc": "2026-10-11T11:02:44.904",
+          "resulting_position_level": 82948.1,
+          "first_observed_position": {
+            "local_utc": "2026-10-11T11:02:56.685Z",
+            "monotonic_ms": 892130101.70625,
+            "response_ms": 150.7430409193039
+          },
+          "cancel_kind": "CANCEL_WORKING_ORDER",
+          "cancel_event_id": "3d0565ae-3ec4-4207-9656-46689de35254",
+          "cancel_status": 404,
+          "cancel_error_code": "error.not-found.dealId",
+          "cancel_wire_path": "/workingorders/00000000-69b0-802d-03b5-c3980055311e",
+          "cancel_target_deal_id": "00000000-69b0-802d-03b5-c3980055311e",
+          "cancel_target_is_submission_deal_id": true
+        }
+      ],
+      "timing": [
+        {
+          "sample_id": "MKT-BUY-892098977",
+          "order_type": "MARKET",
+          "post_dispatch_utc": "2026-10-11T11:02:25.800Z",
+          "position_created_utc": "2026-10-11T11:02:26.040",
+          "position_first_observed_utc": "2026-10-11T11:02:56.685Z",
+          "submission_to_first_observation_ms": {
+            "value": 31116.545,
+            "provenance": "DERIVED_LOCAL",
+            "is_latency": false,
+            "note": "Delayed-observation metric: includes a deliberate ~10 s observation gap before polling. NOT broker execution time."
+          },
+          "fill_observation_ms_from_csv": "816.5",
+          "eligible_quote": null
+        },
+        {
+          "sample_id": "STOP-BUY-892115822",
+          "order_type": "STOP",
+          "post_dispatch_utc": "2026-10-11T11:02:42.617Z",
+          "position_created_utc": "2026-10-11T11:02:44.904",
+          "position_first_observed_utc": "2026-10-11T11:02:56.685Z",
+          "submission_to_first_observation_ms": {
+            "value": 14273.071,
+            "provenance": "DERIVED_LOCAL",
+            "is_latency": false,
+            "note": "Delayed-observation metric: includes a deliberate ~10 s observation gap before polling. NOT broker execution time."
+          },
+          "fill_observation_ms_from_csv": "UNTRIGGERED_RESTING",
+          "eligible_quote": {
+            "local_recv_utc": "2026-10-11T11:02:44.695Z",
+            "server_timestamp_ms": 1791716564852,
+            "bid": 82898.1,
+            "ask": 82948.1
+          },
+          "eligible_quote_to_position_ms": {
+            "mixed_clock": {
+              "value": 209,
+              "provenance": "DERIVED_MIXED_CLOCK",
+              "is_latency": false,
+              "note": "Subtracts a LOCAL receipt time from a SERVER creation time. Crosses clock domains with unvalidated offset. NOT a latency."
+            },
+            "server_domain": {
+              "value": 52,
+              "provenance": "DERIVED_SERVER",
+              "is_latency": false,
+              "note": "Both timestamps server-reported, but event semantics (quote print vs position creation) are not established as comparable. Also NOT a verified latency."
+            }
+          }
+        }
+      ],
+      "end_state": {
+        "positions": [
+          {
+            "deal_suffix": "7ecf",
+            "working_order_suffix": "7ecc",
+            "level": 82946.85,
+            "direction": "BUY"
+          },
+          {
+            "deal_suffix": "8037",
+            "working_order_suffix": "802d",
+            "level": 82948.1,
+            "direction": "BUY"
+          }
+        ],
+        "working_orders": [],
+        "observed_at": "2026-10-11T11:02:56.958Z"
+      }
+    },
+    {
+      "run_id": "2026-10-11T11-03-46-166Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 8,
+      "event_roles": {
+        "SESSION": 1,
+        "SNAPSHOT_POSITIONS": 2,
+        "CLOSE_POSITION": 2,
+        "CONFIRM": 2,
+        "SNAPSHOT_WORKING_ORDERS": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T11-05-33-514Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 4,
+      "event_roles": {
+        "SESSION": 1,
+        "ACCOUNTS": 1,
+        "SNAPSHOT_POSITIONS": 1,
+        "SNAPSHOT_WORKING_ORDERS": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T23-42-28-127Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 1,
+      "event_roles": {
+        "CLOCK_PROBE": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T23-42-34-289Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 1,
+      "event_roles": {
+        "CLOCK_PROBE": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T23-42-52-804Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 1,
+      "event_roles": {
+        "CLOCK_PROBE": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    },
+    {
+      "run_id": "2026-10-11T23-42-57-824Z",
+      "account_alias": null,
+      "environment": null,
+      "event_count": 1,
+      "event_roles": {
+        "CLOCK_PROBE": 1
+      },
+      "quote_count": 0,
+      "ledger_count": 0,
+      "lifecycles": [],
+      "timing": [],
+      "end_state": {
+        "positions": [],
+        "working_orders": [],
+        "observed_at": null
+      }
+    }
+  ],
+  "reconciliation": {
+    "primary_run_id": "2026-10-11T11-02-15-686Z",
+    "entry_runs": [
+      "2026-10-11T11-02-15-686Z"
+    ],
+    "recovery_run_ids": [
+      "2026-10-11T11-03-46-166Z"
+    ],
+    "cleanup": {
+      "attempts": [
+        {
+          "run_id": "2026-10-11T11-02-15-686Z",
+          "event_id": "422234ae-29ed-4430-98c1-b4b7b839df7f",
+          "wire_path": "/positions/00000000-69b0-7ecc-03b5-c3980055311e",
+          "method": "DELETE",
+          "status": 404,
+          "error_code": "error.not-found.dealId",
+          "target_deal_id": "00000000-69b0-7ecc-03b5-c3980055311e"
+        },
+        {
+          "run_id": "2026-10-11T11-02-15-686Z",
+          "event_id": "3d0565ae-3ec4-4207-9656-46689de35254",
+          "wire_path": "/workingorders/00000000-69b0-802d-03b5-c3980055311e",
+          "method": "DELETE",
+          "status": 404,
+          "error_code": "error.not-found.dealId",
+          "target_deal_id": "00000000-69b0-802d-03b5-c3980055311e"
+        }
+      ],
+      "succeeded": true,
+      "succeeded_in": [
+        "2026-10-11T11-03-46-166Z"
+      ],
+      "leftover_positions": [
+        {
+          "deal_id": "00000000-69b0-7ecf-03b5-c3980055311e",
+          "working_order_id": "00000000-69b0-7ecc-03b5-c3980055311e",
+          "direction": "BUY",
+          "level": 82946.85,
+          "created_utc": "2026-10-11T11:02:26.040"
+        },
+        {
+          "deal_id": "00000000-69b0-8037-03b5-c3980055311e",
+          "working_order_id": "00000000-69b0-802d-03b5-c3980055311e",
+          "direction": "BUY",
+          "level": 82948.1,
+          "created_utc": "2026-10-11T11:02:44.904"
+        }
+      ],
+      "recovered_position_ids": [
+        "00000000-69b0-7ecf-03b5-c3980055311e",
+        "00000000-69b0-8037-03b5-c3980055311e"
+      ]
+    },
+    "manifest_claims_clean": true,
+    "manifest_unresolved_arrays": {
+      "unresolved_positions": [],
+      "unresolved_working_orders": []
+    },
+    "observed_clean": false,
+    "manifest_contradicted": true
+  },
+  "stream_coverage": {
+    "event_types": {
+      "REST_REQUEST": 83
+    },
+    "confirmation_frames_captured": 0,
+    "interpretation": "No confirmation-stream frames were captured. The collector sends confirms.subscribe but drops non-quote/non-confirmation frames, including subscription errors. Real-time fill notifications were NOT verified."
+  },
+  "quote_stats": {
+    "run_id": "2026-10-11T11-02-15-686Z",
+    "epic": "BTCUSD",
+    "count": 46,
+    "receive_gap_ms": {
+      "min": 48.965,
+      "median": 200.213,
+      "max": 5959.886
+    },
+    "spread": {
+      "min": 50,
+      "max": 50,
+      "mode": 50
+    },
+    "observed_step_candidate": 0.05,
+    "note": "Instrument-specific fixture context for BTCUSD only. Never default these values onto another symbol."
+  }
+}

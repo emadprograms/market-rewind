@@ -18,18 +18,41 @@ import {
   MutationLedger
 } from './demo-guard.mjs';
 
+/**
+ * OFFLINE KILL SWITCH — `CAPITAL_DEMO_OFFLINE=1`.
+ *
+ * When set, this process is forbidden from opening any connection to the demo API: REST requests
+ * throw before they are issued and the streaming socket refuses to connect. It exists because the
+ * collector's own test suite has to exercise the transport's failure paths, and that must be possible
+ * without any chance of reaching Capital.com. It is a defence in depth, not a replacement for the
+ * demo-only URL validation in `demo-guard.mjs`: the mutation guard decides *what* may be sent, this
+ * decides *whether anything may be sent at all*.
+ *
+ * Read at call time (not import time) so a parent process can set it for a child.
+ */
+export function isOffline() {
+  return String(process.env.CAPITAL_DEMO_OFFLINE || '').trim() === '1';
+}
+
+const OFFLINE_ERROR =
+  'OFFLINE_MODE: CAPITAL_DEMO_OFFLINE=1 forbids network access. No request was issued and no ' +
+  'connection was opened. Unset it only when a human intends to talk to the demo API.';
+
 // Environment & Credential loader
-function loadDemoCredentials() {
+export function loadDemoCredentials() {
   const envSources = [
     path.resolve('.env'),
     path.resolve('../trading-terminal/.env'),
     path.resolve('../trading-terminal/.env.local')
   ];
 
+  // REPAIR (credential scope): only demo-specific names are accepted. The previous loader fell
+  // back to a generic CAPITAL_API_KEY, which can resolve to LIVE credentials — unacceptable for a
+  // collector whose whole safety story is "demo only".
   const loaded = {
-    apiKey: process.env.CAPITAL_API_KEY_DEMO || process.env.CAPITAL_API_KEY,
-    user: process.env.CAPITAL_USER || process.env.VITE_CAPITAL_USER,
-    password: process.env.CAPITAL_PASSWORD || process.env.VITE_CAPITAL_PASSWORD,
+    apiKey: process.env.CAPITAL_API_KEY_DEMO,
+    user: process.env.CAPITAL_USER_DEMO || process.env.VITE_CAPITAL_USER,
+    password: process.env.CAPITAL_PASSWORD_DEMO || process.env.VITE_CAPITAL_PASSWORD,
     cfClientId: process.env.VITE_CF_ACCESS_CLIENT_ID,
     cfClientSecret: process.env.VITE_CF_ACCESS_CLIENT_SECRET
   };
@@ -45,9 +68,9 @@ function loadDemoCredentials() {
         const key = trimmed.slice(0, eq).trim();
         const val = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, '');
 
-        if (!loaded.apiKey && (key === 'CAPITAL_API_KEY_DEMO' || key === 'CAPITAL_API_KEY')) loaded.apiKey = val;
-        if (!loaded.user && (key === 'VITE_CAPITAL_USER' || key === 'CAPITAL_USER')) loaded.user = val;
-        if (!loaded.password && (key === 'VITE_CAPITAL_PASSWORD' || key === 'CAPITAL_PASSWORD')) loaded.password = val;
+        if (!loaded.apiKey && key === 'CAPITAL_API_KEY_DEMO') loaded.apiKey = val;
+        if (!loaded.user && (key === 'VITE_CAPITAL_USER' || key === 'CAPITAL_USER' || key === 'CAPITAL_USER_DEMO')) loaded.user = val;
+        if (!loaded.password && (key === 'VITE_CAPITAL_PASSWORD' || key === 'CAPITAL_PASSWORD' || key === 'CAPITAL_PASSWORD_DEMO')) loaded.password = val;
         if (!loaded.cfClientId && key === 'VITE_CF_ACCESS_CLIENT_ID') loaded.cfClientId = val;
         if (!loaded.cfClientSecret && key === 'VITE_CF_ACCESS_CLIENT_SECRET') loaded.cfClientSecret = val;
       }
@@ -55,7 +78,10 @@ function loadDemoCredentials() {
   }
 
   if (!loaded.apiKey || !loaded.user || !loaded.password) {
-    throw new Error('DEMO CREDENTIALS MISSING: Required demo credentials not found in env or files');
+    throw new Error(
+      'DEMO CREDENTIALS MISSING: set CAPITAL_API_KEY_DEMO plus demo user/password. ' +
+      'A generic CAPITAL_API_KEY is deliberately NOT accepted, because it may resolve to live credentials.'
+    );
   }
 
   return loaded;
@@ -77,6 +103,11 @@ class DemoHttpClient {
     this.cfClientId = null;
     this.cfClientSecret = null;
     this.eventLogger = options.eventLogger || null;
+    // REPAIR (bounded execution): these bounds must be initialised in the CONSTRUCTOR, because
+    // requests can be issued before credentials are set (the clock probe does exactly that).
+    this.requestCount = 0;
+    this.maxRequests = options.maxRequests || 500;   // hard ceiling per run
+    this.requestTimeoutMs = options.requestTimeoutMs || 15000;
   }
 
   setTokens(cst, securityToken) {
@@ -100,12 +131,24 @@ class DemoHttpClient {
   }
 
   async request(pathOrUrl, options = {}) {
+    // REPAIR (bounded execution): a run must not be able to place an unbounded number of requests,
+    // and no single request may hang forever. Both bounds are deliberately generous but finite.
+    this.requestCount = (this.requestCount || 0) + 1;
+    if (this.requestCount > this.maxRequests) {
+      throw new Error(`REQUEST BUDGET EXCEEDED: ${this.requestCount} > maxRequests=${this.maxRequests}. Aborting to avoid unbounded demo mutation.`);
+    }
+
     await this._waitRateLimit();
 
     const validatedUrl = validateDemoRestUrl(pathOrUrl);
     const method = (options.method || 'GET').toUpperCase();
     const t_intent = options.t_intent || nowMono();
     const t_send = nowMono();
+    // REPAIR (dispatch alignment): the wall-clock anchor must be sampled at the SAME instant as the
+    // monotonic dispatch anchor, i.e. after _waitRateLimit() has already elapsed. Sampling it before
+    // the rate-limit wait (as calibrateClock used to) makes the reported RTT and the offset describe
+    // two different intervals.
+    const t_send_wall = Date.now();
 
     const headers = {
       'Content-Type': 'application/json',
@@ -125,12 +168,21 @@ class DemoHttpClient {
     let json = null;
     let error = null;
 
+    // SAFETY: the last point before a socket is opened. Everything above this line — argument
+    // handling, the request budget, the rate-limit wait and demo-URL validation — runs exactly as it
+    // does online, so an offline test still exercises those paths and still fails if one of them
+    // breaks. Below this line, nothing may touch the network.
+    if (isOffline()) throw new Error(OFFLINE_ERROR);
+
     try {
       response = await fetch(validatedUrl, {
         method,
         headers,
         body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined,
-        redirect: 'error' // strict: fail on redirect
+        redirect: 'error', // strict: fail on redirect
+        // REPAIR (bounded execution): without a timeout a stalled socket hangs the whole run
+        // between two mutations, leaving positions open with no artifact written.
+        signal: AbortSignal.timeout(this.requestTimeoutMs)
       });
 
       t_headers = nowMono();
@@ -150,6 +202,7 @@ class DemoHttpClient {
     }
 
     const t_parsed = nowMono();
+    const t_recv_wall = Date.now();
 
     // Extract updated CST or security tokens if returned
     if (response) {
@@ -167,6 +220,8 @@ class DemoHttpClient {
       status_text: response ? response.statusText : null,
       t_intent_mono: t_intent,
       t_send_mono: t_send,
+      t_send_wall_ms: t_send_wall,
+      t_recv_wall_ms: t_recv_wall,
       t_headers_mono: t_headers || null,
       t_body_mono: t_body,
       t_parsed_mono: t_parsed,
@@ -196,6 +251,8 @@ class DemoHttpClient {
         t_headers,
         t_body,
         t_parsed,
+        t_send_wall,
+        t_recv_wall,
         rtt: t_body - t_send
       }
     };
@@ -223,6 +280,7 @@ class DemoStreamingObserver {
 
     return new Promise((resolve, reject) => {
       try {
+        if (isOffline()) throw new Error(OFFLINE_ERROR);
         this.ws = new WebSocket(this.wsUrl);
       } catch (err) {
         return reject(err);
@@ -328,9 +386,33 @@ class DemoStreamingObserver {
             payload: redact(msg.payload)
           });
         }
+      } else {
+        // REPAIR (stream coverage): anything that is not a quote or a confirmation — including
+        // subscription acknowledgements and subscription ERRORS — used to be dropped silently.
+        // That is why the pilot capture contains no evidence about whether confirms.subscribe
+        // was ever accepted.
+        if (this.eventLogger) {
+          this.eventLogger({
+            event_type: 'STREAMING_OTHER',
+            destination: msg.destination || null,
+            correlationId: msg.correlationId || null,
+            t_recv_utc,
+            t_recv_mono,
+            payload: redact(msg.payload ?? msg)
+          });
+        }
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      // REPAIR (stream coverage): an unparseable or error frame is evidence, not noise.
+      if (this.eventLogger) {
+        this.eventLogger({
+          event_type: 'STREAMING_UNPARSEABLE',
+          t_recv_utc,
+          t_recv_mono,
+          error_message: err ? err.message : 'parse failure',
+          raw: redact(String(raw).slice(0, 500))
+        });
+      }
     }
   }
 
@@ -347,7 +429,6 @@ export class CapitalDemoOrderObserver {
   constructor(options = {}) {
     this.runId = options.runId || new Date().toISOString().replace(/[:.]/g, '-');
     this.outDir = path.resolve(`docs/research/capital-demo-order-data/${this.runId}`);
-    fs.mkdirSync(this.outDir, { recursive: true });
 
     this.eventsPath = path.join(this.outDir, 'events.jsonl');
     this.quotesPath = path.join(this.outDir, 'quotes.jsonl');
@@ -358,9 +439,23 @@ export class CapitalDemoOrderObserver {
     this.finalStatePath = path.join(this.outDir, 'final-state.json');
     this.readmePath = path.join(this.outDir, 'README.md');
 
-    this.ledger = new MutationLedger(this.ledgerPath);
-    this.eventsFd = fs.openSync(this.eventsPath, 'a');
-    this.quotesFd = fs.openSync(this.quotesPath, 'a');
+    // SAFETY: the run directory and its append targets are created only when this observer is
+    // actually allowed to collect evidence. Creating them in the constructor meant that merely
+    // constructing an observer — including one refused by the offline switch, or one that never got
+    // past its first request — left an empty bundle directory sitting in the tracked evidence path.
+    // A run that collects nothing must leave nothing behind.
+    this.artifactsEnabled = options.collectArtifacts !== false && !isOffline();
+    if (this.artifactsEnabled) {
+      fs.mkdirSync(this.outDir, { recursive: true });
+      this.ledger = new MutationLedger(this.ledgerPath);
+      this.eventsFd = fs.openSync(this.eventsPath, 'a');
+      this.quotesFd = fs.openSync(this.quotesPath, 'a');
+    } else {
+      // A no-op ledger keeps every caller unchanged while writing nothing.
+      this.ledger = { record: () => {} };
+      this.eventsFd = null;
+      this.quotesFd = null;
+    }
 
     this.client = new DemoHttpClient({
       eventLogger: (event) => this.logEvent(event)
@@ -374,9 +469,16 @@ export class CapitalDemoOrderObserver {
     this.orders = [];
     this.ownedPositions = new Set();
     this.ownedWorkingOrders = new Set();
+    // REPAIR: cleanup outcomes and failures are tracked separately so a run can no longer report
+    // success while instructions failed. Previously failures were invisible and ids were dropped
+    // from the tracking sets regardless of the response.
+    this.cleanupOutcomes = [];
+    this.cleanupFailures = [];
+    this.streamingMessages = [];
   }
 
   logEvent(record) {
+    if (this.eventsFd === null) return; // no artifacts: nothing to write to
     const entry = {
       event_id: crypto.randomUUID(),
       timestamp_utc: new Date().toISOString(),
@@ -387,6 +489,7 @@ export class CapitalDemoOrderObserver {
   }
 
   logQuote(record) {
+    if (this.quotesFd === null) return; // no artifacts: nothing to write to
     fs.writeSync(this.quotesFd, JSON.stringify(record) + '\n');
   }
 
@@ -396,10 +499,15 @@ export class CapitalDemoOrderObserver {
     const samples = [];
 
     for (let i = 0; i < count; i++) {
-      const t_send_wall = Date.now();
       const res = await this.client.request('/api/v1/time');
-      const t_recv_wall = Date.now();
-      const rtt = res.timings.rtt;
+
+      // REPAIR (dispatch alignment): both anchors come from the request itself, so the interval
+      // measured here is exactly the interval the RTT describes. Previously t_send_wall was sampled
+      // BEFORE request() performed its rate-limit wait, while `rtt` began after that wait — making
+      // offset and uncertainty describe a longer interval than the probe.
+      const t_send_wall = res.timings.t_send_wall;
+      const t_recv_wall = res.timings.t_recv_wall;
+      const rttExact = t_recv_wall - t_send_wall;
       const t_mid_wall = (t_send_wall + t_recv_wall) / 2;
 
       // Extract server time from body
@@ -411,12 +519,17 @@ export class CapitalDemoOrderObserver {
 
       samples.push({
         probe: i + 1,
-        rtt_ms: rtt,
+        rtt_ms: rttExact,
+        rtt_monotonic_ms: res.timings.rtt,
         t_send_wall,
         t_recv_wall,
         serverTimeMs,
         offset_ms: offset,
-        uncertainty_ms: rtt / 2
+        // The true uncertainty of a midpoint estimate is half the round trip, measured on the
+        // same clock as the anchors.
+        uncertainty_ms: rttExact / 2,
+        clock_domain: 'local_wall_vs_server',
+        note: 'Midpoint offset estimate. Only meaningful if the return path is symmetric, which this probe cannot establish.'
       });
     }
 
@@ -879,8 +992,9 @@ export class CapitalDemoOrderObserver {
     });
 
     const dealRef = res.body?.dealReference;
+    let confirm = null;
     if (dealRef) {
-      const confirm = await this.pollConfirm(dealRef);
+      confirm = await this.pollConfirm(dealRef);
       this.ledger.record({
         mutation_type: 'CLEANUP_POSITION_CONFIRMED',
         sample_id: sampleId,
@@ -890,7 +1004,27 @@ export class CapitalDemoOrderObserver {
       });
     }
 
-    this.ownedPositions.delete(dealId);
+    // REPAIR (cleanup must be judged, not assumed): the previous code deleted the id from the
+    // tracked set unconditionally, so a 404 (as happened in the pilot) still looked like a clean
+    // run. Only a confirmed CLOSED removes the position from the unresolved set.
+    const closed = res.status === 200 && (!dealRef || confirm?.status === 'CLOSED');
+    if (closed) {
+      this.ownedPositions.delete(dealId);
+      this.cleanupOutcomes.push({ kind: 'POSITION', dealId, sampleId, status: res.status, confirmed: true });
+    } else {
+      this.cleanupFailures.push({
+        kind: 'POSITION',
+        dealId,
+        sampleId,
+        status: res.status,
+        errorCode: res.body?.errorCode || null,
+        confirmStatus: confirm?.status || null,
+        reason: res.status === 404
+          ? 'Position id not found — the id may be a SUBMISSION id or the position was already closed.'
+          : 'Cleanup did not return a confirmed CLOSED state.'
+      });
+    }
+    return closed;
   }
 
   async cleanupWorkingOrder(dealId, sampleId) {
@@ -903,6 +1037,22 @@ export class CapitalDemoOrderObserver {
     const res = await this.client.request(`/api/v1/workingorders/${dealId}`, {
       method: 'DELETE'
     });
+
+    // REPAIR: a 404 here is NOT a crash and NOT a success. It usually means the working order was
+    // already CONSUMED by triggering (exactly what happened to the pilot's stop), which produced a
+    // position that now needs closing instead. Record it and let the snapshot pass resolve it.
+    if (res.status === 404) {
+      this.cleanupFailures.push({
+        kind: 'WORKING_ORDER',
+        dealId,
+        sampleId,
+        status: res.status,
+        errorCode: res.body?.errorCode || null,
+        reason: 'Working order not found — most likely already consumed by triggering. The resulting position, if any, is resolved from the final snapshot.'
+      });
+      this.ownedWorkingOrders.delete(dealId);
+      return false;
+    }
 
     const dealRef = res.body?.dealReference;
     if (dealRef) {
@@ -921,6 +1071,33 @@ export class CapitalDemoOrderObserver {
 
   async writeArtifacts(preCalibration, postCalibration, sessionInfo, baseline, finalSnapshot) {
     console.log('💾 Writing final research artifacts to disk...');
+
+    // REPAIR (observed final state): read what the broker says, rather than trusting tracking sets.
+    const observedPositions = (finalSnapshot?.positions?.positions || finalSnapshot?.positions || [])
+      .map((p) => p?.position ?? p)
+      .filter(Boolean)
+      .map((p) => p.dealId);
+    const observedWorkingOrders = (finalSnapshot?.workingOrders?.workingOrders || finalSnapshot?.workingOrders || [])
+      .map((w) => w?.workingOrderData ?? w)
+      .filter(Boolean)
+      .map((w) => w.dealId);
+
+    // REPAIR (outcome persistence): write the OBSERVED outcome back onto each order row, so the CSV
+    // cannot end up asserting UNTRIGGERED_RESTING for an order that actually triggered and filled.
+    for (const order of this.orders) {
+      const matchedPosition = observedPositions.includes(order.dealId);
+      const stillWorking = observedWorkingOrders.includes(order.dealId);
+      if (matchedPosition && order.submit_to_fill_ms === 'UNTRIGGERED_RESTING') {
+        order.outcome = 'FILLED';
+        order.outcome_source = 'RECONCILED_FROM_FINAL_SNAPSHOT';
+        order.outcome_note = `Original row read "${order.submit_to_fill_ms}" for submit_to_fill_ms, but a position with this working order id is present in the final snapshot.`;
+        order.submit_to_fill_ms = 'OBSERVATION_GAP_NOT_EXECUTION_TIME';
+      } else if (stillWorking) {
+        order.outcome = 'RESTING';
+      } else if (!matchedPosition && order.submit_to_fill_ms === 'UNTRIGGERED_RESTING') {
+        order.outcome = 'NOT_FILLED_OR_CLOSED';
+      }
+    }
 
     // 1. orders.csv
     const csvHeaders = 'sample_id,order_type,direction,epic,size,level,pre_quote_bid,pre_quote_ask,post_response_ms,submit_to_fill_ms,dealReference,dealId,fill_price,outcome\n';
@@ -946,8 +1123,21 @@ export class CapitalDemoOrderObserver {
         post: postCalibration
       },
       order_count: this.orders.length,
-      unresolved_positions: Array.from(this.ownedPositions),
-      unresolved_working_orders: Array.from(this.ownedWorkingOrders)
+      // REPAIR (observed final state): resolution is derived from the FINAL SNAPSHOT the broker
+      // actually returned, not from the collector's own tracking sets. In the pilot those sets
+      // were emptied by unconditional deletes while two positions were still open, so the manifest
+      // claimed a clean end state the account did not have.
+      unresolved_positions: observedPositions,
+      unresolved_working_orders: observedWorkingOrders,
+      cleanup: {
+        succeeded: this.cleanupFailures.length === 0 && observedPositions.length === 0 && observedWorkingOrders.length === 0,
+        outcomes: this.cleanupOutcomes,
+        failures: this.cleanupFailures
+      },
+      streaming: {
+        messages_recorded: this.streamingMessages.length,
+        note: 'Non-quote, non-confirmation frames (including subscription results and errors) are now recorded as STREAMING_OTHER events.'
+      }
     };
     fs.writeFileSync(this.manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
 
@@ -1036,7 +1226,21 @@ async function main() {
       // 8. Write artifacts
       await observer.writeArtifacts(preCal, postCal, sessionInfo, baseline, finalSnapshot);
 
-      console.log('\n✨ Pilot completed successfully without errors or leftover positions!');
+      // REPAIR (gated success): the previous message was unconditional. A run is only clean if the
+      // final snapshot shows no positions and no working orders AND no cleanup instruction failed.
+      const leftovers =
+        (finalSnapshot?.positions?.positions || finalSnapshot?.positions || []).length +
+        (finalSnapshot?.workingOrders?.workingOrders || finalSnapshot?.workingOrders || []).length;
+      const failures = observer.cleanupFailures.length;
+      if (leftovers === 0 && failures === 0) {
+        console.log('\n✅ Pilot completed with a VERIFIED clean end state (no positions, no working orders, no failed cleanup).');
+      } else {
+        console.error(
+          `\n❌ Pilot did NOT end clean: ${leftovers} leftover account object(s) and ${failures} failed cleanup instruction(s). ` +
+          'Report is written but MUST NOT be treated as a clean run. See manifest.cleanup.failures.'
+        );
+        process.exitCode = 2;
+      }
     }
   } catch (err) {
     console.error('CRITICAL RUNTIME ERROR:', err);

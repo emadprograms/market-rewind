@@ -1,0 +1,598 @@
+# Independent verification — market-rewind v6.0 (Offline Order Simulator)
+
+You are an independent verifier. Another agent built milestone **v6.0** in this repository and claims
+it works. Your job is to **try to falsify that claim with real numbers** and hand the raw results back.
+
+Do not improve, refactor, or "fix" anything. If something fails, stop that step, capture the raw output,
+and carry on with the next section. A failing step reported honestly is worth more than a passing step
+quietly made to pass.
+
+---
+
+## 0. Ground rules (read before touching anything)
+
+1. **Never run the data collector.** `tools/research/capital-demo-order-observer.mjs` sends **real
+   trading mutations** when invoked as `--pilot`, which is its default. You may *read* it and you may
+   run `node tools/research/test-observer-repairs.mjs` and `node tools/research/test-demo-guard.mjs`
+   (both are offline test suites). You may **not** run the observer in any other way, even
+   `--calibrate`, unless `CAPITAL_DEMO_OFFLINE=1` is set. Never put credentials in this repository.
+2. **No network is needed** for anything in this document except `git` and `npm install`. If you find
+   yourself authenticating to a broker, you have taken a wrong turn.
+3. **Mutation patches are temporary.** Section 4 deliberately breaks the source to prove the tests
+   catch it. Every patch must be reverted with `git checkout -- <file>`, and `git status --short` must
+   be empty before you move on. Never commit a patch.
+4. **Report what happened, not what you expected.** Copy full command output, including failures.
+5. If this is not a scratch clone, work in one (`git clone` the repo fresh) so nothing you do touches
+   a working copy someone cares about.
+6. **Get onto the right branch before judging anything.** The milestone is on
+   `arena/d6be95e4-market-rewind` and in pull request #6; `main` does **not** contain it. A fresh clone
+   gives you `main`, which is the *pre-milestone* state — tests, docs and evidence will all appear to
+   be missing if you skip step 6's checkout in §1. Do not `--depth 1` either: §1 compares against an
+   older commit, and a shallow clone cannot resolve it.
+
+---
+
+## 1. Target and provenance
+
+**Prerequisites** — check these before anything else, because two sections depend on them:
+
+| Tool | Needed for | If missing |
+|---|---|---|
+| `node` v22.x | everything | the suite will not run; report your version and stop |
+| `npm` | install | same |
+| `python3` | §2's reporter and **all six mutation patches in §4** | §4 cannot run — say so in your report rather than skipping it silently |
+| `git` | provenance checks | required |
+| a browser binary | §8 only | skip §8 and say so |
+
+```bash
+cd market-rewind
+node -v                       # expect v22.x
+python3 --version             # required by section 4
+
+git fetch origin
+git checkout arena/d6be95e4-market-rewind     # REQUIRED: main does not have v6.0
+git rev-parse --abbrev-ref HEAD                # expect: arena/d6be95e4-market-rewind
+git rev-parse HEAD                             # record this
+git ls-remote origin refs/heads/arena/d6be95e4-market-rewind
+git status --short                             # expect EMPTY
+
+# Every number below was measured at commit 2b9a704. Commits after it should touch only
+# documentation. Prove that, so you know the numbers still describe the code in front of you:
+git diff --stat 2b9a704 HEAD -- src tools tests
+#    expect: NO OUTPUT. Anything listed here is code or a test that changed after the measurements
+#    were taken — say so, and treat any mismatch below as unexplained until it is accounted for.
+#    (This deliberately ignores documentation paths: comments about the numbers cannot invalidate
+#    the numbers, but a source change can.)
+```
+
+**Requirement:** you are on the milestone branch, `HEAD` equals the branch tip reported by
+`git ls-remote`, the post-measurement diff above is empty, and `git status` is clean.
+
+If you are on `main`, stop: you are looking at the wrong commit and none of the expected results will
+appear. If `HEAD` is a commit that is not `2b9a704` but the diff above is empty, you are fine — the
+branch has only had documentation added since.
+
+Provenance checks — record each result:
+
+```bash
+# 1. The milestone is tagged
+git tag -l v6.0                                             # expect: v6.0
+
+# 2. The evidence directory is TRACKED (it once was not) and holds exactly 11 bundles
+git ls-files docs/research/capital-demo-order-data | wc -l   # expect: 38 files
+git ls-files docs/research | wc -l                           # expect: 42 (38 data + 4 documents)
+ls docs/research/capital-demo-order-data | wc -l             # expect: 11 directories
+ls docs/research/capital-demo-order-data | sort             # expect 6 × 2026-10-11T11-*, 4 × 2026-10-11T23-42-*, 1 × 2026-10-12T01-00-22
+#    The 38 files: the primary run holds 8 (it captured quotes and orders), the other ten hold 3 each.
+
+# 3. The six original PILOT bundles are byte-identical to the commit that introduced them
+git diff --stat b5aaa21 HEAD -- 'docs/research/capital-demo-order-data/2026-10-11T11-0*'
+#    expect: NO OUTPUT. Any output means recorded evidence was rewritten — stop and report it.
+
+# 4. The five clock-probe directories contain no evidence (they are test byproducts)
+for d in docs/research/capital-demo-order-data/2026-10-11T23-42-* \
+         docs/research/capital-demo-order-data/2026-10-12T01-00-22-910Z; do
+  printf '%s: %s event(s), %s bytes quotes, %s bytes ledger\n' \
+    "$(basename "$d")" \
+    "$(wc -l < "$d/events.jsonl")" \
+    "$(wc -c < "$d/quotes.jsonl")" \
+    "$(wc -c < "$d/mutation-ledger.jsonl")"
+done
+#    expect every one: 1 event, 0 bytes quotes, 0 bytes ledger.
+#    1 event with `"status": null` and `"error_message": "fetch failed"` = no HTTP response was
+#    received and nothing was traded. An empty mutation ledger is the proof that nothing was sent.
+```
+
+Also record: `git log --oneline | head -8` (the milestone's commits) and confirm `node_modules`
+exists; if it does not, run `npm install --no-audit --no-fund` first (an `EBADENGINE` warning is
+expected and harmless).
+
+---
+
+## 2. The full test suite
+
+```bash
+npx vitest run --reporter=json --outputFile=/tmp/vitest-full.json > /tmp/vitest-full.log 2>&1; echo "exit=$?"
+
+python3 - <<'PY'
+import json
+d = json.load(open('/tmp/vitest-full.json'))
+print('files  :', len(d['testResults']))
+print('tests  :', d['numTotalTests'], 'passed:', d['numPassedTests'],
+      'failed:', d['numFailedTests'], 'skipped:', d['numPendingTests'])
+print('suites :', d['numPassedTestSuites'], 'passed /', d['numFailedTestSuites'], 'failed')
+if d['numFailedTests']:
+    for tr in d['testResults']:
+        for a in tr['assertionResults']:
+            if a['status'] == 'failed':
+                print('FAIL:', tr['name'].split('/tests/')[-1], '::', a['title'])
+PY
+```
+
+**Expected** (the builder's numbers — a small drift is acceptable, a failure is not):
+
+| Metric | Expected |
+|---|---|
+| Test files | 121 |
+| Tests | 1001 total = **999 passed, 2 skipped, 0 failed** |
+| Suite duration | roughly 150–260 s on a normal machine |
+
+**The 2 skips must be explainable, not mysterious.** They are in
+`tests/regression/chart/tslaHistoryData.test.ts` and skip themselves when the DuckDB streaming backend
+is not running (`GET /health` fails). Confirm that is what the log shows. Any *other* skip is a finding.
+
+Breakdown, to be reported as-is:
+
+| Directory | Tests |
+|---|---|
+| `tests/unit` | 699 |
+| `tests/regression` | 85 |
+| `tests/integration` | 97 |
+| `tests/codex` | 48 |
+| `tests/performance` | 32 |
+| `tests/hooks` | 26 |
+| `tests/verification` | 9 |
+| `tests/helpers` | 5 |
+
+(The per-directory counts move as the suite grows; the total above is the figure that matters.)
+
+---
+
+## 3. Independent probes (the important section)
+
+`tests/verification/independentProbes.test.ts` is a small suite written so its expected values can be
+**derived from the documented rules by hand**, not read out of the code. It prints one `PROBE …` JSON
+line per observation.
+
+```bash
+npx vitest run tests/verification/independentProbes.test.ts 2>&1 | grep -E 'PROBE|Tests '
+```
+
+Then verify, for each probe, that the printed value matches the arithmetic below. A mismatch is a
+finding — report it and do **not** adjust the expectation.
+
+**Latency model used everywhere below** (the active profile is `training`):
+instruction travel **100 ms**, broker acceptance **0 ms**, execution dispatch **50 ms**,
+fill notification **100 ms**, quote freshness limit **2000 ms**. A BUY pays the **ask**, a SELL
+receives the **bid**.
+
+| Probe | What it asserts | Derivation you should check by hand |
+|---|---|---|
+| **P1** | A market order fills at the execution-time ask, not the submitted ask | Tape `100.00/100.50 @t=0`, `101.00/101.50 @t=1000`. Arrival `0+100=100`, eligible `100+0+50=150`. At t=150 the newest quote is the t=0 one → fill = its ask **100.50** at **t=150**, `notificationMs = 100` |
+| **P2** | A BUY stop triggers on the **ask**, latches once, and reports slippage in ticks | Stop at `101.50`; at t=1000 the ask is `102.05 ≥ 101.50` → fill `102.05`; slippage `(102.05−101.50)/0.05` = **11 ticks**; exactly **1** `TRIGGERED` event |
+| **P3** | A BUY limit triggers on the **ask**, equality included, and never pays through its level | Limit `99.50`; ask `99.50` at t=1000 satisfies it (equality) → fill `99.50`, movement `(99.50−100.50)/0.05` = **−20 ticks** (favourable), and fill ≤ level |
+| **P4** | A position closes **exactly once**; the second request is refused; PnL is realised once | Entry `100.50` (from P1); exit at bid `105.00`; size `0.01` → realised `(105.00−100.50)×0.01` = **0.045**. Expect `secondOk:false` and **one** close fill |
+| **P5** | An instruction is **not** judged against a price from its own future | A validly placed BUY stop at `102` is accepted and fills at `102.05` even though a t=300 quote was handed over before its arrival was processed. Control **P5b**: a BUY stop at `95` (below the market when placed) is refused outright with `accepted:false` and **0** orders created |
+| **P6** | Two mounted views of one account cannot double-count | One order → **one** position id, identical in both views, `accountOpenCount:1`; unmounting one view does not change the account |
+| **P7** | A stalled account says so instead of inventing a price, and recovers | **P7a**: no tape → `frozen:true`, `frozenReason:"MISSING_TAPE"`, **0** fills, `nowMs` did not advance. **P7b**: after data arrives, `frozen:false`, 1 fill at the newest quote it could see at the eligible instant = **100.50** at t=150 |
+| **P8** | Determinism: batching is invisible, and no wall clock is read | Same tape fed as one frame vs 39 frames → **identical** digest |
+
+Determinism across timezones (this is the check that would expose a hidden wall-clock read):
+
+```bash
+TZ=UTC        npx vitest run tests/verification/independentProbes.test.ts 2>&1 | grep 'PROBE P8'
+TZ=Asia/Tokyo npx vitest run tests/verification/independentProbes.test.ts 2>&1 | grep 'PROBE P8'
+# expect the SAME digest in both lines, and in both runs of the same line
+```
+
+---
+
+## 3b. Timezone independence (this section found a real bug)
+
+Run the analyzer under a timezone that is **not** UTC. This is not a formality: on 2026-10-12 an
+external verifier ran this milestone on a UTC+3 machine and found three failures that no check in the
+repository could have caught, because the repository's own machine runs in UTC.
+
+```bash
+for tz in UTC Asia/Bahrain Pacific/Kiritimati America/New_York; do
+  printf '%-20s %s\n' "$tz" "$(TZ=$tz node tools/research/analyze-capital-demo-observations.mjs --check 2>&1 | tail -1 | xargs)"
+done
+# expect: 19/19 passed on EVERY line, including the non-UTC ones.
+```
+
+The recorded evidence contains timestamps with **no trailing `Z`**: Capital.com returns
+`createdDate`/`updateTime` in server-local wall time (UTC+3 in the pilot) and `createdDateUTC`/
+`updateTimeUTC` in UTC but *without a timezone designator*. `Date.parse` reads a bare ISO string as
+**local** time, so on a UTC machine the bug is invisible and on any other machine the subtraction
+claims are wrong by that machine's offset (it was −10799791 ms instead of 209 ms at UTC+3).
+
+The repair suite's group 9b now runs the analyzer under UTC+03:00, UTC+14:00 and UTC−04:00 and fails
+if the tally is anything but 19/19 — which it does even when run from UTC. If any line above is not
+`19/19`, that guard has failed and this is a finding.
+
+---
+
+## 4. Mutation testing — do the tests actually catch bugs?
+
+These patches **deliberately break the engine**. Each must be caught by at least one test. Run each
+block exactly as written; each reverts itself at the end and prints how many tests failed.
+
+The builder measured these catches — use them to judge whether a catch is real or accidental. A
+mutation caught by **zero** tests is a finding: it means a documented guarantee is not covered.
+
+| Mutation | Intentional defect | Expected catch |
+|---|---|---|
+| M1 | A BUY stop triggers on the bid instead of the ask | ~8 tests |
+| M2 | Every trigger comparison drops equality (`<=`/`>=` become `<`/`>`) | ~10 tests |
+| M3 | Fill-notification delay becomes 0 ms, erasing the timeline | ~3 tests |
+| M4 | An out-of-order quote is accepted and rewinds the tape | 1 test |
+| M5 | An instruction is validated against a later price (the exact bug phase 48 fixed) | 1 test |
+| M6 | An order fills or is accepted with no quote at all | ~3 tests |
+
+A small drift in the counts is fine — the file lists and test order may differ on your machine. What
+matters is that each mutation is caught, and that the counts come from an actual run.
+
+> If any mutation reports `failed: 0`, that is a **serious finding**: it means a documented
+> guarantee is not actually covered. Report it and continue.
+
+```bash
+cd market-rewind
+
+run_mutation() {                     # $1 = label, $2 = test files, $3 = python patch
+  NAME="$1"; TESTS="$2"; PATCH="$3"
+  python3 -c "$PATCH"
+  npx vitest run $TESTS --reporter=json --outputFile=/tmp/mut.json >/dev/null 2>&1
+  python3 - <<'PY'
+import json
+d = json.load(open('/tmp/mut.json'))
+fails = [a['title'] for tr in d['testResults'] for a in tr['assertionResults'] if a['status'] == 'failed']
+print(f"  caught by {len(fails)} test(s); total in run: {d['numTotalTests']}")
+for t in fails[:5]:
+    print('    -', t[:90])
+PY
+  git checkout -- .
+  echo "  reverted; dirty files now: $(git status --short | wc -l)  (must be 0)"
+}
+
+echo '--- M1: buy stop triggers on the bid instead of the ask (the classic broker bug)'
+run_mutation M1 "tests/unit/orderSimulator/engine.test.ts tests/regression/behaviouralMatrix.test.ts" "
+import pathlib
+p=pathlib.Path('src/lib/orderSimulator/triggers.ts'); s=p.read_text()
+old=\"    BUY: {\n      field: 'ask',\n      direction: '>=',\"
+new=\"    BUY: {\n      field: 'bid',\n      direction: '>=',\"
+assert old in s; p.write_text(s.replace(old,new,1)); print('  patch applied')
+"
+
+echo '--- M2: drop equality from every trigger comparison'
+run_mutation M2 "tests/unit/orderSimulator/engine.test.ts tests/regression/behaviouralMatrix.test.ts" "
+import pathlib
+p=pathlib.Path('src/lib/orderSimulator/triggers.ts'); s=p.read_text()
+old=\"return rule.direction === '<=' ? observed <= level : observed >= level;\"
+new=\"return rule.direction === '<=' ? observed < level : observed > level;\"
+assert old in s; p.write_text(s.replace(old,new,1)); print('  patch applied')
+"
+
+echo '--- M3: notification delay 100 ms -> 0 ms (the timeline must notice)'
+run_mutation M3 "tests/unit/orderSimulator/uiViewModels.test.ts tests/integration/tradeDeskUi.test.tsx" "
+import pathlib
+p=pathlib.Path('src/lib/orderSimulator/profiles.ts'); s=p.read_text()
+old=\"notificationMs: assumption(100, 'Illustrative fill-notification delay. No confirmation stream was captured.'),\"
+new=\"notificationMs: assumption(0, 'Illustrative fill-notification delay. No confirmation stream was captured.'),\"
+assert old in s; p.write_text(s.replace(old,new,1)); print('  patch applied')
+"
+
+echo '--- M4: accept an out-of-order quote (engine clock discipline)'
+run_mutation M4 "tests/unit/orderSimulator/engine.test.ts tests/unit/orderSimulator/determinism.test.ts" "
+import pathlib
+p=pathlib.Path('src/lib/orderSimulator/engine.ts'); s=p.read_text()
+old='if (quote.replayMs < this.nowMs) {'
+new='if (false) {'
+assert old in s; p.write_text(s.replace(old,new,1)); print('  patch applied')
+"
+
+echo '--- M5: judge an instruction against a later quote (the phase-48 bug must stay fixed)'
+run_mutation M5 "tests/unit/orderSimulator/engine.test.ts tests/regression/behaviouralMatrix.test.ts" "
+import pathlib
+p=pathlib.Path('src/lib/orderSimulator/engine.ts'); s=p.read_text()
+old='const quote = this.quoteAsOf(order.symbol, acceptedAtMs) ?? order.submittedQuote ?? null;'
+new='const quote = this.lastQuoteBySymbol.get(order.symbol.toUpperCase()) ?? null;'
+assert old in s; p.write_text(s.replace(old,new,1)); print('  patch applied')
+"
+
+echo '--- M6: fill / accept with no quote at all'
+run_mutation M6 "tests/unit/orderSimulator/uiViewModels.test.ts tests/integration/tradeDeskUi.test.tsx" "
+import pathlib
+p=pathlib.Path('src/lib/orderSimulator/engine.ts'); s=p.read_text()
+old='''    if (!quote) {
+      order.state = 'REJECTED';
+      order.terminalAt = this.nowMs;
+      order.rejectReason = 'NO_VALID_QUOTE';'''
+new='''    if (false) {
+      order.state = 'REJECTED';
+      order.terminalAt = this.nowMs;
+      order.rejectReason = 'NO_VALID_QUOTE';'''
+assert old in s; p.write_text(s.replace(old,new,1)); print('  patch applied')
+"
+```
+
+Finally: `git status --short` must be empty, and `git diff --stat` must show nothing.
+
+---
+
+## 5. Performance numbers (report the raw lines)
+
+```bash
+npx vitest run tests/performance/replaySeek.perf.test.ts 2>&1 | grep -E 'PERF|Tests '
+```
+
+Each guard prints its own measurement. **Report the three `PERF` lines verbatim**, plus your CPU model
+(`grep -m1 'model name' /proc/cpuinfo` on Linux, `sysctl -n machdep.cpu.brand_string` on macOS) and
+Node version. The builder's baseline on an unknown cloud vCPU was:
+
+| Measurement | Builder's number |
+|---|---|
+| 20,000 quotes fed in one batch | ~17 ms (~1.2 M quotes/s) |
+| Rewind 20,000 quotes to the 25 % point, then re-advance | ~3 ms rewind, ~3 ms forward |
+| 20,000-quote run with 3 live instructions | ~21 ms, 2 fills |
+
+The assertions inside the guards allow 4 seconds, so time is not the pass condition — the point is to
+see the real figure. **Report anything more than ~10× slower than the baseline above** as a
+performance finding; anything in the same order of magnitude is fine.
+
+---
+
+## 6. Offline research tooling (no network)
+
+```bash
+node tools/research/analyze-capital-demo-observations.mjs --check 2>&1 | tail -3   # expect: 19/19 passed
+node tools/research/test-observer-repairs.mjs 2>&1 | tail -3                        # expect: 48 passed, 0 failed
+node tools/research/test-demo-guard.mjs 2>&1 | tail -3                              # expect: 16/16 passed
+```
+
+Then prove the test suite cannot pollute the recorded evidence:
+
+```bash
+before=$(ls docs/research/capital-demo-order-data | wc -l)
+node tools/research/test-observer-repairs.mjs >/dev/null 2>&1
+echo "bundles before=$before after=$(ls docs/research/capital-demo-order-data | wc -l)  (must be equal, 11)"
+git status --short   # must be empty — no new bundle directories, no modified artifacts
+```
+
+Why this section exists: the collector's tests used to make network calls while claiming to be
+offline. Five bundle directories in the tracked evidence path were created by clock probes — four in
+the original build, one more later. Those five are still there and are documented (see §1); what must
+not happen is a sixth. The observer now enforces `CAPITAL_DEMO_OFFLINE=1` at the transport boundary and
+the suite spawns only from a throwaway working directory.
+
+A subtler version of the same defect was found while writing this brief, and is now covered by checks
+`1c`/`1d`: the observer created its bundle directory **in its constructor**, before it knew whether the
+run was allowed to collect anything. A run that was refused outright therefore still left an empty
+directory in the evidence path — and so did merely constructing an observer.
+
+That class of bug is invisible from a sandbox working directory, because the directory simply lands
+somewhere else. So run the probe below **from the repository root**, where it belongs:
+
+```bash
+grep -n 'CAPITAL_DEMO_OFFLINE' tools/research/capital-demo-order-observer.mjs | head -4
+
+before=$(ls docs/research/capital-demo-order-data | wc -l)
+CAPITAL_DEMO_OFFLINE=1 node tools/research/capital-demo-order-observer.mjs --calibrate >/tmp/offline.log 2>&1
+echo "exit=$?  (expect non-zero)"
+grep -i 'OFFLINE_MODE' /tmp/offline.log | head -3
+echo "bundles before=$before after=$(ls docs/research/capital-demo-order-data | wc -l)  (both must be 11)"
+git status --short   # must be empty: a refused run leaves no directory, no file, no trace
+```
+
+Record (a) the three tallies, (b) both bundle counts, (c) the refusal line, and (d) that `git status`
+stayed empty.
+
+---
+
+## 7. Typecheck and production build
+
+```bash
+npx tsc --noEmit          # expect: no output at all
+npx vite build 2>&1 | tail -4
+```
+
+The build prints a pre-existing "chunks larger than 500 kB" advisory. That is expected and is not a
+finding; a compile error would be.
+
+---
+
+## 8. Optional — browser journey suite
+
+```bash
+npx playwright test -c playwright.journey.config.ts --list   # expect: 82 tests in 15 files
+npx playwright install chromium                              # may fail: no route to the CDN
+npx playwright test -c playwright.journey.config.ts          # only if the browser installed
+```
+
+**If a previous run of this suite gave strange results, read this first.** The config used to target
+port 3000 with `reuseExistingServer: true`, which meant that anything already listening there — a
+`vite preview` daemon, a leftover tab's server, a stale `dist/` — was silently reused, and the suite
+then tested a build that predated the code. One reporting machine had exactly that: a daemon serving
+an old `dist/` on 3000, and a test that flipped from failing to passing the instant `dist/` was
+rebuilt, with no source change at all. The suite now starts its own server on **port 3100** with
+`--strictPort` and never reuses one, so a stale server cannot be tested and a busy port is an error
+rather than a silent substitution. If you are re-running an older checkout, check which port the
+config names before trusting any result.
+
+**And check that the two ports agree.** Moving the server to 3100 while the browser's `baseURL` still
+said 3000 changed nothing: Playwright booted the right server and then navigated to the other one. Both
+now derive from a single constant (`JOURNEY_PORT`), and `tests/regression/journeyDiscovery.test.ts`
+asserts that `use.baseURL` and `webServer.url` share an origin and that the port is not 3000. Note what
+that guard is: a **vitest** test. `npx playwright test` never runs it, so a config drift is caught only
+if you run both suites — run both, and treat the browser run as the authority.
+
+**The last browser run before this one (at an earlier commit) gave 20 failed / 4 skipped / 58 passed,
+and every one of those 20 has a named cause fixed since.** Six were the two defects above (the unpriced
+ticket and the order that could never fill, both now guarded), two were a tape that could not be closed
+because the trade desk sat over the button, and the rest were specs that asserted a fill without ever
+advancing replay time — a paused clock cannot fill an order, and that is the simulator working as
+designed. Four of them (`04`, `05`, `06` ×2) are spec bugs, listed below with the specific
+mistake in each. If you still see any of them, the fix did not take, and that is exactly the report
+that matters most.
+
+**Two defects behind the `—` ticket and the never-filling order are now fixed, and one of them was
+only found because a fix for the other broke two tests.** (1) A tape arriving while the playhead stood
+still was never read — quotes reach the engine through *movement*, and the bridge returns early when
+the playhead has not moved, which is the ordinary case (the replay starts paused and ticks load
+asynchronously). `refreshFromTape()` now reads the tape at the instant the session is already at: no
+clock moves, no history is replayed. (2) The delivery floor was one number for the whole session, so a
+tape registered *after* another instrument had delivered was measured against the other instrument's
+progress, and its quote at the already-consumed instant was unreachable (`0 > 0` is false). The second
+instrument then silently had no market data at all. Delivery is now tracked **per symbol**. Both are
+guarded: `tests/unit/orderSimulator/replay.test.ts` has a two-instrument test that fails if the cursors
+are collapsed back into one, and `tests/integration/accountPlaybackSync.test.tsx` has a late-tape
+reproducer. Reintroducing a shared floor fails three tests (the unit guard,
+`behaviouralMatrix` §10.18, `tradeDeskUi` SIM-UI-02) — the builder verified this by reintroduction.
+
+**Expect the trading specs to work now.** Until recently the simulated account had no clock at all:
+the chart playhead advanced and the account sat still, because the only code that ever moved a session
+from the playhead had no call site in the application. Orders were accepted and never filled, so no
+position opened, so no trade badge appeared; the ticket showed an em dash for bid and ask because no
+quote was ever delivered. That is fixed, and `tests/integration/accountPlaybackSync.test.tsx` fails if
+the wire is removed. If you see the old symptoms — a badge that never appears, a ticket stuck on `—` —
+say so loudly: it means the wire regressed, and it is the most valuable thing you could report.
+
+The builder could **not** run this (the browser binary was undownloadable in their environment), so
+**no browser result is currently proven either way.** If your machine can run it, this is the single
+most valuable thing you can add. Report:
+
+- whether the browser installed;
+- the pass/fail counts;
+- the titles of every failure, verbatim.
+
+Four spec bugs were found and fixed by inspecting the last round's failures. They are listed here so
+you can tell a recurrence from a new problem:
+
+| Spec | What it asserted | Why that could never pass |
+|---|---|---|
+| `04-temporal-isolation` | five "step forward" clicks land on a display clock of `09:10:05` | "1 tick" is menu option **0**, not the default: the default step is 3 minutes, so five clicks are 09:15. The spec now selects the tick step explicitly. |
+| `05-playback-transport` | one click of "step" advances one tick | same default: the button reads `Step 3m Forward`. Fixed the same way. |
+| `06-live-replay` (price badge) | a price and a `$` sign appear in `.playback-bar` | the playback bar never carries a price; the badge lives elsewhere in the chart. |
+| `06-live-replay` (tape close) | `Close Tape` is clickable | the trade desk's overlay panel (`zIndex 4000`) sat over the button (`zIndex 20`). |
+
+Two things are already known and should not be mistaken for new bugs:
+
+1. Four tests in `tests/regression/journey/07-trading.spec.ts` are marked `test.fixme` on purpose.
+   They assert the **old netting behaviour** (buying twice accumulates one position; an opposite order
+   closes or flips it), which v6.0 deliberately replaced with independent positions. They are disabled
+   rather than left failing because their replacement cannot be verified without a browser.
+2. The badge/PnL failures in `07` and `08` had a shared root cause and are expected to **pass now**: no
+   order could fill at all, because the account never received a quote (see the two defects above). If
+   a badge still never appears, or a fill never happens, that is the regression to report — not a
+   re-baselined assertion. One caveat remains true: the badge shows the most recent open position and
+   PnL is account-wide rather than per chart, so assert what the feature promises, not what an older
+   build did.
+
+---
+
+## 9. Known-true facts — do not report these as findings
+
+| Observation | Status |
+|---|---|
+| 2 skipped tests | Expected: backend-dependent TSLA history tests |
+| `EBADENGINE` warning on `npm install` | Warning only |
+| Vite "chunks larger than 500 kB" | Pre-existing advisory |
+| 11 bundle directories, 5 of them clock-probe-only | Documented in `docs/research/capital-demo-pilot-evidence-audit.md` §0 |
+| Browser failures in `07` / `08` (if you run §8) | Known, documented and **deliberately unresolved**: the simulated account has rules for BTCUSD alone, and those specs trade equity charts. The buttons are now disabled and explain why, so the failures are correct behaviour rather than silent no-ops. Do not treat them as new discoveries |
+| `15-simulated-terminal.spec.ts` should now **pass** (7 tests) | Rewritten to trade BTCUSD and to assert the refusal on SPY. If any of its tests still fail, that is a genuine finding — the diagnosis in `48-VERIFICATION.md` §4.1 would be wrong |
+| `Fill.priceChangeFromSubmitTicks` / `stopToFillDifferenceTicks` are **tick counts**, not currency | Documented naming rule (they were renamed from an ambiguous form) |
+| A tick-independent quote in `playbackBridge` is marked `derived: true` | Derived spread is disclosed, not presented as observed |
+| The analyzer treats a timestamp with no `Z` as UTC | The evidence mixes two clock families; this is deliberate, documented in `msUtc`, and guarded by repair-suite group 9b |
+
+---
+
+## 10. Paste this back
+
+Fill in and paste the whole block. Raw output beats summary; do not tidy failures away.
+
+```
+VERIFICATION REPORT — market-rewind v6.0
+machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
+
+1. PROVENANCE
+   branch             = <name>
+   HEAD               = <hash>
+   origin branch tip  = <hash>          identical? yes/no
+   src/tools/tests vs 2b9a704            = empty / <output>
+   git status (before/after) = <?> / <?>
+   v6.0 tag           = present/absent
+   evidence bundles   = <n>   tracked files = <n>
+   original 6 pilot bundles byte-identical? yes/no   (git diff output if no)
+   probe directories: events/quotes/ledger per directory = <…>
+
+2. FULL SUITE
+   files/tests/passed/failed/skipped = <?>
+   duration = <?> s        skips explained? <what the log said>
+   failing test titles (if any): <…>
+   per-directory counts: unit=? regression=? integration=? codex=? performance=? hooks=? verification=? helpers=?
+
+3. INDEPENDENT PROBES
+   PROBE P1 … (paste all PROBE lines verbatim)
+   TZ=UTC    P8 digest = <…>
+   TZ=Tokyo  P8 digest = <…>       identical? yes/no
+   any probe whose value differs from the derivation in §3: <list or "none">
+
+3b. TIMEZONE
+   UTC=?/19  Asia/Bahrain=?/19  Pacific/Kiritimati=?/19  America/New_York=?/19   (all must be 19/19)
+
+4. MUTATION TESTING
+   M1 caught by <n> test(s)     M2 <n>   M3 <n>   M4 <n>   M5 <n>   M6 <n>
+   any mutation with 0 failures: <list or "none">
+   git status after reverting all patches = <must be empty>
+
+5. PERFORMANCE (verbatim)
+   PERF dense-batch …
+   PERF dense-seek …
+   PERF instruction-batch …
+
+6. OFFLINE TOOLING
+   analyzer = <?>/19     repair suite = <?> passed / <?> failed     demo guard = <?>/16
+   bundles before/after the repair suite = <?> / <?>
+   CAPITAL_DEMO_OFFLINE=1 probe refusal = <observed? yes/no + the line>
+   bundles before/after the offline probe = <?> / <?>   (both 11)
+   git status after the offline probe = <must be empty>
+
+7. TYPECHECK / BUILD
+   tsc --noEmit = clean / <errors>
+   vite build   = ok / <errors>
+
+8. BROWSER (optional)
+   installed? yes/no        tests = <?> passed / <?> failed / <?> fixme
+   which port the suite started, and which port it browsed = <?>
+   `04` five steps land on = <?>     `05` one step = <?>     `06` badge/tape-close = <?>
+   `07` / `08` fills and badges = <?>     `15` ticket bid/ask and Filled = <?>
+   failing titles: <…>
+
+9. ANYTHING ELSE THAT LOOKED WRONG
+   <free text — especially anything you could not explain>
+```
+
+---
+
+## What "verified" means
+
+The claim being tested is that v6.0's simulator is correct, deterministic, honest about what it does
+not know, and unable to touch the network or a broker account. It is **verified** if, and only if:
+
+1. every section above ran and produced the expected result, with no unexplained failures;
+2. all nine probes match the hand-derivations in §3;
+3. every one of the six mutations is caught by at least one test;
+4. the recorded evidence is byte-unchanged, no new bundle appeared, and the offline switch refuses;
+5. the analyzer's claims hold in every timezone tested, not just UTC (§3b);
+6. the full suite and the build are clean.
+
+Anything less is a finding, and a finding is the most useful thing you can hand back.

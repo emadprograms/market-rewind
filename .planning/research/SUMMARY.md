@@ -1,23 +1,37 @@
 # Project Research Summary
 
-**Project:** Market Rewind - Pure Streaming DuckDB Replay Engine & Global Multi-Asset Simulator
-**Domain:** High-Frequency Financial Time-Series Replay & Parquet Data Lake
-**Researched:** 2026-10-06
+**Project:** Market Rewind — Offline Order Simulator / Mock Capital.com Terminal
+**Milestone:** v6.0
+**Domain:** Deterministic order-execution simulation (retail CFD broker model) inside a tick-replay charting app
+**Researched:** 2026-10-12
 **Confidence:** HIGH
 
 ---
 
 ## Executive Summary
 
-Data Harvester has completed its Milestone v5.0 migration to the **Partitioned Parquet Tick Lake** architecture and has permanently retired and deleted both `streaming.duckdb` and `historical.duckdb`. As a direct result, Market Rewind's legacy backend data access layer (which assumed a local `streaming.duckdb` file and suffered from DuckDB disk-level concurrency locking) is completely broken, failing 11/11 backend tests.
+Market Rewind is adding an offline order terminal: the user places market, limit, and stop orders
+against the replayed bid/ask tape, and **transmission and execution delays change the outcome** —
+a market order fills at a different ask, a cancel loses a race against a trigger, a limit refuses to
+fill worse than its boundary. The milestone is defined by
+`docs/research/capital-order-simulator-implementation-plan.md`, whose Section 1 is a correction
+sheet: it explicitly rejects the earlier narrative report's 209 ms / 2499 ms / 816.5 ms figures and
+the `Normal(210 ms, 20 ms)` distribution as measurements.
 
-To restore functionality and establish an institutional-grade, lock-free architecture, Market Rewind must implement full compliance with Data Harvester's canonical **Repo B Tick Lake Read Contract (v1.5.0)** (`data-harvester/docs/contracts/repo_b_tick_lake_contract.md`). Under this contract, Market Rewind operates as an independent reader with zero code imports from `data-harvester`, executing queries against finalized, immutable Parquet micro-batches using private in-memory DuckDB connections (`:memory:`).
+The research converges on one dominant conclusion: **this milestone is won or lost on time and
+identity discipline, not on features.** The engine must be pure TypeScript that *receives* replay
+time and never reads a clock; identity must be split across request/order/fill/position; and the
+interval processor must see *every crossed tick*, not the frame's final snapshot — which is the same
+class of bug this repo has already fixed twice in its playback layer.
 
-The integration requires a clean, four-stage phased delivery:
-1. **Isolated Reader Engine & Contract Test Harness**: Construct the standalone `TickLakeReader` module with canonical symbol encoding, partition pruning, and structured exceptions, proved by contract test suites.
-2. **Deterministic Resampling & Dual Schema Ingestion**: Implement robust OHLCV candle aggregation with `(timestamp, ingest_id)` tie-breaking and support for both Schema v1 (`price`, `volume`) and Schema v2 (`bid_price`, `ask_price`).
-3. **Backend Service Migration & Order Flow Tape**: Transition `DuckDBService` and `server.py` to use the lake reader, supporting reverse-chronological tape queries and maintenance guards.
-4. **End-to-End Verification & Full Regression Suite**: Validate 100% green pass rate across `npm run backend:test`, Vitest unit tests, and Playwright journey tests.
+Three independent external sources confirm the architectural choices: the VirtualClock pattern
+(heap of `(fireTime, seq)`, `now()` never advances on its own), the "live and replay share one code
+path, event log as sole source of truth" pattern, and explicit multi-run determinism digests proving
+wall-clock independence. The single highest-risk correctness item is **Pitfall 1 — stop/MIT trigger
+inversion**, for which a production trading engine (`nautilus_trader`) filed a live bug report in
+September 2026.
+
+Stack impact is deliberately zero: **no new runtime dependencies.**
 
 ---
 
@@ -25,76 +39,106 @@ The integration requires a clean, four-stage phased delivery:
 
 ### Recommended Stack
 
-Market Rewind requires zero new external libraries; it uses standard `duckdb >= 1.0.0` and Python standard library (`pathlib`, `datetime`). Zero imports from `data-harvester`'s `src/` tree are permitted.
-
-**Core technologies:**
-- **In-Memory DuckDB (`duckdb.connect(":memory:")`)**: Ephemeral private sessions with `threads=4` and `max_memory=2GB` for vectorized Parquet scanning without disk lock contention.
-- **Vectorized `read_parquet(?, hive_partitioning=false)`**: Direct scanning of pruned Parquet batch files.
-- **Filesystem Partition Pruning**: Python-level directory resolution avoiding recursive scanning over root.
+Zero new runtime dependencies. The engine lives in `src/lib/orderSimulator/` as pure TypeScript with
+no React, no IO, no clock, no randomness. Scheduling is an inline `(fireTime, tieBreakSeq)` binary
+heap; price arithmetic is scaled-integer (never float equality on tick multiples); one session-scoped
+zustand store adapts the engine to React. Reject any dependency that reintroduces wall-clock
+coupling. See [STACK.md](./STACK.md).
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Standalone zero-dependency lake reader module with zero `data-harvester` imports.
-- Proper uppercase percent-encoding for `[A-Za-z0-9_-]` safe set (e.g. `BRK.B` -> `BRK%2EB`).
-- Partition pruning to `ticks/symbol=<ENCODED_SYMBOL>/date=<YYYY-MM-DD>/*.parquet`.
-- Dual-schema compatibility for Schema v1 and Schema v2 rows.
-- Deterministic OHLCV candle resampling with `arg_min` / `arg_max` tie-breakers.
-- Reverse-chronological order flow tape queries with spread calculation.
-- Maintenance guard detection checking `_maintenance/in_progress.json`.
-- 100% pass rate on `npm run backend:test`.
-
-**Should have (competitive):**
-- Automatic query retry on `duckdb.IOException` caused by mid-query file rotation.
-- Sub-50ms query response time across multi-gigabyte partitions.
-
-**Defer (v5.1+):**
-- Visualizing provider gap ledger entries (`_control/gaps.json`) directly in the UI chart timeline.
+Table stakes: BUY/SELL market, limit, and stop entries; cancel; amend; explicit close; attached
+SL/TP; order/position lists; status lifecycle; long/short PnL; chart markers. Differentiators:
+delay that genuinely changes execution, two-clock transparency (broker-processed vs client-visible),
+provenance labels on every parameter, explainable lost races, and a zero-delay comparison profile.
+Anti-features to refuse explicitly: partial fills, netting, trailing/guaranteed stops, stop-limit,
+margin/swap/commissions, any broker transport, and any fitted latency distribution presented as
+measured. See [FEATURES.md](./FEATURES.md).
 
 ### Architecture Approach
 
-A clean adapter pattern: `backend/streaming_service/tick_lake_reader.py` implements the pure Repo B contract, and `DuckDBService` in `backend/streaming_service/duckdb_client.py` wraps it to maintain backward compatibility with `server.py` and the frontend API.
-
-**Major components:**
-1. `TickLakeReader`: Contract parser, partition resolver, in-memory DuckDB executor.
-2. `DuckDBService` adapter: Preserves existing API signatures (`get_symbols`, `query_candles`, `query_ticks`, `get_status`).
-3. `server.py`: REST and WebSocket API endpoints serving Market Rewind UI.
+Five layers: existing replay layer (`usePlaybackStore` + `PlaybackManager` own the only clock) →
+pure engine → session-scoped store adapter → account-wide selectors → UI/chart projection. Five
+patterns carry the design: virtual-clock scheduler, two-clock authoritative/observed state split
+with idempotent notices, interval processor merging quotes and deadlines chronologically,
+checkpoint + command log for seek/branch, and provenance-carrying parameter snapshots. The engine
+must be authoritative; React selectors, chart primitives, badges, and Strict Mode remounts must
+never execute economic transitions. See [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ### Critical Pitfalls
 
-1. **Recursive root globbing**: Scanning `<TICK_LAKE_ROOT>/**/*.parquet` touches `_staging/` (partial files) and causes crashes. *Mitigation: Prune strictly within `ticks/`*.
-2. **Symbol unescaped paths**: Looking for `symbol=BRK.B/` matches nothing. *Mitigation: Uppercase percent-encode `[^A-Za-z0-9_-]`*.
-3. **Hive partition collision**: Physical dictionary-encoded `symbol` column collides with Hive inference. *Mitigation: Use `hive_partitioning=false`*.
-4. **Snapshot race**: File deleted mid-query by compaction. *Mitigation: Check maintenance guard, retry on `duckdb.IOException`*.
+1. **Stop/MIT trigger inversion** (highest risk — real engines ship this).
+2. **Observation time mistaken for execution time** (the plan's own correction sheet).
+3. **Request/order/position identity conflation** (caused the pilot's failed cleanup).
+4. **Wall-clock leakage** into the engine.
+5. **Frame-final-quote evaluation** losing intra-frame crossings (repo has hit this class twice).
+6. **Non-idempotent notices / remounts** double-applying fills.
+7. **Trigger-latch violation** (un-triggering a stop, or disabling an SL while a TP is only
+   *eligible*).
+8. **Identity by buffer index** across prepends/merges.
+See [PITFALLS.md](./PITFALLS.md).
 
 ---
 
 ## Implications for Roadmap
 
-Suggested phase structure for Milestone v5.0:
+### Phase 43: Pilot Evidence Audit & Offline Fixtures
+Normalise the eight saved run bundles into derived fixtures with stable aliases; recompute response
+times; keep unsupported metrics explicitly unavailable; link the submission/position/stop IDs, the
+two failed cleanup attempts, and the later successful recovery. Rewrite the collector's known bugs
+(affected-position IDs, non-2xx cleanup reconciliation, consumed working orders, unconditional
+success message, missing timeouts, mis-aligned clock probe) **without executing it**.
+**Delivers:** trustworthy fixtures + provenance labels, and the collector ready for a later Stage 2.
+**Avoids:** P2, P3.
 
-### Phase 39: Standalone Tick Lake Reader & Symbol Partition Pruning
-- **Rationale:** Foundational data access layer must be verified before connecting to server or resampling logic.
-- **Delivers:** `TickLakeReader` class with root discovery, symbol encoding, partition pruning, and structured exception taxonomy (`LakeUnavailableError`, `LakeMaintenanceInProgressError`).
-- **Addresses:** Safe partition resolution and contract isolation.
-- **Avoids:** Unescaped symbol lookup failures and recursive root globbing.
+### Phase 44: Pure Deterministic Engine, Scheduler & Profiles
+`src/lib/orderSimulator/**`: entity types, state transitions, deadline heap, chronological merge,
+quote resolver, latency profiles with provenance, PnL. Independently testable with no React, HTTP,
+storage, or timers. **Delivers:** the core property — same tape + commands + profile ⇒ same events.
+**Avoids:** P1, P4, P7.
 
-### Phase 40: Deterministic OHLCV Aggregation & Dual Schema Support
-- **Rationale:** Core analytical capability of Market Rewind is dynamic candle aggregation across multiple timeframes.
-- **Delivers:** Vectorized `read_parquet` resampling queries with `arg_min`/`arg_max` tie-breaking, timeframe intervals (`1s` to `1d`), RTH filtering for daily bars, and compatibility with Schema v1 and v2.
-- **Addresses:** Dual schema support and deterministic bar calculations.
-- **Avoids:** Column missing errors on `bid_price` vs `price` and non-deterministic candle edges.
+### Phase 45: Replay & Session Integration
+Register one engine at session scope; feed every crossed tick with typed movement reasons; handle
+gaps, exposure-driven symbol loading, buffer merges, forward/backward seek with command-log
+branching, session resets, and stale async responses — without reviving the seek/render freeze.
+**Delivers:** 1×/10×/batched equivalence and deterministic pause/step/seek/reset.
+**Avoids:** P5, P8.
 
-### Phase 41: Backend Service Migration & Order Flow Tape
-- **Rationale:** Connects the validated reader and resampling queries to the live HTTP and WebSocket backend.
-- **Delivers:** Refactored `DuckDBService` and `server.py` routing all `/api/status`, `/api/symbols`, `/api/summary`, `/api/candles`, `/api/ticks`, and `/ws/playback` queries to the tick lake. Reverse-chronological tape queries with spread.
-- **Addresses:** API compatibility and real-time playback streaming.
-- **Avoids:** Disk database lock collisions and stale server status.
+### Phase 46: Replace Chart-Local Trading & Portfolio Accounting
+Route BUY/SELL/Close/drag through engine commands; select account entities by ID and symbol; use
+existing marker primitives for multiple positions and working orders; count PnL once per account
+entity regardless of chart duplication. **Delivers:** no double counting, symbol changes that cannot
+relabel a position. **Avoids:** P6 and the integration gotchas.
 
-### Phase 42: Comprehensive Verification & Regression Immunity
-- **Rationale:** Prove that all backend, unit, and end-to-end tests pass cleanly with zero regressions.
-- **Delivers:** 100% green test results across `npm run backend:test` (11+ tests), Vitest unit suites (418+ tests), and Playwright journey suites.
-- **Addresses:** Complete milestone validation.
+### Phase 47: Ticket, Status Panels, Timeline & Settings
+Market/Limit/Stop ticket with validation and ticket-side bid/ask; order and position activity with
+explicit pending states; per-order timeline separating price waiting, economic execution, and client
+observation, with provenance; editable delay profiles snapshotted per command; synthetic teaching
+tapes for market movement, a missed limit, a stop gap, and a cancellation race. **Avoids:** the UX
+pitfalls, especially hiding a fill when Cancel was pressed.
+
+### Phase 48: Regression Verification & Implementation Handover
+Run the behavioural matrix from plan §10, the existing dense replay/seek performance tests, the
+frontend suite, and the build; document defaults, provenance, independent-position mode, pause/seek
+behaviour, unknown broker timing, data requirements, and how Stage 2 can calibrate profiles.
+
+### Phase Ordering Rationale
+
+Evidence before engine (provenance must be right before any number is embedded) → engine before
+integration (the pure core is the only part that can be tested exhaustively) → integration before
+account replacement (the engine must be authoritative before charts stop owning trades) → UI last
+before verification (the timeline is a *view* of engine truth, and building it early would tempt
+logic into components).
+
+### Research Flags
+
+- **Deep-dive during planning:** nothing blocks. The plan document is unusually complete; the
+  research's job was to independently confirm its two central mechanics (replay-time deadlines,
+  every-crossed-tick evaluation) — both confirmed by external sources.
+- **Known environment limitation:** the Playwright journey suite cannot run in this sandbox (no
+  obtainable browser binary). The same limitation was disclosed as a verification override in v5.0;
+  expect it again unless a browser is provisioned.
+- **Explicitly deferred:** Stage 2 calibration (collector repair lands here; execution does not).
 
 ---
 
@@ -102,24 +146,44 @@ Suggested phase structure for Milestone v5.0:
 
 | Area | Confidence | Notes |
 |---|---|---|
-| Stack | HIGH | Tested directly against Data Harvester's real lake and contract test suite. |
-| Features | HIGH | Explicitly documented in `repo_b_tick_lake_contract.md` v1.5.0. |
-| Architecture | HIGH | Proven patterns matching Data Harvester's Phase 33 contract assertions. |
-| Pitfalls | HIGH | Pitfalls observed and documented during Data Harvester's v4.2/v5.0 audits. |
+| Stack | HIGH | Zero-dependency conclusion follows directly from the determinism requirement |
+| Features | HIGH | Scope is enumerated in plan §2 and §10 |
+| Architecture | HIGH | Three independent external patterns agree with the plan's design |
+| Pitfalls | HIGH (P1–P7) / MEDIUM (P8–P10) | P1 has a production bug report; P8–P10 are inferred from repo history |
 
-**Overall confidence:** HIGH
+### Gaps to Address
+
+- **No measured execution latency exists.** All dispatch/acceptance/notification splits are labelled
+  training assumptions. This is a *stated* limitation, not a research gap to close in this milestone.
+- **Spread/tick size are instrument-specific.** BTCUSD's 0.05 tick and 50.00 spread must never be
+  defaulted onto other symbols.
+- **SELL-side and limit-fill behaviour was never observed** in the pilot (all three samples were BUY;
+  the one limit never filled). Keep the reference profile BUY-only and training-valued elsewhere.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `data-harvester/docs/contracts/repo_b_tick_lake_contract.md` (v1.5.0)
-- `data-harvester/docs/operations/tick_lake_operations_guide.md` (v2.1.0)
-- `data-harvester/docs/contracts/durability_boundary_contract.md`
-- `data-harvester/tests/contract/test_repo_b_contract.py`
-- Real tick lake on disk at `/Users/emadarshadalam/Documents/GitHub/data-harvester/data/tick_lake`
+- `docs/research/capital-order-simulator-implementation-plan.md` — scope, ownership, clock/replay,
+  quote rules, latency profiles, behavioural test matrix, acceptance criteria
+- `docs/research/capital-demo-order-observations.md` + `docs/research/capital-demo-order-data/**` —
+  the pilot evidence the corrections are drawn from
+- https://github.com/nautechsystems/nautilus_trader/issues/5079 — stop vs MIT trigger semantics
+  inversion in a real engine
 
----
-*Research completed: 2026-10-06*
-*Ready for roadmap: yes*
+### Secondary (MEDIUM confidence)
+- https://www.thegreenreport.blog/articles/deterministic-simulation-testing-a-practical-guide-for-qa-engineers/deterministic-simulation-testing-a-practical-guide-for-qa-engineers.html — VirtualClock, `run_until_idle`
+- https://github.com/golgimed/mimic/issues/27 — simulation clock vs wall clock, determinism with seeds
+- https://github.com/alicegogogogogo/matchbook — event log as sole truth, order state machine
+- https://github.com/payswapdotorg/TradRL-2.0/pull/9 — determinism digests across runs and clock shifts
+- https://dev.to/iwtxokhtd83/adding-ioc-fok-and-stop-orders-to-a-matching-engine-na1 — stop trigger mechanics
+- https://www.futuhk.com/en/support/topic2_354 , https://www.webull.hk/en/help/faq/1695-Market-if-Touched-order — trigger latch
+- https://www.techinterview.org/post/3233477258/matching-engine-price-time-priority-system-design/ — single-threaded determinism, integer ticks
+
+### Tertiary (LOW confidence)
+- https://www.venturasecurities.com/share-market-glossary/market-if-touched-mit-order/ ,
+  https://support.tradovate.com/s/article/Types-of-Futures-Orders-Tradovate — MIT vs stop placement
+  (multiple retail-broker glossaries agree; used only to confirm directionality)
+- https://adhdecode.com/distributed-systems/testing-distributed-systems/deterministic-simulation/ —
+  forcing races deterministically

@@ -18,8 +18,10 @@ import { SessionConfig } from './components/SessionConfig';
 import { ChartWorkspace } from './components/ChartWorkspace';
 import { PlaybackBar } from './components/PlaybackBar';
 import { PlaybackManager } from './components/PlaybackManager';
+import { useAccountPlaybackSync } from './hooks/useAccountPlaybackSync';
 import { TimeAndSales } from './components/TimeAndSales';
 import { ConnectionSetupCard } from './components/ConnectionSetupCard';
+import { TradeDesk } from './components/tradeDesk/TradeDesk';
 
 export default function App() {
   const { 
@@ -128,6 +130,8 @@ export default function App() {
   const setBufferedTicks = usePlaybackStore((state) => state.setBufferedTicks);
 
   const [isTapeOpen, setIsTapeOpen] = useState(false);
+  // The simulated trading desk: ticket, activity, timeline and settings (v6.0, SIM-UI-01..06).
+  const [isDeskOpen, setIsDeskOpen] = useState(false);
 
   const sessionGenRef = useRef(0);
   // Keep latest selectedDate/entryTime in refs to avoid stale closure when
@@ -211,6 +215,9 @@ export default function App() {
       loadStreamingTicks();
     }
   }, [isSessionStarted, sessionTicker, selectedDate, loadStreamingTicks]);
+
+  // The account follows the chart. Without this the simulated clock never moves.
+  useAccountPlaybackSync();
 
   return (
     <div className="app-container">
@@ -303,6 +310,13 @@ export default function App() {
             )}
           </div>
 
+          {isDeskOpen && (
+            <TradeDesk
+              symbol={(activeChartTicker || sessionTicker || '').toUpperCase()}
+              onClose={() => setIsDeskOpen(false)}
+            />
+          )}
+
           {/* Time & Sales Order Flow Drawer */}
           {isTapeOpen && (
             <TimeAndSales
@@ -325,6 +339,34 @@ export default function App() {
           onNextSymbol={handleNextSymbol}
           nextSymbol={nextSymbol}
         />
+        {/* Hidden while the tape is open: this button floats over the right-hand edge at z-index 4000,
+            and the tape panel's header — including its close button — occupies exactly that corner at
+            z-index 20. The overlap made the tape impossible to close with the mouse, which is how a
+            browser found it: Playwright retried the click 173 times before giving up. */}
+        {!isDeskOpen && !isTapeOpen && (
+          <button
+            type="button"
+            onClick={() => setIsDeskOpen(true)}
+            aria-label="Open the simulated trading desk"
+            data-testid="open-trade-desk"
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              zIndex: 4000,
+              background: '#111c33',
+              color: '#e2e8f0',
+              border: '1px solid #334155',
+              borderRadius: '4px',
+              padding: '4px 10px',
+              fontSize: '11px',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              cursor: 'pointer',
+            }}
+          >
+            Trade desk
+          </button>
+        )}
         <PlaybackManager />
       </div>
     </div>

@@ -24,36 +24,43 @@ import {
   tapePanel,
   utcToEtClock,
   collectPageErrors,
+  setStepToTick,
 } from '../mocks/replayJourney';
 
 const TARGET = '2026-09-25';
 
 test.describe('JOURNEY 06 — Live replay & Time & Sales tape', () => {
-  test('the live price badge is present and updates as the tape streams', async ({ page }) => {
+  test('a live price is present, and the tape advances as it streams', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
     await beginReplay(page, { ticker: 'SPY', date: TARGET });
 
-    const bar = page.locator('.playback-bar');
-    // A "$<price>" badge renders once there is a current tick.
-    const priceOf = async () => {
-      const text = await bar.innerText();
-      const m = text.match(/\$(\d+(?:\.\d+)?)/);
-      return m ? parseFloat(m[1]) : NaN;
-    };
-
-    const before = await priceOf();
-    expect(Number.isNaN(before)).toBe(false);
-    expect(before).toBeGreaterThan(0);
-
-    const beforeTick = (await readPlaybackState(page)).currentTick;
+    // This test used to look for a "$<price>" badge inside `.playback-bar` and never found one,
+    // because the bar renders profit-and-loss figures and elapsed replay time — no price, and no
+    // dollar sign anywhere in the component. The assertion was against a surface that does not exist.
+    //
+    // The live price is in the tape, which is what the test's own name describes.
+    await openTape(page);
+    await expect(tapePanel(page)).toBeVisible();
 
     await setSpeed(page, '50');
     await pressPlay(page);
     await page.waitForTimeout(900);
     await pressPause(page);
 
+    expect(await tapeRows(page).count()).toBeGreaterThan(0);
+
+    // Each row is a print: time, price, size, bid/ask. The price cell must be an actual number.
+    const priceCell = tapeRows(page).last().locator('div').nth(1);
+    const price = parseFloat((await priceCell.innerText()).replace(/[^0-9.]/g, ''));
+    expect(Number.isFinite(price)).toBe(true);
+    expect(price).toBeGreaterThan(0);
+
+    // And the stream keeps moving: one more tick changes the market time the tape is printing.
+    const beforeTick = (await readPlaybackState(page)).currentTick;
+    await setStepToTick(page); // one-tick stepping is not the default step size
+    await page.getByTitle('Step 1 Tick Forward').click();
+    await page.waitForTimeout(200);
     const afterTick = (await readPlaybackState(page)).currentTick;
-    // The current tick advanced (market time moved) — the live badge reflects it.
     expect(afterTick).not.toBeNull();
     expect(afterTick!.time).not.toBe(beforeTick!.time);
 

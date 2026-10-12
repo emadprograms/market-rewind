@@ -86,7 +86,9 @@ test.describe('JOURNEY 04 — Temporal isolation (stops at 09:10, no look-ahead)
 
     const before = await readPlaybackState(page);
 
-    // Step forward a handful of ticks.
+    // Step forward a handful of ticks. The step size must be set to one tick first: the buttons are
+    // labelled from the current step, whose default is 3 minutes.
+    await setStepToTick(page);
     const stepFwd = page.getByTitle('Step 1 Tick Forward');
     for (let i = 0; i < 5; i++) {
       await stepFwd.click();
@@ -98,9 +100,14 @@ test.describe('JOURNEY 04 — Temporal isolation (stops at 09:10, no look-ahead)
     // A few steps must NOT teleport to the end of the tape.
     expect(after.currentTickIndex).toBeLessThan(after.totalTicks - 1);
 
-    // The clock moved forward but stayed within the opening minutes.
+    // The clock moved forward but stayed inside the opening minutes.
+    //
+    // This previously demanded '09:2'. The replay anchor is 09:10:00 and the mock emits one tick per
+    // second (MOCK_TICK_INTERVAL_SEC = 1), so five single-tick steps land at 09:10:05 — the assertion
+    // could never be satisfied by correct behaviour, and it failed every run. '09:1' states what the
+    // intent always was: the cursor is still in the first minutes, not teleported toward the close.
     const clock = await readReplayClock(page);
-    expect(clock.startsWith('09:2')).toBe(true);
+    expect(clock.startsWith('09:1')).toBe(true);
 
     expect(pageErrors).toEqual([]);
   });

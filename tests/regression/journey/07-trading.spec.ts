@@ -28,6 +28,12 @@ import {
 const TARGET = '2026-09-25';
 
 test.describe('JOURNEY 07 — Trading (buy / sell orders)', () => {
+  // ⚠️ EXPECTED TO CHANGE — v6.0 replaced netting with independent positions (SIM-ACCOUNT-03).
+  // The four tests below assert the old accumulation/flip behaviour, which no longer exists: a second
+  // BUY opens a second position rather than increasing one, and an opposite order does not close or
+  // flip the first. They cannot be updated honestly without running the browser suite, which was not
+  // available in the environment this change was made in. See 48-VERIFICATION.md §4.
+
   test('clicking BUY opens a long position and shows the trade badge', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
     await beginReplay(page, { ticker: 'SPY', date: TARGET });
@@ -73,7 +79,7 @@ test.describe('JOURNEY 07 — Trading (buy / sell orders)', () => {
     expect(Math.abs(pnl)).toBeLessThan(1);
   });
 
-  test('clicking BUY twice adds to the long (size accumulates)', async ({ page }) => {
+  test.fixme('clicking BUY twice adds to the long (size accumulates)', async ({ page }) => {
     await beginReplay(page, { ticker: 'SPY', date: TARGET });
 
     await setTradeSize(page, 0, 2);
@@ -84,7 +90,7 @@ test.describe('JOURNEY 07 — Trading (buy / sell orders)', () => {
     expect(await readBadgeSize(page, 0)).toBe(4);
   });
 
-  test('BUY then an equal SELL closes the position and clears the badge', async ({ page }) => {
+  test.fixme('BUY then an equal SELL closes the position and clears the badge', async ({ page }) => {
     await beginReplay(page, { ticker: 'SPY', date: TARGET });
 
     await setTradeSize(page, 0, 3);
@@ -95,7 +101,7 @@ test.describe('JOURNEY 07 — Trading (buy / sell orders)', () => {
     await expect(tradeBadge(page, 0)).toHaveCount(0);
   });
 
-  test('a partial opposite order reduces the remaining position size', async ({ page }) => {
+  test.fixme('a partial opposite order reduces the remaining position size', async ({ page }) => {
     await beginReplay(page, { ticker: 'SPY', date: TARGET });
 
     await setTradeSize(page, 0, 5);
@@ -109,7 +115,7 @@ test.describe('JOURNEY 07 — Trading (buy / sell orders)', () => {
     expect(await readBadgeSize(page, 0)).toBe(3);
   });
 
-  test('an opposite order larger than the position flips it to the other side', async ({ page }) => {
+  test.fixme('an opposite order larger than the position flips it to the other side', async ({ page }) => {
     await beginReplay(page, { ticker: 'SPY', date: TARGET });
 
     await setTradeSize(page, 0, 2);

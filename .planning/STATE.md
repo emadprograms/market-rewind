@@ -1,21 +1,23 @@
 ---
 gsd_state_version: "1.0"
-milestone: v5.0
-milestone_name: Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
-status: completed
-last_updated: "2026-10-06T18:05:00.000Z"
-last_activity: 2026-10-06
+milestone: v6.0
+milestone_name: "Offline Order Simulator (Mock Capital.com Terminal)"
+status: Shipped
+last_updated: "2026-10-12T00:10:00.000Z"
+last_activity: 2026-10-12
+last_activity_desc: Milestone v6.0 shipped — all six phases verified
+state_head: 0736e99
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 0
+  completed_plans: 0
   percent: 100
 ---
 
 # Project State
 
-## Milestone: v5.0 — Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance)
+## Milestone: v6.0 — Offline Order Simulator (Mock Capital.com Terminal)
 
 ### Completed Milestones
 
@@ -29,6 +31,7 @@ progress:
 - **Milestone v4.2**: State Machine Convergence & Temporal Strictness (Shipped 2026-09-30)
 - **Milestone v4.3**: Live Data Stabilization and Testing (Shipped 2026-09-30)
 - **Milestone v5.0**: Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance) (Shipped 2026-10-06)
+- **Milestone v6.0**: Offline Order Simulator (Mock Capital.com Terminal) (Shipped 2026-10-12)
 
 ## Project Reference
 
@@ -37,30 +40,27 @@ See: [.planning/REQUIREMENTS.md](./REQUIREMENTS.md)
 See: [.planning/ROADMAP.md](./ROADMAP.md)
 
 **Core value:** High-fidelity, deterministic tick-by-tick market replay with sub-second timeframes, dynamic Parquet tick lake resampling, multi-symbol global playback synchronization, and absolute temporal isolation (zero future data leakage).
-**Current focus:** Re-architecting from retired `streaming.duckdb` to Data Harvester's zero-import Partitioned Parquet Tick Lake reader adhering to Repo B Read Contract v1.5.0.
+**Current focus:** Building an offline order terminal whose transmission and execution delays change execution outcomes. Source plan: `docs/research/capital-order-simulator-implementation-plan.md`; research: `.planning/research/`.
 
 ## Current Position
 
-Phase: 42 — Comprehensive Verification & Regression Immunity (milestone complete)
-Plan: 39-01 — COMPLETED (80/80 Phase 39 tests green)
-     40-01 — COMPLETED (50/50 Phase 40 tests green)
-     41-01 — COMPLETED (87 Phase 41 tests green; backend suite fully green 197 passed / 1 skipped)
-     42-01 — COMPLETED (Vitest 81/81 files, 422 tests green from a fresh clone; backend 221 passed / 1 skipped
-              with 97% line coverage; build clean; Playwright journey env-blocked in sandbox —
-              no browser obtainable, see 42-VERIFICATION.md §4)
-Status: Milestone v5.0 COMPLETE — all 13 requirements verified (LAKE-READ/ RESAMPLE/ API / VERIFY)
-Last activity: 2026-10-09 - Completed quick task 261009-b4e: extend seek bar and mark timestamps
+Phase: Not started — roadmap defined (phases 43–48)
+Plan: —
+Status: In progress
+Last activity: 2026-10-12 — Milestone v6.0 started (research, requirements, roadmap)
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 261007-dqh | show both the bid price and the ask price on the y-axis | 2026-10-07 | 508792f | [261007-dqh-show-both-the-bid-price-and-the-ask-pric](./quick/261007-dqh-show-both-the-bid-price-and-the-ask-pric/) |
-| 261007-jah | remove price from bottom playback bar | 2026-10-07 | 5e32456 | [261007-jah-remove-price-from-bottom-playback-bar](./quick/261007-jah-remove-price-from-bottom-playback-bar/) |
-| 261007-msp | minute-based playback stepping controls with step selector (1m, 5m, 10m, 15m) | 2026-10-07 | 29b054a | [261007-msp-minute-step-playback](./quick/261007-msp-minute-step-playback/) |
-| 261007-jou | default replay date to yesterday instead of hardcoded 2026-09-25 | 2026-10-07 | f110bfb | [261007-jou-default-replay-date-to-yesterday-instead](./quick/261007-jou-default-replay-date-to-yesterday-instead/) |
-| 261007-nsp | non-pause seeking, remove live price line, execute at bid/ask | 2026-10-07 | 4b426b4 | [261007-nsp-playback-trade-quote-fixes](./quick/261007-nsp-playback-trade-quote-fixes/) |
-| 261009-b4e | extend seek bar and mark timestamps | 2026-10-09 | cefac2c | [261009-b4e-make-the-seek-longer-it-s-very-short-mak](./quick/261009-b4e-make-the-seek-longer-it-s-very-short-mak/) |
 
+## Operator Next Steps
 
+- Begin Phase 43 with /gsd-plan-phase 43 (or /gsd-discuss-phase 43 first)
 
+## Deferred Items
+
+| Item | Carry-forward | Rationale |
+|------|---------------|-----------|
+| Playwright journey suite cannot run in-sandbox (no obtainable browser binary) | From v5.0 (LAKE-VERIFY-02 override) | Adds NSS/browser deps unavailable here; run `npx playwright install chromium && npm run test:journey` on a machine with a browser. Phase 48 must disclose rather than claim a pass. |
+| Stage 2 latency calibration | Deferred to a later milestone | v6.0 repairs the collector but executes nothing against Capital.com. |

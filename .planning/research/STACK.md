@@ -1,58 +1,93 @@
-# Technology Stack: Partitioned Parquet Tick Lake Integration
+# Stack Research
 
-**Milestone:** v5.0
-**Domain:** High-Frequency Tick Replay & Financial Time-Series Storage
-**Date:** 2026-10-06
+**Domain:** Offline deterministic order-execution simulator (retail CFD broker model)
+**Researched:** 2026-10-12
+**Confidence:** HIGH
+**Scope:** NEW capabilities only — offline order terminal for Milestone v6.0
 
 ---
 
-## 1. Core Stack Additions & Changes
+## Executive Summary
 
-| Layer | Existing (v4.3) | New (v5.0) | Rationale |
+**This milestone adds zero runtime dependencies.** The engine must be pure TypeScript that runs
+without React, HTTP, browser storage, or a wall clock, so that a given (tape + commands + profile)
+always produces identical events. Every candidate dependency for this domain (decimal libraries,
+scheduler libraries, order-book libraries) either breaks that property or is unnecessary at the
+fidelity this milestone targets.
+
+---
+
+## Recommended Stack
+
+### Core Technologies (all already present)
+
+| Technology | Version | Purpose | Why |
 |---|---|---|---|
-| **Storage Engine** | Single disk-backed DuckDB file (`streaming.duckdb`) | Partitioned Parquet Tick Lake (`ticks/symbol=*/date=*/*.parquet`) | `data-harvester` v5.0 permanently deleted disk `.duckdb` files. Parquet files provide immutable, lock-free micro-batch storage. |
-| **Reader Connection** | File connection `duckdb.connect(db_path, read_only=True)` | Ephemeral in-memory connection `duckdb.connect(":memory:")` | Eliminates file locking collisions (`duckdb.IOException: Could not set lock on file`) and permits unbounded concurrent reader threads. |
-| **Parquet Scanner** | Internal table scans `FROM ticks` | Vectorized DuckDB Parquet scanner `FROM read_parquet(?, hive_partitioning=false)` | Reads pruned lists of Parquet batch files directly into memory at C++ SIMD speed. |
-| **Partition Resolver** | SQL `WHERE symbol = ?` over unified table | Filesystem-level partition directory resolution and date filtering | Bypasses unnecessary filesystem traversal; queries only relevant `date=YYYY-MM-DD` partitions. |
-| **Symbol Encoding** | Unmodified strings | Percent-encoding uppercase hex for `[^A-Za-z0-9_-]` (e.g., `BRK.B` -> `BRK%2EB`) | Strictly adheres to Hive directory naming convention specified in Repo B Read Contract v1.5.0. |
-| **Python Dependencies** | `duckdb>=1.0.0`, `aiohttp>=3.8.0`, `pytest` | Same (`duckdb>=1.0.0`, `pyarrow>=14.0.0` optional) with **ZERO** `data-harvester` library imports | Contract mandate: Downstream consumer must have zero dependency on `data-harvester/src`. |
+| TypeScript | existing (`tsconfig.json`) | Engine + UI | Engine needs typed entity separation (request/order/fill/position IDs are all strings today — a type error waiting to happen) |
+| Zustand | existing (`src/store/`) | One session-scoped engine store | Repo already uses zustand for `usePlaybackStore`; adding a second state lib would fork the replay clock |
+| Vite | existing (`vite.config.ts`) | Build | No change |
+| Vitest | existing (`vitest.config.ts`) | Engine unit tests | Engine is pure → tested with plain `vitest run`, no jsdom, no fake timers |
+| Playwright | existing | Journey/browser gates | Env-blocked in sandbox (see PITFALLS); maintainer machine only |
+
+### Supporting Libraries
+
+**None.** Deliberate.
+
+| Need | Decision | Why not a library |
+|---|---|---|
+| Deterministic scheduler | Inline binary heap over `(fireTime, tieBreakSeq)` | A promise/timer library reintroduces wall-clock coupling; the heap is ~40 lines and matches the VirtualClock pattern in the sources |
+| Price arithmetic | Scaled-integer arithmetic (`price / tickSize` as integers, `decimalPlacesFactor` for display) | Never compare floats for tick increments or limit boundaries. `decimal.js` would work but a scaled integer is exact, dependency-free, and serialises cleanly into the event log |
+| Order book | **Not required** | This milestone models full fills against a single quoted bid/ask stream with no depth and no partial fills. A real LOB/matching engine solves a problem this milestone explicitly excludes |
+| Event log / digests | Plain JSON + a cheap FNV-1a/djb2 hash of the canonical event stream | Same technique as the "determinism digest" pattern (see Sources); no hashing dependency needed |
+
+### Development Tools
+
+| Tool | Purpose | Notes |
+|---|---|---|
+| `vitest` | Engine, races, replay determinism | Add `tests/unit/orderSimulator*.test.ts` per plan §10 |
+| A guard test asserting no clock/random calls in the engine | Enforce P4 | Static scan of `src/lib/orderSimulator/**` for `Date.now`, `performance.now`, `setTimeout`, `setInterval`, `Math.random`. This is the cheapest possible defence for the milestone's central invariant |
 
 ---
 
-## 2. Component Specifications
+## Alternatives Considered
 
-### DuckDB In-Memory Execution
-- **Version:** `duckdb >= 1.0.0` (installed in `.venv`: DuckDB 1.1.x+)
-- **Session Primitives:**
-  ```python
-  con = duckdb.connect(":memory:")
-  con.execute("SET TimeZone = 'UTC'")
-  con.execute("SET threads = 4")
-  con.execute("SET max_memory = '2GB'")
-  ```
-- **Query Paradigm:**
-  - Resolve candidate parquet file paths using `Path.glob()` over `ticks/symbol=<ENCODED_SYMBOL>/date=<YYYY-MM-DD>/*.parquet`.
-  - Pass the explicit list of file paths as parameter `?` to `read_parquet(?, hive_partitioning=false)`.
-  - Always close the connection in a `finally` block or context manager.
-
-### Partition Directory & Lake Root Resolution
-- **Environment Variables:**
-  - `TICK_LAKE_ROOT`: Primary override pointing to root directory of tick lake.
-  - `DATA_DIR`: Fallback pointing to base directory containing `tick_lake`.
-- **Precedence Order:**
-  1. Explicit constructor argument `lake_root`.
-  2. `os.environ.get("TICK_LAKE_ROOT")`.
-  3. `os.environ.get("DATA_DIR") / "tick_lake"`.
-  4. Relative repository path: `ROOT_DIR.parent / "data-harvester" / "data" / "tick_lake"`.
-  5. Fallback path: `/Volumes/Micron-E 0256 A/data-harvester/data/tick_lake` (if mounted).
-- **Metadata Contract:**
-  - Inspect `lake.json` at root to verify `format == "tick_lake"` and `schema_version in compatible_versions`.
+| Category | Recommended | Alternative | Why not |
+|---|---|---|---|
+| Simulator time | Replay-market ms passed in as a parameter | Reuse `Date.now()` + offsets | The whole milestone depends on pause/step/seek speed-independence; wall time cannot express "paused" |
+| Scheduler | Explicit heap merged with the quote stream | `setTimeout` per deadline | `setTimeout` fires on wall time and would keep firing while replay is paused. It also cannot be fast-forwarded by a seek |
+| Scheduler (alt) | Same | `requestAnimationFrame` | Ties deadlines to render cadence, dropping intermediate crossings (P5) |
+| Entity identity | Separate `requestId`/`orderId`/`fillId`/`positionId` branded types | Reuse a single `dealId` | The pilot's own cleanup failure is this exact bug (P3) |
+| Delay modelling | Fixed profiles (Training / pilot reference / Zero-delay) | `Normal(210 ms, 20 ms)` fitted distribution | Section 1 of the plan rejects it: one sample per order type cannot establish variance. Inventing a distribution is a correctness-of-claim failure, not a nice-to-have |
+| Store | One session-scoped `useOrderSimulatorStore` | Per-chart state (today's `useTradeManager`) | Per-chart state is why duplicate charts double-count PnL today |
 
 ---
 
-## 3. Libraries & Dependencies
+## What NOT to Use
 
-- **`duckdb`**: Core query execution engine for dynamic `time_bucket()` candle resampling, tape pagination, and symbol summaries.
-- **`pathlib.Path`**: Filesystem traversal, partition path construction, and maintenance guard polling.
-- **`aiohttp`**: Async HTTP server and WebSocket transport serving Market Rewind UI.
-- **`pytest` & `pytest-aiohttp`**: Comprehensive backend integration test suite.
+| Anti-pattern | Reason |
+|---|---|
+| `setTimeout` / `setInterval` / `requestAnimationFrame` anywhere inside `src/lib/orderSimulator/**` | Mutates state on wall time. Breaks pause, breaks speed-independence, breaks seek determinism |
+| `Date.now()`, `new Date()`, `performance.now()` inside the engine | Same. Engine must receive time; it must never ask for it |
+| `Math.random()` inside the engine | Non-deterministic. Jitter, if ever added, is seeded and sampled once per command at submission time, outside the core |
+| A broker SDK / `capital-com` REST client in `src/` | Acceptance criterion #7: the terminal contains no broker transport or credential dependency |
+| Extending the existing instant-fill path in `useTradeManager.ts` | Its synchronous fill + counter-order netting + synthetic ±0.01 spread are the exact behaviours this milestone replaces |
+| A real matching-engine library | Requires depth and partial fills, both explicitly out of scope |
+| Float equality on tick increments | `0.05` is not representable in binary floating point; "valid tick multiple" checks must be integer-based |
+
+---
+
+## Version Compatibility
+
+- No new packages → no new compatibility surface.
+- Node in this sandbox is `v22.22.3`; `@opengsd/gsd-core@1.16.0` declares `engines.node >= 24` (warning only — GSD is planning tooling, never shipped in the app).
+- Engine must not depend on Node APIs (no `fs`, no `process`) so the same module runs in the browser, in Vitest, and in the offline evidence-analysis script.
+
+---
+
+## Sources
+
+- Deterministic engine design (event log as sole source of truth; "at comes from the process clock and only records when an event happened; matching never reads it"): https://github.com/alicegogogogogo/matchbook
+- Virtual clock with heap + sequence tie-break, `run_until_idle`, "nothing in the code under test can sneak in real wall-clock behavior": https://www.thegreenreport.blog/articles/deterministic-simulation-testing-a-practical-guide-for-qa-engineers/deterministic-simulation-testing-a-practical-guide-for-qa-engineers.html
+- Simulation clock vs wall clock separation and "make simulation time visible": https://github.com/golgimed/mimic/issues/27
+- Single-threaded matching for determinism; integer ticks only, "no floating point value ever reaches the matching engine": https://www.techinterview.org/post/3233477258/matching-engine-price-time-priority-system-design/
+- Determinism digests across identical inputs and wall-clock shifts: https://github.com/payswapdotorg/TradRL-2.0/pull/9
