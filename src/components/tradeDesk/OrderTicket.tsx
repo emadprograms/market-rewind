@@ -88,13 +88,59 @@ export function OrderTicket({ symbol, onSubmit }: OrderTicketProps) {
   const [takeProfitText, setTakeProfitText] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  // An instrument with no configured rules gets NO rules. This previously fell back to BTCUSD_RULES,
+  // which meant an untradeable symbol was still *displayed* with another instrument's price decimals
+  // and size increment — the display half of the rule that SIM-QUOTE-02 forbids: the BTCUSD pilot
+  // values are fixtures for that symbol only and are never defaulted onto others.
   const rules = useMemo(() => {
     try {
       return createInstrumentRegistry([BTCUSD_RULES])(symbol);
     } catch {
-      return BTCUSD_RULES;
+      return null;
     }
   }, [symbol]);
+
+  // Everything below this point assumes a configured instrument. An early return states that once,
+  // where the compiler can see it, rather than relying on a cast further down.
+  if (rules === null) {
+    return (
+      <section aria-labelledby="ticket-heading" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <header>
+          <h2 id="ticket-heading" style={{ fontSize: '13px', margin: 0, color: '#e2e8f0' }}>
+            Order ticket — {symbol}
+          </h2>
+          <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#94a3b8' }}>{SIMULATED_ACCOUNT_LABEL}</p>
+        </header>
+
+        {/* The honest state. Previously this instrument rendered a ticket whose bid and ask were both
+            em dashes and whose Submit produced an error, because the account has no rules for it. The
+            desk now says so up front, in plain language, instead of inviting an instruction it cannot
+            accept. */}
+        <div
+          data-testid="unsupported-instrument"
+          role="note"
+          style={{
+            fontSize: '12px',
+            lineHeight: 1.5,
+            color: '#fcd34d',
+            background: '#1f2937',
+            border: '1px solid #4b5563',
+            borderLeft: '3px solid #f59e0b',
+            borderRadius: '4px',
+            padding: '10px',
+          }}
+        >
+          <strong style={{ display: 'block', marginBottom: '4px' }}>
+            The simulated account does not trade {symbol}.
+          </strong>
+          It trades an instrument only when it has that instrument&rsquo;s own rules &mdash; tick size,
+          size increment and price distance are never borrowed from another symbol. The pilot evidence
+          this simulator was built from covers <strong>BTCUSD</strong> alone, so BTCUSD is the only
+          instrument configured here. Nothing has been invented to make {symbol} appear tradeable.
+        </div>
+      </section>
+    );
+  }
 
   const quote = accountState.lastQuoteBySymbol?.[symbol.toUpperCase()] ?? null;
   const level = levelText.trim() === '' ? null : Number(levelText);

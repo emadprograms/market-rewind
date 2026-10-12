@@ -229,6 +229,8 @@ export default function ChartUnit({
           tradeSize={trade.tradeSize}
           setTradeSize={trade.setTradeSize}
           placeOrder={trade.placeOrder}
+          symbol={trade.symbol}
+          isTradeable={trade.isTradeable}
         />
         
         {/* KEYBOARD ACTION MODAL */}

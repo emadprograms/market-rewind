@@ -94,13 +94,43 @@ each is applied and reverted within a single command block.
    | `04`, `05`, `06`, `07`, `08`, `09` re-baselining | 14 | **Unresolved.** Attributed to v6.0's account-wide PnL and latest-open-position badge, as predicted in limitation 2 below, but not yet confirmed or fixed |
    | `15-simulated-terminal.spec.ts` | 5 | **Unresolved, and not predicted.** The whole new spec fails |
 
-   The five `15-` failures were investigated as far as this environment allows. The verifier's stated
-   cause — missing `data-testid` elements — is **not correct**: `ticket-bid`, `activity-rows`,
-   `evidence-cards` and the dynamic `transition-${name}` template (`Submitted`, `Accepted`,
-   `Executed`) all exist in the source and the names match. The failures are consistent with the desk
-   having no quote at the playhead when the spec interacts with it (the ticket renders `—`), which
-   would also stop orders progressing. That points at the spec's own setup rather than at the engine,
-   but it cannot be confirmed or fixed without a browser binary, so no fix is claimed.
+   A second, targeted diagnostic run (Stage 2 of the brief) pinned the cause, and it is **one root
+   cause explaining all eighteen trading failures**, not several:
+
+   - The account's instrument registry contains `BTCUSD_RULES` alone, which is correct: SIM-QUOTE-02
+     says the BTCUSD pilot values are fixtures for that symbol only and are never defaulted onto
+     others. Every chart in the app, however, is SPY / AAPL / QQQ.
+   - `useTradeManager` asked the registry for rules, caught `UnsupportedSymbolError`, and returned
+     silently, so no market-data tape was ever registered for the charted symbol. No tape means no
+     quote; no quote means no fill; no fill means no position, and the badge — which projects the
+     latest open position — never appeared. That is the `07` and `08` failure signature.
+   - The desk compounded it: the ticket fell back to `BTCUSD_RULES` for *display*, so an untradeable
+     symbol was rendered with another instrument's price decimals, and its bid and ask showed as em
+     dashes with no explanation until a Submit failed.
+   - On the chart path the rejection was completely silent. `placeOrder` set `lastError`, and
+     **nothing in the codebase rendered it.** Clicking BUY on a SPY chart produced no order, no
+     position and no message of any kind.
+
+   **Fixed in this phase** (all guarded by tests that fail without the fix):
+
+   | Change | Effect |
+   |---|---|
+   | `OrderTicket` no longer falls back to `BTCUSD_RULES`; an unconfigured symbol gets `null` rules | The display half of the borrowing rule is closed |
+   | The ticket renders `data-testid="unsupported-instrument"` — plain language, naming the symbol and BTCUSD, and the reason rules are never borrowed | The user is told before submitting, not after |
+   | `useTradeManager` exposes `isTradeable` and `symbol`; `TradeControls` disables BUY/SELL and renders `data-testid="trade-controls-untradeable"` | The chart path can no longer discard a click silently |
+   | `15-simulated-terminal.spec.ts` exercises the terminal on **BTCUSD** and asserts the refusal on SPY | The spec tested an instrument the account cannot trade; that was the spec's fault, not the app's |
+   | The journey mock's universe gained `BTCUSD` | The desk journeys need a chart they can actually trade |
+   | Four assertions in `tradeDeskUi.test.tsx` | Reintroducing the fallback fails three of them by name; 34/34 with the fix |
+
+   One assertion in the new spec was also simply wrong: it demanded the plural "single samples" from
+   the evidence cards, which correctly read "Single sample: this is a reference point, not a
+   distribution." Five of that test's assertions passed; only the last was my error.
+
+   **Still open, and deliberately not decided here:** whether the simulated account should trade the
+   equity universe at all. Doing so requires per-instrument rules that would have to be labelled
+   `TRAINING_ASSUMPTION` (equity tick sizes are not in the pilot evidence) rather than borrowed from
+   BTCUSD. Until that is decided, the thirteen `07` / `08` trading assertions cannot pass, and the
+   four instrument-agnostic failures in `04`-`09` are separate and still unexplained.
 
    Net effect on this milestone: the browser layer is **not verified**, and one of its new specs is
    known-bad as written. Everything else in this document stands.

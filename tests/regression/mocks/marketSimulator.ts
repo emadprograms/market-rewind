@@ -69,6 +69,9 @@ export interface DayMarket {
 
 /** Realistic base prices so range assertions (e.g. SPY 700–850) hold. */
 export const BASE_PRICES: Record<string, number> = {
+  // BTCUSD is here because it is the one instrument the simulated account has rules for, so the trade
+  // desk journeys need a chart it can actually trade. The level matches the Capital.com demo pilot.
+  BTCUSD: 82950,
   SPY: 768,
   QQQ: 515,
   AAPL: 255,

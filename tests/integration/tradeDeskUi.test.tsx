@@ -510,3 +510,41 @@ describe('SIM-UI-06 — labelling and accessibility', () => {
     fetchSpy.mockRestore();
   });
 });
+
+describe('SIM-QUOTE-02 — an instrument with no rules is refused, not approximated', () => {
+  it('tells the user plainly instead of rendering a ticket it cannot honour', () => {
+    // The state a browser run found on every equity chart: the account has rules for BTCUSD alone, so
+    // a SPY ticket used to render em dashes for bid and ask and accept a Submit that always failed.
+    render(<TradeDesk symbol="SPY" onClose={() => {}} />);
+
+    const notice = screen.getByTestId('unsupported-instrument');
+    expect(notice).toHaveTextContent(/does not trade SPY/i);
+    expect(notice).toHaveTextContent(/BTCUSD/);
+  });
+
+  it('offers no way to submit an order it would have to refuse', () => {
+    render(<TradeDesk symbol="SPY" onClose={() => {}} />);
+
+    expect(screen.queryByRole('button', { name: /Submit BUY/ })).toBeNull();
+    expect(screen.queryByTestId('ticket-bid')).toBeNull();
+    expect(screen.queryByTestId('ticket-ask')).toBeNull();
+  });
+
+  it('never borrows BTCUSD price decimals or size steps for another instrument', () => {
+    // The old ticket fell back to BTCUSD_RULES for display, showing 0.05 tick steps and 0.0001 size
+    // increments on an instrument that has neither. The refusal replaces that entirely.
+    render(<TradeDesk symbol="AAPL" onClose={() => {}} />);
+
+    expect(screen.getByTestId('unsupported-instrument')).toHaveTextContent(/does not trade AAPL/i);
+    expect(screen.queryByText(/0\.0001 increments/)).toBeNull();
+    expect(screen.queryByText(new RegExp(`0\\.0?5 steps`))).toBeNull();
+  });
+
+  it('still renders a full ticket for the instrument it does trade', () => {
+    render(<TradeDesk symbol={SYMBOL} onClose={() => {}} />);
+
+    expect(screen.queryByTestId('unsupported-instrument')).toBeNull();
+    expect(screen.getByTestId('ticket-bid')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Submit BUY MARKET/ })).toBeInTheDocument();
+  });
+});

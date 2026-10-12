@@ -91,6 +91,23 @@ export function useTradeManager({
     }
   }, []);
 
+  /**
+   * Whether the simulated account has rules for this chart's instrument.
+   *
+   * These controls used to render as if every chart were tradeable. Clicking BUY on an instrument with
+   * no rules produced no order, no position and no message: `placeOrder` set `lastError`, and nothing
+   * rendered it. The buttons now report the situation instead of accepting a click they cannot honour.
+   */
+  const isTradeable = useMemo(() => {
+    if (!rulesFor) return false;
+    try {
+      rulesFor(symbol);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [rulesFor, symbol]);
+
   useEffect(() => {
     if (!rulesFor) return;
     let rules: InstrumentRules;
@@ -211,6 +228,7 @@ export function useTradeManager({
 
   return {
     // legacy view surface
+    symbol,
     activeTrade,
     realizedPnL,
     unrealizedPnL,
@@ -227,6 +245,8 @@ export function useTradeManager({
     askPrice,
     bidPrice,
     lastError,
+    /** False when the simulated account has no rules for this chart's instrument. */
+    isTradeable,
     /** Kept so existing call sites compile; the badge no longer owns a PnL. */
     instrumentSession: instruments,
   };

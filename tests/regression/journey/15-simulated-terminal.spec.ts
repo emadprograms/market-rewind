@@ -4,11 +4,17 @@
  * Journey step 6: "The user opens the terminal, places an order, and is told the truth about what
  * happened to it."
  *
- * ⚠️ NOT EXECUTED IN THIS ENVIRONMENT. This spec was written for phase 48 and is discovered by
- * `npx playwright test -c playwright.journey.config.ts --list`, but the sandbox it was authored in
- * could not install a browser binary (`npx playwright install chromium` fails to reach the download
- * CDN), so no browser run is recorded anywhere in this milestone's verification. It must be treated
- * as unverified until it has actually run in CI. See 48-VERIFICATION.md.
+ * ⚠️ THIS SPEC'S FIRST BROWSER RUN FAILED ALL FIVE TESTS, and the cause was in the spec, not the app.
+ *
+ * An external verifier ran it on 2026-10-12 (macOS, Chromium): 53 passed / 23 failed across the suite,
+ * with every test here failing. The diagnostic showed the ticket rendering em dashes for bid and ask
+ * and no order ever being accepted. The reason: this spec replayed SPY, and the simulated account has
+ * instrument rules for BTCUSD alone (SIM-QUOTE-02 forbids borrowing one instrument's tick size for
+ * another). So there was never a tape for SPY, never a quote, and never a fill to assert on.
+ *
+ * The spec now does what it should have done from the start: it exercises the terminal on BTCUSD, the
+ * one instrument it can trade, and it asserts the honest refusal on a chart symbol the account does
+ * not trade, instead of pretending both are the same situation.
  *
  * It uses the same offline mocks as the other journey specs, so it needs no DuckDB backend.
  */
@@ -20,8 +26,16 @@ const TARGET = '2026-09-25';
 const DESK = '[data-testid="trade-desk"]';
 const ROWS = '[data-testid="activity-rows"]';
 
-async function openDesk(page: import('@playwright/test').Page): Promise<void> {
-  await beginReplay(page, { ticker: 'SPY', date: TARGET });
+/** The one instrument the simulated account has rules for. */
+const TRADEABLE = 'BTCUSD';
+/** A chart symbol the simulated account does NOT trade — the app's ordinary equity universe. */
+const UNTRADEABLE = 'SPY';
+
+async function openDesk(
+  page: import('@playwright/test').Page,
+  ticker: string = TRADEABLE,
+): Promise<void> {
+  await beginReplay(page, { ticker, date: TARGET });
   await page.getByTestId('open-trade-desk').click();
   await expect(page.locator(DESK)).toBeVisible();
 }
@@ -29,7 +43,10 @@ async function openDesk(page: import('@playwright/test').Page): Promise<void> {
 test.describe('JOURNEY 15 — the simulated trading terminal', () => {
   test('opens as a simulated account with live bid/ask and an unsubmitted ticket', async ({ page }) => {
     const pageErrors = collectPageErrors(page);
-    await openDesk(page);
+    await openDesk(page); // BTCUSD: the instrument the account has rules for
+
+    // The refusal notice belongs to the other case and must not appear here.
+    await expect(page.getByTestId('unsupported-instrument')).toHaveCount(0);
 
     // The label that keeps this honest.
     await expect(page.locator(DESK)).toContainText('Simulated account');
@@ -41,6 +58,24 @@ test.describe('JOURNEY 15 — the simulated trading terminal', () => {
     await expect(page.locator(ROWS)).toHaveCount(0);
 
     expect(pageErrors).toEqual([]);
+  });
+
+  test('an instrument the account has no rules for is refused in plain language', async ({ page }) => {
+    // The state this spec previously mistook for a working terminal with empty prices. It is not an
+    // empty ticket: the instrument is not tradeable, and the desk must say so rather than render a
+    // dead ticket and accept a Submit it cannot honour.
+    await openDesk(page, UNTRADEABLE);
+
+    const notice = page.getByTestId('unsupported-instrument');
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText('does not trade SPY');
+    // It names the reason and the instrument that IS configured, rather than leaving the user to guess.
+    await expect(notice).toContainText('never borrowed from another symbol');
+    await expect(notice).toContainText('BTCUSD');
+
+    // And there is no way to submit an instruction it would have to refuse.
+    await expect(page.getByRole('button', { name: /Submit BUY/ })).toHaveCount(0);
+    await expect(page.getByTestId('ticket-bid')).toHaveCount(0);
   });
 
   test('submitting shows a sending instruction, and a position only after the fill confirms', async ({ page }) => {
@@ -100,7 +135,9 @@ test.describe('JOURNEY 15 — the simulated trading terminal', () => {
     // ...with no control that could change it...
     await expect(page.getByRole('spinbutton', { name: 'Acknowledgement envelope' })).toHaveCount(0);
     // ...and the evidence cards live in their own section.
-    await expect(page.getByTestId('evidence-cards')).toContainText('single samples');
+    // Singular, and deliberately so: each card is one observation, not a distribution. This assertion
+    // previously demanded the plural and failed against correct copy.
+    await expect(page.getByTestId('evidence-cards')).toContainText('Single sample');
   });
 
   test('the desk is keyboard navigable and announces without narrating every tick', async ({ page }) => {

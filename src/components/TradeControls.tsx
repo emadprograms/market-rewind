@@ -5,9 +5,20 @@ interface TradeControlsProps {
   tradeSize: number;
   setTradeSize: (size: number) => void;
   placeOrder: (type: TradeType) => void;
+  /** The charted instrument. Named in the refusal so the user knows what was declined. */
+  symbol?: string;
+  /** False when the simulated account has no rules for this instrument. */
+  isTradeable?: boolean;
 }
 
-export function TradeControls({ tradeSize, setTradeSize, placeOrder }: TradeControlsProps) {
+export function TradeControls({
+  tradeSize,
+  setTradeSize,
+  placeOrder,
+  symbol,
+  isTradeable = true,
+}: TradeControlsProps) {
+  const disabled = !isTradeable;
   return (
     <div className="trade-controls" style={{
       position: 'absolute', top: '0px', left: '0px', zIndex: 20,
@@ -17,9 +28,14 @@ export function TradeControls({ tradeSize, setTradeSize, placeOrder }: TradeCont
     }}>
       <button 
         onClick={() => placeOrder('long')}
+        disabled={disabled}
+        aria-disabled={disabled}
+        title={disabled ? `The simulated account does not trade ${symbol ?? 'this instrument'}.` : undefined}
         style={{ 
-          background: '#26a69a', color: '#fff', border: 'none', borderRadius: '4px', 
-          padding: '4px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+          background: disabled ? '#334155' : '#26a69a', color: disabled ? '#94a3b8' : '#fff',
+          border: 'none', borderRadius: '4px', 
+          padding: '4px 12px', fontSize: '12px', fontWeight: '700',
+          cursor: disabled ? 'not-allowed' : 'pointer',
           transition: 'filter 0.2s'
         }}
         onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.2)'}
@@ -40,9 +56,14 @@ export function TradeControls({ tradeSize, setTradeSize, placeOrder }: TradeCont
       
       <button 
         onClick={() => placeOrder('short')}
+        disabled={disabled}
+        aria-disabled={disabled}
+        title={disabled ? `The simulated account does not trade ${symbol ?? 'this instrument'}.` : undefined}
         style={{ 
-          background: '#ef5350', color: '#fff', border: 'none', borderRadius: '4px', 
-          padding: '4px 12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+          background: disabled ? '#334155' : '#ef5350', color: disabled ? '#94a3b8' : '#fff',
+          border: 'none', borderRadius: '4px', 
+          padding: '4px 12px', fontSize: '12px', fontWeight: '700',
+          cursor: disabled ? 'not-allowed' : 'pointer',
           transition: 'filter 0.2s'
         }}
         onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.2)'}
@@ -50,6 +71,17 @@ export function TradeControls({ tradeSize, setTradeSize, placeOrder }: TradeCont
       >
         SELL
       </button>
+
+      {disabled && (
+        <span
+          data-testid="trade-controls-untradeable"
+          role="note"
+          style={{ fontSize: '11px', color: '#fcd34d', background: '#1f2937',
+                   border: '1px solid #4b5563', borderRadius: '4px', padding: '2px 6px' }}
+        >
+          Not traded here — the simulated account has rules for BTCUSD only.
+        </span>
+      )}
     </div>
   );
 }
