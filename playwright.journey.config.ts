@@ -31,10 +31,19 @@ export default defineConfig({
     video: 'off',
   },
   // Boots the Vite dev server automatically; the API layer is fully mocked.
+  // A dedicated port, started fresh for every run, with a strict bind.
+  //
+  // This suite used to target port 3000 with `reuseExistingServer: !process.env.CI`. That is the
+  // usual convenience setting and it was actively harmful here: anything already listening on 3000 —
+  // in the reporting environment, a launchd daemon running `vite preview` with KeepAlive — was
+  // silently reused, so the suite tested a `dist/` bundle built before the code under test. Results
+  // looked like app failures and were in fact stale artefacts, and `--strictPort` avoids the milder
+  // version of the same trap, where Vite quietly moves to another port and the URL check passes
+  // against a server that is not the one being tested.
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    command: 'npm run dev -- --port 3100 --strictPort',
+    url: 'http://localhost:3100',
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [

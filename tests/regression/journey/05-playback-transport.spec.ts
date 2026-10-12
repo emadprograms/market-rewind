@@ -23,6 +23,7 @@ import {
   seekScrubber,
   utcToEtClock,
   collectPageErrors,
+  setStepToTick,
 } from '../mocks/replayJourney';
 
 const TARGET = '2026-09-25';
@@ -102,6 +103,7 @@ test.describe('JOURNEY 05 — Playback transport (play / pause / step / scrub / 
 
     const start = await readPlaybackState(page);
 
+    await setStepToTick(page); // the step buttons are labelled from the current step size
     await page.getByTitle('Step 1 Tick Forward').click();
     await page.waitForTimeout(150);
     const fwd = await readPlaybackState(page);

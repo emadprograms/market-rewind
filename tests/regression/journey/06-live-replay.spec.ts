@@ -24,6 +24,7 @@ import {
   tapePanel,
   utcToEtClock,
   collectPageErrors,
+  setStepToTick,
 } from '../mocks/replayJourney';
 
 const TARGET = '2026-09-25';
@@ -56,6 +57,7 @@ test.describe('JOURNEY 06 — Live replay & Time & Sales tape', () => {
 
     // And the stream keeps moving: one more tick changes the market time the tape is printing.
     const beforeTick = (await readPlaybackState(page)).currentTick;
+    await setStepToTick(page); // one-tick stepping is not the default step size
     await page.getByTitle('Step 1 Tick Forward').click();
     await page.waitForTimeout(200);
     const afterTick = (await readPlaybackState(page)).currentTick;

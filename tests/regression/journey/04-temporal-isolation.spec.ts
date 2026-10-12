@@ -86,7 +86,9 @@ test.describe('JOURNEY 04 — Temporal isolation (stops at 09:10, no look-ahead)
 
     const before = await readPlaybackState(page);
 
-    // Step forward a handful of ticks.
+    // Step forward a handful of ticks. The step size must be set to one tick first: the buttons are
+    // labelled from the current step, whose default is 3 minutes.
+    await setStepToTick(page);
     const stepFwd = page.getByTitle('Step 1 Tick Forward');
     for (let i = 0; i < 5; i++) {
       await stepFwd.click();

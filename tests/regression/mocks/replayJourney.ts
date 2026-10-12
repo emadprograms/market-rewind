@@ -14,6 +14,7 @@
 
 import { expect, type Locator, type Page } from '@playwright/test';
 import { installApiMocks, type MockMarketHandle, type MockMarketOptions } from './apiMock';
+import { getTzForTicker, getUtcTimeFromEt } from '../../../src/lib/timezones';
 
 export const ET = 'America/New_York';
 
@@ -85,9 +86,26 @@ export async function enterReplayDate(page: Page, req: ReplayRequest): Promise<v
 }
 
 /** Click "Initialize Market Simulator" and wait for the replay workspace. */
+/**
+ * The clock the replay display should show for an anchor expressed in Eastern Time.
+ *
+ * The anchor is always stated in ET because that is what a user types, but the display renders each
+ * instrument in its own zone: equities in ET, crypto in UTC (see `getTzForTicker`). Asserting the ET
+ * string against a 24/7 instrument therefore fails by exactly the offset — `09:10` never appears in
+ * a display reading `13:10:00.000 UTC` — and the failure looks like a broken app rather than a spec
+ * that forgot which clock it was reading. This existed all along; it only became reachable when the
+ * terminal spec started replaying a crypto instrument, which is the one whose rules came from evidence.
+ */
+export function expectedDisplayClock(ticker: string | undefined, date: string | undefined, anchorEt: string): string {
+  if (!ticker || !date) return anchorEt;
+  if (getTzForTicker(ticker) !== 'UTC') return anchorEt;
+  // `getUtcTimeFromEt` returns "YYYY-MM-DD HH:MM:SS"; the display shows the time part.
+  return getUtcTimeFromEt(date, anchorEt.slice(0, 5)).slice(11);
+}
+
 export async function startReplay(
   page: Page,
-  opts: { ticker?: string; anchorEt?: string } = {},
+  opts: { ticker?: string; anchorEt?: string; date?: string } = {},
 ): Promise<void> {
   await page.getByRole('button', { name: /Initialize Market Simulator/i }).click();
 
@@ -103,9 +121,10 @@ export async function startReplay(
     timeout: 40_000,
   });
 
-  // Replay clock anchored (defaults to the 09:10 ET entry point).
-  const anchor = opts.anchorEt ?? '09:10:00';
-  await expect(page.locator('.time-display')).toContainText(anchor, { timeout: 40_000 });
+  // Replay clock anchored (defaults to the 09:10 ET entry point), read in the instrument's own zone.
+  const anchorEt = opts.anchorEt ?? '09:10:00';
+  const expected = expectedDisplayClock(opts.ticker, opts.date, anchorEt);
+  await expect(page.locator('.time-display')).toContainText(expected, { timeout: 40_000 });
 }
 
 /** Full convenience: open → configure → start, then assert the anchor time. */
@@ -117,7 +136,11 @@ export async function beginReplay(
   const handle = await openWebsite(page, options);
   await waitForBackendConnected(page);
   await enterReplayDate(page, req);
-  await startReplay(page, { ticker: req.ticker, anchorEt: req.entryTime ? `${req.entryTime}:00` : '09:10:00' });
+  await startReplay(page, {
+    ticker: req.ticker,
+    date: req.date,
+    anchorEt: req.entryTime ? `${req.entryTime}:00` : '09:10:00',
+  });
   return handle;
 }
 
@@ -219,6 +242,18 @@ export async function pressPlay(page: Page): Promise<void> {
 export async function pressPause(page: Page): Promise<void> {
   await pauseButton(page).click();
   await expect(playButton(page)).toBeVisible();
+}
+
+/**
+ * Put the transport into one-tick stepping.
+ *
+ * The step buttons are labelled from the current step size, and the store's default is 3 minutes
+ * (`stepMinutes: 3`), so the button reads "Step 3m Forward" and a locator looking for
+ * "Step 1 Tick Forward" waits forever — which is what happened, for 90 seconds at a time, in every
+ * test that tried to single-step. The control offers "1 tick" as the value 0; select it first.
+ */
+export async function setStepToTick(page: Page): Promise<void> {
+  await page.getByTestId('playback-step-select').selectOption('0');
 }
 
 export async function setSpeed(page: Page, value: string): Promise<void> {

@@ -339,7 +339,11 @@ export default function App() {
           onNextSymbol={handleNextSymbol}
           nextSymbol={nextSymbol}
         />
-        {!isDeskOpen && (
+        {/* Hidden while the tape is open: this button floats over the right-hand edge at z-index 4000,
+            and the tape panel's header — including its close button — occupies exactly that corner at
+            z-index 20. The overlap made the tape impossible to close with the mouse, which is how a
+            browser found it: Playwright retried the click 173 times before giving up. */}
+        {!isDeskOpen && !isTapeOpen && (
           <button
             type="button"
             onClick={() => setIsDeskOpen(true)}
