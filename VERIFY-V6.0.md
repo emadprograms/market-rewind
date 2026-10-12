@@ -34,9 +34,20 @@ quietly made to pass.
 
 ## 1. Target and provenance
 
+**Prerequisites** — check these before anything else, because two sections depend on them:
+
+| Tool | Needed for | If missing |
+|---|---|---|
+| `node` v22.x | everything | the suite will not run; report your version and stop |
+| `npm` | install | same |
+| `python3` | §2's reporter and **all six mutation patches in §4** | §4 cannot run — say so in your report rather than skipping it silently |
+| `git` | provenance checks | required |
+| a browser binary | §8 only | skip §8 and say so |
+
 ```bash
 cd market-rewind
 node -v                       # expect v22.x
+python3 --version             # required by section 4
 
 git fetch origin
 git checkout arena/d6be95e4-market-rewind     # REQUIRED: main does not have v6.0
