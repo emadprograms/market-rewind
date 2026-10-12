@@ -7,12 +7,12 @@ Phase numbering continues from v5.0 (which ended at 42). Source plan:
 
 | # | Phase | Goal | Requirements | Success Criteria | Status |
 |---|-------|------|--------------|------------------|--------|
-| 43 | Pilot Evidence Audit & Collector Repair | Normalise the eight saved demo run bundles into offline fixtures with provenance, and repair the collector's known defects without running it | SIM-EVIDENCE-01, SIM-EVIDENCE-02, SIM-EVIDENCE-03 | 3 | PENDING |
-| 44 | Pure Deterministic Engine, Scheduler & Profiles | Build the dependency-free order engine, deadline scheduler, quote resolver, and latency profiles that make delay change execution | SIM-ENGINE-01..06, SIM-QUOTE-01..06, SIM-LATENCY-01..05 | 4 | PENDING |
-| 45 | Replay & Session Integration | Feed the engine every crossed tick on replay time and make pause, step, seek, and reset deterministic without reviving the seek freeze | SIM-REPLAY-01..07 | 4 | PENDING |
-| 46 | Shared Account & Chart Projection | Replace chart-local instant fills with one engine-authoritative account so PnL and positions cannot double-count across charts | SIM-ACCOUNT-01..05 | 3 | PENDING |
-| 47 | Ticket, Activity, Timeline & Settings | Deliver the order terminal UI: ticket, order/position activity, per-order timeline, and editable latency profiles | SIM-UI-01..06 | 3 | PENDING |
-| 48 | Regression Verification & Handover | Prove the behavioural matrix and regression immunity, and document defaults, provenance, and limitations | SIM-VERIFY-01, SIM-VERIFY-02 | 3 | PENDING |
+| 43 | Pilot Evidence Audit & Collector Repair | Normalise the eight saved demo run bundles into offline fixtures with provenance, and repair the collector's known defects without running it | SIM-EVIDENCE-01, SIM-EVIDENCE-02, SIM-EVIDENCE-03 | 3 | VERIFIED |
+| 44 | Pure Deterministic Engine, Scheduler & Profiles | Build the dependency-free order engine, deadline scheduler, quote resolver, and latency profiles that make delay change execution | SIM-ENGINE-01..06, SIM-QUOTE-01..06, SIM-LATENCY-01..05 | 4 | VERIFIED |
+| 45 | Replay & Session Integration | Feed the engine every crossed tick on replay time and make pause, step, seek, and reset deterministic without reviving the seek freeze | SIM-REPLAY-01..07 | 4 | VERIFIED |
+| 46 | Shared Account & Chart Projection | Replace chart-local instant fills with one engine-authoritative account so PnL and positions cannot double-count across charts | SIM-ACCOUNT-01..05 | 3 | VERIFIED |
+| 47 | Ticket, Activity, Timeline & Settings | Deliver the order terminal UI: ticket, order/position activity, per-order timeline, and editable latency profiles | SIM-UI-01..06 | 3 | VERIFIED |
+| 48 | Regression Verification & Handover | Prove the behavioural matrix and regression immunity, and document defaults, provenance, and limitations | SIM-VERIFY-01, SIM-VERIFY-02 | 3 | VERIFIED |
 
 ---
 
@@ -86,3 +86,4 @@ Phase numbering continues from v5.0 (which ended at 42). Source plan:
 | v4.2 | State Machine Convergence & Temporal Strictness | — | 2026-09-30 | [v4.2-ROADMAP.md](./milestones/v4.2-ROADMAP.md) |
 | v4.3 | Live Data Stabilization and Testing | 34-38 | 2026-09-30 | `milestones/v4.3-phases/` |
 | v5.0 | Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance) | 39-42 | 2026-10-06 | [v5.0-ROADMAP.md](./milestones/v5.0-ROADMAP.md) |
+| v6.0 | Offline Order Simulator (Mock Capital.com Terminal) | 43-48 | 2026-10-12 | [v6.0-ROADMAP.md](./milestones/v6.0-ROADMAP.md) |

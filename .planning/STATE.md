@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 milestone: v6.0
 milestone_name: "Offline Order Simulator (Mock Capital.com Terminal)"
-status: In progress
+status: Shipped
 last_updated: "2026-10-12T00:10:00.000Z"
 last_activity: 2026-10-12
-last_activity_desc: Milestone v6.0 started — research, requirements and roadmap defined
+last_activity_desc: Milestone v6.0 shipped — all six phases verified
 state_head: 0736e99
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 6
   total_plans: 0
   completed_plans: 0
-  percent: 0
+  percent: 100
 ---
 
 # Project State
@@ -31,6 +31,7 @@ progress:
 - **Milestone v4.2**: State Machine Convergence & Temporal Strictness (Shipped 2026-09-30)
 - **Milestone v4.3**: Live Data Stabilization and Testing (Shipped 2026-09-30)
 - **Milestone v5.0**: Partitioned Parquet Tick Lake Integration (Repo B Contract Compliance) (Shipped 2026-10-06)
+- **Milestone v6.0**: Offline Order Simulator (Mock Capital.com Terminal) (Shipped 2026-10-12)
 
 ## Project Reference
 

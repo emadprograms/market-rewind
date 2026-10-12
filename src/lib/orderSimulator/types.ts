@@ -168,10 +168,14 @@ export interface Fill {
   readonly price: number;
   readonly replayMs: ReplayMs;
   readonly quoteSeq: number;
-  /** Price at submission, for adverse-move reporting. Positive = adverse. */
-  readonly priceChangeFromSubmit: number | null;
-  /** Direction-aware difference from a stop level to the fill. */
-  readonly stopToFillDifference: number | null;
+  /**
+   * How far the fill moved from the quote the order was placed against, in TICKS, direction-aware
+   * (positive = adverse for the order's side). Ticks rather than currency because the price grid is
+   * discrete: a difference expressed in ticks is exact, and one expressed in dollars is not.
+   */
+  readonly priceChangeFromSubmitTicks: number | null;
+  /** Direction-aware distance from a stop's level to its fill, in TICKS. */
+  readonly stopToFillDifferenceTicks: number | null;
 }
 
 export interface Position {

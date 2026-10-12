@@ -880,7 +880,7 @@ export class OrderSimulatorEngine {
       price: fillPrice,
       replayMs: this.nowMs,
       quoteSeq: quote.seq,
-      priceChangeFromSubmit: order.submittedQuote
+      priceChangeFromSubmitTicks: order.submittedQuote
         ? roundToDecimals(
             (order.side === 'BUY'
               ? fillPrice - order.submittedQuote.ask
@@ -888,7 +888,7 @@ export class OrderSimulatorEngine {
             4,
           )
         : null,
-      stopToFillDifference:
+      stopToFillDifferenceTicks:
         order.triggeredAt !== null && order.level !== null
           ? roundToDecimals((order.side === 'BUY' ? fillPrice - order.level : order.level - fillPrice) / tick.tickSize, 4)
           : null,
@@ -903,8 +903,8 @@ export class OrderSimulatorEngine {
       size: order.size,
       quote: { bid: quote.bid, ask: quote.ask, seq: quote.seq },
       quoteAgeMs: this.nowMs - quote.replayMs,
-      priceChangeFromSubmitInTicks: fill.priceChangeFromSubmit,
-      stopToFillDifferenceInTicks: fill.stopToFillDifference,
+      priceChangeFromSubmitInTicks: fill.priceChangeFromSubmitTicks,
+      stopToFillDifferenceInTicks: fill.stopToFillDifferenceTicks,
     });
 
     // Notification: the economics happened at `nowMs`; the client learns later.
