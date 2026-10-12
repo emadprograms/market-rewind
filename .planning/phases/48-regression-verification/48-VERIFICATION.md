@@ -189,6 +189,32 @@ each is applied and reverted within a single command block.
 
    Net effect on this milestone: the browser layer is **not verified**, and one of its new specs is
    known-bad as written. Everything else in this document stands.
+
+6. **Round 4 (an external run of the brief at `7dab070`) found two real defects in this work, and
+   fixing one of them exposed the deeper one.** 20 failed / 4 skipped / 58 passed.
+
+   | Finding | Detail |
+   |---|---|
+   | The fix had only been applied to half the hazard | `webServer.url` had been moved to 3100 while `use.baseURL` still said 3000, so the suite started the right server and then browsed the wrong one — still the stale `vite preview` daemon the change was meant to escape. Both now derive from one `JOURNEY_PORT`, and `journeyDiscovery.test.ts` asserts they share an origin and that the port is not 3000. That guard is a **vitest** test: `npx playwright test` never runs it, so both suites must be run each round. |
+   | A tape arriving at a settled playhead was never consumed | `registerTape` replaced the tape and nothing read it. Quotes reach the engine through *movement*, and the playback bridge returns early when the playhead has not moved — the ordinary case, since the replay starts paused and ticks load asynchronously. The ticket therefore priced nothing (em dashes) and an accepted order waited on a clock that never moved. `refreshFromTape()` now reads the tape at the instant the session is already at: no clock change, no history replayed, idempotent. |
+   | …and the repair was incomplete | The delivery floor was a single number for the whole session, so a tape registered *after* another instrument had delivered was measured against that other instrument's progress, and its quote at the consumed instant was unreachable (`0 > 0` is false). Two instruments and one cursor meant the second instrument silently had no market data. Delivery is now tracked **per symbol**, and quotes refused as history advance their own cursor so a late page is scanned once. |
+   | Four failures were spec bugs, not product bugs | `04` and `05` single-stepped with the default 3-minute step ("1 tick" is option 0) — `setStepToTick` now selects it; `06` asserted a price badge inside `.playback-bar`, which never carries one; `06`'s tape close was physically unclickable in an older commit (fixed in `78d5ef7`). |
+   | One diagnosis was refined, not accepted | The report read the account's clock as frozen. It is not: the account's clock follows the playhead. What it cannot do is fill an order while the playhead is paused (travel is 100 ms, and `clampToExposure` freezes at the last quote). Four specs submitted and then awaited a fill without advancing replay time, which can only time out. They now run the replay briefly. That is the simulator working as designed, and the specs were wrong. |
+
+   Disposition: of the 20 failures, 16 have named causes fixed since (the two defects above, the port
+   divergence, the four spec bugs, and the trading failures that shared the unpriced-ticket root cause);
+   4 remain to be confirmed by a fresh browser run at `2b9a704`. The `refreshFromTape` repair was proven
+   by reproducer-first testing: two new tests in `accountPlaybackSync.test.tsx` failed exactly as the
+   report predicted (`expected undefined to be 100.5`), then passed. The per-symbol cursor repair was
+   proven by reintroduction: collapsing the cursors back into one global floor fails the new unit guard,
+   `behaviouralMatrix` §10.18 and `tradeDeskUi` SIM-UI-02.
+
+   Two of the failures the first repair *caused* were themselves findings, which is why they were not
+   papered over. `tradeDeskUi` "shows no price rather than inventing one" was mislabelled test data — it
+   registered an ETHUSD tape carrying BTCUSD quotes, so it had been passing because nothing was
+   delivered at all; it now uses an ETHUSD tape at ETHUSD prices, which makes it a stronger assertion.
+   `behaviouralMatrix` §10.18 registered two instruments' tapes and expected both to be readable, which
+   is exactly what the shared cursor prevented.
 2. **Four browser trading tests are known-stale and marked `test.fixme`** rather than left failing:
    `07-trading.spec.ts` asserted that buying twice accumulates one position, that an opposite order
    closes or flips it, and that a partial opposite order reduces it. v6.0 replaced that behaviour, and
