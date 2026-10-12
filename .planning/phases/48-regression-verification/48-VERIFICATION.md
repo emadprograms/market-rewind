@@ -78,12 +78,32 @@ each is applied and reverted within a single command block.
 
 ## 4. Disclosed limitations
 
-1. **Browser verification did not run.** `npx playwright test -c playwright.journey.config.ts --list`
-   discovers **80 tests in 15 files** (including the new `15-simulated-terminal.spec.ts`), but the
-   browser binary cannot be installed in this environment: `npx playwright install chromium` fails
-   with `Failed to download Chrome for Testing 156.0.8078.4 … code=1` (no route to the download CDN).
-   No browser outcome is claimed. The journey suite is offline-mocked (no DuckDB backend needed), so
-   it should run in CI with browsers present.
+1. **Browser verification did not run here, and has since been run elsewhere — with failures.**
+   `npx playwright test -c playwright.journey.config.ts --list` discovers **80 tests in 15 files**
+   (including the new `15-simulated-terminal.spec.ts`), but the browser binary cannot be installed in
+   this environment: `npx playwright install chromium` fails with `Failed to download Chrome for
+   Testing 156.0.8078.4 … code=1` (no route to the download CDN).
+
+   On 2026-10-12 an independent verifier with a working browser ran the suite on macOS (Apple M4,
+   Chromium) and recorded **53 passed / 23 failed / 4 fixme**. Those numbers supersede "no outcome
+   claimed" and are broken down as follows:
+
+   | Group | Count | Status |
+   |---|---|---|
+   | `07-trading.spec.ts` netting assertions | 4 | Intentional `test.fixme`; replaced behaviour, not a defect |
+   | `04`, `05`, `06`, `07`, `08`, `09` re-baselining | 14 | **Unresolved.** Attributed to v6.0's account-wide PnL and latest-open-position badge, as predicted in limitation 2 below, but not yet confirmed or fixed |
+   | `15-simulated-terminal.spec.ts` | 5 | **Unresolved, and not predicted.** The whole new spec fails |
+
+   The five `15-` failures were investigated as far as this environment allows. The verifier's stated
+   cause — missing `data-testid` elements — is **not correct**: `ticket-bid`, `activity-rows`,
+   `evidence-cards` and the dynamic `transition-${name}` template (`Submitted`, `Accepted`,
+   `Executed`) all exist in the source and the names match. The failures are consistent with the desk
+   having no quote at the playhead when the spec interacts with it (the ticket renders `—`), which
+   would also stop orders progressing. That points at the spec's own setup rather than at the engine,
+   but it cannot be confirmed or fixed without a browser binary, so no fix is claimed.
+
+   Net effect on this milestone: the browser layer is **not verified**, and one of its new specs is
+   known-bad as written. Everything else in this document stands.
 2. **Four browser trading tests are known-stale and marked `test.fixme`** rather than left failing:
    `07-trading.spec.ts` asserted that buying twice accumulates one position, that an opposite order
    closes or flips it, and that a partial opposite order reduces it. v6.0 replaced that behaviour, and

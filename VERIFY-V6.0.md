@@ -442,6 +442,7 @@ Two things are already known and should not be mistaken for new bugs:
 | Vite "chunks larger than 500 kB" | Pre-existing advisory |
 | 11 bundle directories, 5 of them clock-probe-only | Documented in `docs/research/capital-demo-pilot-evidence-audit.md` §0 |
 | 4 `test.fixme` browser tests | Intentional; see §8 |
+| 23 browser failures (if you run §8) | Known and documented: 4 intentional, 14 unconfirmed re-baselining of trading assertions, 5 in the new `15-simulated-terminal.spec.ts`. These are the milestone's known-bad area — report them, but they are not new discoveries |
 | `Fill.priceChangeFromSubmitTicks` / `stopToFillDifferenceTicks` are **tick counts**, not currency | Documented naming rule (they were renamed from an ambiguous form) |
 | A tick-independent quote in `playbackBridge` is marked `derived: true` | Derived spread is disclosed, not presented as observed |
 | The analyzer treats a timestamp with no `Z` as UTC | The evidence mixes two clock families; this is deliberate, documented in `msUtc`, and guarded by repair-suite group 9b |
