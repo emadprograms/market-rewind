@@ -124,6 +124,11 @@ export const useAccountStore = create<AccountStoreState>((set, get) => {
 
     registerTape: (symbol, quotes) => {
       session.replaceTape(symbol, quotes);
+      // A tape usually arrives while the playhead is standing still: the replay starts paused and the
+      // ticks load asynchronously. Replacing the tape alone delivers nothing, because quotes reach the
+      // engine through movement — so read what the tape now holds, up to the time the session is
+      // already at. Without this the engine holds no quote at all until the user presses play.
+      session.refreshFromTape();
       publish();
     },
 

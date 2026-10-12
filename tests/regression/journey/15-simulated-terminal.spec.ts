@@ -20,7 +20,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { beginReplay, collectPageErrors } from '../mocks/replayJourney';
+import { beginReplay, collectPageErrors, pressPlay, pressPause, setSpeed } from '../mocks/replayJourney';
 
 const TARGET = '2026-09-25';
 const DESK = '[data-testid="trade-desk"]';
@@ -28,6 +28,22 @@ const ROWS = '[data-testid="activity-rows"]';
 
 /** The instrument whose rules came from the Capital.com pilot rather than from an assumption. */
 const TRADEABLE = 'BTCUSD';
+
+/**
+ * Let the replay run for a moment so an instruction in flight can actually arrive.
+ *
+ * A simulated order is not filled on the click: it travels, it is accepted, it is dispatched, and only
+ * then does the broker confirm. That takes replay time, and replay is paused by default — so a test
+ * that submits and then waits for a fill without ever advancing the clock is waiting for something
+ * that cannot happen. It was written that way and could only ever time out; the "Sending" row it
+ * produced was the simulator behaving correctly.
+ */
+async function runReplayBriefly(page: import('@playwright/test').Page): Promise<void> {
+  await setSpeed(page, '50');
+  await pressPlay(page);
+  await page.waitForTimeout(1_200);
+  await pressPause(page);
+}
 /** An equity the mock serves and the account also trades, on its own assumed rules. */
 const EQUITY = 'SPY';
 /** A symbol the mock serves but the account has no rules for: the refusal case, reachable in a browser. */
@@ -104,8 +120,12 @@ test.describe('JOURNEY 15 — the simulated trading terminal', () => {
     // The instruction is visible immediately; the desk claims nothing more than that.
     await page.getByRole('tab', { name: 'Activity' }).click();
     await expect(page.locator(ROWS)).toContainText('BUY MARKET');
+    // It must not have claimed a fill it has not received — the point of the test.
+    await expect(page.locator(ROWS)).not.toContainText('Filled');
 
-    // Once the simulated broker has filled it, the row says so and a position appears.
+    // Now give the instruction the replay time it needs to travel, be accepted and be dispatched.
+    await runReplayBriefly(page);
+
     await expect(page.locator(ROWS)).toContainText('Filled', { timeout: 30_000 });
     await expect(page.locator(ROWS)).toContainText('Open');
   });
@@ -132,6 +152,9 @@ test.describe('JOURNEY 15 — the simulated trading terminal', () => {
     await page.getByRole('tab', { name: 'Timeline' }).click();
 
     await expect(page.getByTestId('transition-Submitted')).toBeVisible();
+    // Execution is a separate event that needs replay time to arrive; without this the assertion waits
+    // for a moment the paused clock will never reach.
+    await runReplayBriefly(page);
     await expect(page.getByTestId('transition-Executed')).toBeVisible({ timeout: 30_000 });
     // Three named intervals, not one number called "latency".
     await expect(page.getByTestId('interval-Execution delay')).toBeVisible();

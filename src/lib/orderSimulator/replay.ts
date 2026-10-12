@@ -114,14 +114,21 @@ export class ReplaySession {
   private commandSeq = 0;
   private cursorMs: ReplayMs;
   /**
-   * Highest replay time already delivered to the engine.
+   * Highest replay time already delivered, tracked **per symbol**.
    *
-   * BUGFIX: this used to be inferred from the cursor, which starts at `startMs` and therefore
-   * silently swallowed a quote at exactly t=0 — the session's opening quote was never fed, so an
-   * order resting at the first tick could not be evaluated. Delivery is now tracked separately from
-   * the playhead.
+   * BUGFIX: this used to be one number for the whole session, which starts at `startMs` and therefore
+   * silently swallowed a quote at exactly t=0 — the session's opening quote was never fed, so an order
+   * resting at the first tick could not be evaluated. Delivery is now tracked separately from the
+   * playhead.
+   *
+   * BUGFIX: one number for every symbol was still wrong. A tape is registered per symbol and read
+   * against the highest time delivered *for that tape*, so a second instrument's tape was measured
+   * against the first instrument's progress: register BTCUSD up to t=0 and the ETHUSD tape arriving
+   * afterwards could never deliver its own t=0 quote, because `0 > 0` is false and the segment had
+   * already been consumed. The instrument silently had no market data at all — the ticket priced
+   * nothing, and an order waiting on its clock could never fill. Each symbol's cursor is now its own.
    */
-  private lastDeliveredMs: ReplayMs = Number.NEGATIVE_INFINITY;
+  private lastDeliveredBySymbol = new Map<string, ReplayMs>();
   private lateTapeNotices = new Set<string>();
   private eventsSeen = 0;
 
@@ -179,6 +186,27 @@ export class ReplaySession {
     this.noticeLog.push(`${reason}: ${symbol} tape now holds ${bySeq.size} unique quotes.`);
   }
 
+  /**
+   * Consume every quote the current tape carries up to the playhead.
+   *
+   * Replacing a tape does not, on its own, hand anything to the engine: quotes are delivered by
+   * movement, and movement for a symbol is measured against that symbol's delivery cursor. So a tape
+   * that arrives while the playhead is standing still is never read — and that is the ordinary case in
+   * the application. The replay starts paused and the chart loads its ticks asynchronously, so the tape
+   * routinely turns up after the playhead has settled. The visible result was a ticket with no quote to
+   * price against, showing em dashes for bid and ask, and an accepted instruction that could never
+   * execute because the clock it was waiting on was never going to move.
+   *
+   * Calling this on arrival makes the tape's contents reachable without pretending the market moved:
+   * it advances to the time the session is already at, so nothing about the clock changes and the
+   * only effect is that quotes at or before the playhead are delivered. It is idempotent — a quote the
+   * engine has already seen advances that symbol's cursor past itself, and a quote that is already
+   * history is refused and marked delivered — so it is safe to call on every tape replacement.
+   */
+  refreshFromTape(): AdvanceReport {
+    return this.advanceTo(this.cursorMs, 'BUFFER_REPLACED');
+  }
+
   /** Total number of distinct quotes known across every tape. */
   get quoteCount(): number {
     let total = 0;
@@ -196,21 +224,45 @@ export class ReplaySession {
         if (quote.replayMs > fromMsExclusive && quote.replayMs <= toMsInclusive) out.push(quote);
       }
     }
-    // Sort by time, then by the symbol's tape order (source order for equal times), then by symbol
-    // name so that the ordering is fully determined even when two tapes share a timestamp.
+    return this.inDeliveryOrder(out);
+  }
+
+  /**
+   * Every quote up to `toMsInclusive` that the tape it belongs to has not delivered yet.
+   *
+   * The floor is per symbol: each tape is read against its own progress, never against another
+   * instrument's. This is what makes a tape registered while the playhead stands still readable (see
+   * `refreshFromTape`) and what keeps one instrument's advancement from swallowing another's opening
+   * quote.
+   */
+  private undeliveredQuotes(toMsInclusive: number): Quote[] {
+    const out: Quote[] = [];
+    for (const [symbol, tape] of this.tapes) {
+      const floor = this.lastDeliveredBySymbol.get(symbol) ?? Number.NEGATIVE_INFINITY;
+      for (const quote of tape.values()) {
+        if (quote.replayMs > floor && quote.replayMs <= toMsInclusive) out.push(quote);
+      }
+    }
+    return this.inDeliveryOrder(out);
+  }
+
+  /**
+   * Sort by time, then by the symbol's tape order (source order for equal times), then by symbol name
+   * so that the ordering is fully determined even when two tapes share a timestamp.
+   */
+  private inDeliveryOrder(quotes: Quote[]): Quote[] {
     const orderIndex = (q: Quote): number => {
       const order = this.tapeOrder.get(q.symbol.toUpperCase());
       const index = order ? order.indexOf(q.seq) : -1;
       return index;
     };
-    out.sort(
+    return quotes.sort(
       (a, b) =>
         a.replayMs - b.replayMs ||
         orderIndex(a) - orderIndex(b) ||
         a.symbol.localeCompare(b.symbol) ||
         a.seq - b.seq,
     );
-    return out;
   }
 
   // -- exposure -------------------------------------------------------------
@@ -271,11 +323,12 @@ export class ReplaySession {
     const fromMs = this.cursorMs;
     const eventsBefore = this.engine.eventLog().length;
 
-    // The floor is the last quote actually delivered — NOT the engine's clock, because the engine
-    // can legitimately be at the opening instant with nothing delivered yet. A tape page that
-    // arrives after the playhead passed it is filtered per quote in `deliverQuote`, which keeps the
-    // opening quote deliverable while refusing to replay history as if it were live.
-    const quotes = this.quotesBetween(this.lastDeliveredMs, limitMs);
+    // The floor is the last quote this symbol's tape actually delivered — NOT the engine's clock,
+    // because the engine can legitimately be at the opening instant with nothing delivered yet, and
+    // not another symbol's progress either. A tape page that arrives after the playhead passed it is
+    // filtered per quote in `deliverQuote`, which keeps the opening quote deliverable while refusing
+    // to replay history as if it were live.
+    const quotes = this.undeliveredQuotes(limitMs);
     let fed = 0;
     for (const quote of quotes) if (this.deliverQuote(quote)) fed++;
     const skipped = quotes.length - fed;
@@ -316,26 +369,36 @@ export class ReplaySession {
    */
   private deliverQuote(quote: Quote): boolean {
     const t = quote.replayMs;
+    const key = quote.symbol.toUpperCase();
     if (t < this.engine.now()) {
       // Late history: the playhead is already beyond this quote. Record it once and move on rather
-      // than rewinding the engine's clock.
-      const key = `LATE_TAPE:${quote.symbol}`;
-      if (!this.lateTapeNotices.has(key)) {
-        this.lateTapeNotices.add(key);
+      // than rewinding the engine's clock. The cursor advances past it anyway: this quote is now known
+      // to be undeliverable, and the engine's clock only moves forward within a branch, so scanning it
+      // again on every later advance would be pure waste.
+      const noticeKey = `LATE_TAPE:${quote.symbol}`;
+      if (!this.lateTapeNotices.has(noticeKey)) {
+        this.lateTapeNotices.add(noticeKey);
         this.noticeLog.push(
           `Late tape data for ${quote.symbol} ignored: quote at ${fmt(t)} arrived after the engine ` +
             `had already reached ${fmt(this.engine.now())}. History is never replayed as live.`,
         );
       }
+      this.markDelivered(key, t);
       return false;
     }
     this.engine.runUntilBefore(t);
     this.engine.onQuote(quote);
     this.engine.runUntil(t);
     // Recorded here, not at the call sites, so that a rebuild or a rebranch — which deliver quotes
-    // directly — cannot leave the delivery cursor stale and re-feed the tape on the next advance.
-    this.lastDeliveredMs = Math.max(this.lastDeliveredMs, t);
+    // directly — cannot leave a delivery cursor stale and re-feed the tape on the next advance.
+    this.markDelivered(key, t);
     return true;
+  }
+
+  /** Advance one symbol's delivery cursor. It is per symbol: tapes are read independently. */
+  private markDelivered(symbolKey: string, t: ReplayMs): void {
+    const previous = this.lastDeliveredBySymbol.get(symbolKey) ?? Number.NEGATIVE_INFINITY;
+    if (t > previous) this.lastDeliveredBySymbol.set(symbolKey, t);
   }
 
   /**
@@ -362,7 +425,7 @@ export class ReplaySession {
     this.engine = this.newEngine(sessionId);
     this.commands = [];
     this.cursorMs = this.startMs;
-    this.lastDeliveredMs = Number.NEGATIVE_INFINITY;
+    this.lastDeliveredBySymbol.clear();
     this.movementSeq = this.movementSeq; // movement history is monotonic across a branch
 
     const noticesBefore = this.noticeLog.length;
@@ -438,7 +501,7 @@ export class ReplaySession {
     this.engine = this.newEngine(this.sessionId);
     this.commands = [];
     this.cursorMs = this.startMs;
-    this.lastDeliveredMs = Number.NEGATIVE_INFINITY;
+    this.lastDeliveredBySymbol.clear();
 
     const notices = [
       `New session ${this.sessionId}. ${droppedPositions} open position(s) and ${droppedOrders} live ` +

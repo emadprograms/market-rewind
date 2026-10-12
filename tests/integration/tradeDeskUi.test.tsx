@@ -16,10 +16,13 @@ import type { Quote } from '../../src/lib/orderSimulator/types';
 
 const SYMBOL = 'BTCUSD';
 
-function tape(count = 40): Quote[] {
+function tape(count = 40, symbol: string = SYMBOL, base = 100): Quote[] {
+  // The quotes carry the symbol the tape is registered under: a tape whose quotes name another
+  // instrument is malformed input, and building one by accident once let a test pass for the wrong
+  // reason (nothing was delivered, so nothing could be mispriced).
   return Array.from({ length: count }, (_, i) => {
-    const bid = Math.round((100 + i * 0.05) * 100) / 100;
-    return { symbol: SYMBOL, bid, ask: Math.round((bid + 0.5) * 100) / 100, replayMs: i * 1_000, seq: i + 1 };
+    const bid = Math.round((base + i * 0.05) * 100) / 100;
+    return { symbol, bid, ask: Math.round((bid + 0.5) * 100) / 100, replayMs: i * 1_000, seq: i + 1 };
   });
 }
 
@@ -202,11 +205,14 @@ describe('SIM-UI-02 — order and position activity', () => {
   });
 
   it('shows no price rather than inventing one, and lets the broker refuse', () => {
-    // No tape for this symbol at all. The ticket displays nothing rather than a made-up price...
+    // No tape for this symbol at all. The ticket displays nothing rather than a made-up price. The
+    // ETHUSD tape is deliberately present AND deliberately priced ~3000: if the desk borrowed another
+    // instrument's data to fill this gap, the bid below would show a number instead of a dash.
     useAccountStore.getState().configure({ instruments: [BTCUSD_RULES], profile: trainingProfile(), sessionId: 'no-quotes' });
-    useAccountStore.getState().registerTape('ETHUSD', tape());
+    useAccountStore.getState().registerTape('ETHUSD', tape(40, 'ETHUSD', 3_000));
     mount();
     expect(screen.getByTestId('ticket-bid')).toHaveTextContent('—');
+    expect(screen.getByTestId('ticket-bid')).not.toHaveTextContent('3');
     expect(screen.getByTestId('ticket-ask')).toHaveTextContent('—');
 
     // ...and accepting the instruction is all the client can honestly claim: the broker decides.

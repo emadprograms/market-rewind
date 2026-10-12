@@ -161,3 +161,62 @@ describe('the account follows the playhead', () => {
     expect(state.fills).toHaveLength(0);
   });
 });
+
+describe('a tape that arrives after the playhead has settled', () => {
+  /**
+   * The application's real order of operations: the replay starts paused, the chart loads its ticks
+   * asynchronously, and only then does `useTradeManager` register a tape with the account. So the
+   * tape routinely arrives at a playhead that is standing still — and movement is the only thing
+   * that delivers quotes to the engine. Without an explicit re-read on arrival the engine holds no
+   * quote at all, which is exactly what a browser saw: the ticket rendered em dashes for bid and ask
+   * and a submitted order sat on "Sending" forever, because the clock it was waiting on never moved.
+   */
+  it('is consumed as soon as it arrives, without the playhead moving', () => {
+    // A fresh session with no tape at all: the application before its ticks have loaded. (The
+    // file-level setup registers one, so this deliberately reconfigures rather than relying on it.)
+    act(() => {
+      useAccountStore.getState().configure({ instruments: [BTCUSD_RULES], sessionId: 'no-tape-yet' });
+    });
+    render(<Harness />);
+
+    // The playhead settles somewhere it will not move from.
+    playheadTo(5_000);
+    expect(useAccountStore.getState().state.lastQuoteBySymbol?.[SYMBOL]).toBeUndefined();
+
+    // The ticks finish loading. Nothing about the playhead changes.
+    act(() => {
+      useAccountStore.getState().registerTape(SYMBOL, tape());
+    });
+
+    // The engine must consume the quotes it now holds up to the playhead — not invent one, not pick
+    // the oldest: the newest quote at or before 5 s, which is the t=5000 quote at 100.50.
+    expect(useAccountStore.getState().state.lastQuoteBySymbol?.[SYMBOL]?.bid).toBe(100.5);
+  });
+
+  it('lets an instruction accepted before the tape existed execute once it arrives', () => {
+    act(() => {
+      useAccountStore.getState().configure({ instruments: [BTCUSD_RULES], sessionId: 'no-tape-yet' });
+    });
+    render(<Harness />);
+    playheadTo(5_000);
+
+    // Accepted while there was nothing to price against — the state the desk was in on every chart.
+    useAccountStore.getState().openPosition({ symbol: SYMBOL, side: 'BUY', type: 'MARKET', size: SIZE });
+    expect(useAccountStore.getState().state.fills).toHaveLength(0);
+
+    act(() => {
+      useAccountStore.getState().registerTape(SYMBOL, tape());
+    });
+
+    // The tape arrived and was read, so the instruction now has a market to act in — but it has not
+    // arrived at the broker yet: it was submitted at 5 s and travel takes 100 ms. An order that waits
+    // for a clock that is not moving is the simulator working as designed, not a fault, and it is why
+    // a test that submits and then asserts a fill without ever advancing time can only ever time out.
+    expect(useAccountStore.getState().state.fills).toHaveLength(0);
+
+    playheadTo(6_000);
+
+    expect(useAccountStore.getState().state.fills.length).toBeGreaterThan(0);
+    expect(useAccountStore.getState().state.positions[0].state).toBe('OPEN');
+  });
+});

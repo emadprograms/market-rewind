@@ -475,6 +475,45 @@ describe('SIM-REPLAY-07 — stable quote identity', () => {
     expect(session.nowMs).toBe(20_000);
   });
 
+  it('reads each tape against its own cursor, so a second instrument can still price at t=0', () => {
+    // Regression guard. Delivery progress used to be one number for the whole session, so a tape
+    // registered after another instrument had already delivered was measured against the other
+    // instrument's cursor. A quote at exactly the consumed instant was then unreachable (`0 > 0` is
+    // false), and the second instrument silently had no market data at all — the ticket priced
+    // nothing and an accepted order could never fill.
+    const ETH_RULES = {
+      symbol: 'ETHUSD',
+      tickSize: 0.5,
+      minSize: 0.1,
+      sizeIncrement: 0.1,
+      priceDecimals: 2,
+      contractMultiplier: 1,
+      currency: 'USD',
+      provenance: 'TRAINING_ASSUMPTION' as const,
+    };
+    const session = new ReplaySession({
+      sessionId: 'two-tapes',
+      instruments: [BTCUSD_RULES, ETH_RULES],
+      profile: trainingProfile(),
+      startMs: 0,
+    });
+
+    // BTCUSD arrives first and is read at the opening instant.
+    session.replaceTape(SYMBOL, [{ symbol: SYMBOL, bid: 100, ask: 100.5, replayMs: 0, seq: 1 }]);
+    session.refreshFromTape();
+    expect(session.state().lastQuoteBySymbol.BTCUSD.bid).toBe(100);
+
+    // ETHUSD's tape arrives afterwards, while the playhead still stands at t=0.
+    session.replaceTape('ETHUSD', [{ symbol: 'ETHUSD', bid: 3_000, ask: 3_000.5, replayMs: 0, seq: 1 }]);
+    session.refreshFromTape();
+
+    // Its own opening quote is delivered; the first instrument's is untouched.
+    expect(session.state().lastQuoteBySymbol.ETHUSD.bid).toBe(3_000);
+    expect(session.state().lastQuoteBySymbol.BTCUSD.bid).toBe(100);
+    // Nothing was invented to make that happen: the clock did not move.
+    expect(session.nowMs).toBe(0);
+  });
+
   it('does not depend on array index: the same tape in a different array is the same tape', () => {
     const first = makeSession();
     const quotes = makeTape();
