@@ -41,17 +41,23 @@ node -v                       # expect v22.x
 git fetch origin
 git checkout arena/d6be95e4-market-rewind     # REQUIRED: main does not have v6.0
 git rev-parse --abbrev-ref HEAD                # expect: arena/d6be95e4-market-rewind
-git rev-parse HEAD                             # expect: 5f3cfb6678af2d731b950e34c37cd55e31e84cca
+git rev-parse HEAD                             # record this
 git ls-remote origin refs/heads/arena/d6be95e4-market-rewind
 git status --short                             # expect EMPTY
+
+# Every number below was measured at commit 5f3cfb6. Commits after it are expected to touch only
+# this file. Prove that, so you know the numbers still describe the code in front of you:
+git diff --stat 5f3cfb6 HEAD -- . ':(exclude)VERIFY-V6.0.md'
+#    expect: NO OUTPUT. Output means the code changed after the measurements were taken — say so,
+#    and treat any mismatch below as unexplained until it is accounted for.
 ```
 
-**Requirement:** you are on the milestone branch, the `HEAD` hash and the `ls-remote` hash are
-**identical** (the working copy is at the published branch tip), and `git status` is clean.
+**Requirement:** you are on the milestone branch, `HEAD` equals the branch tip reported by
+`git ls-remote`, the post-measurement diff above is empty, and `git status` is clean.
 
-If `HEAD` differs from the value above, that is not automatically a failure — but say so clearly in
-your report, because every number in this document was measured at the hash above. If you are on
-`main`, stop: you are looking at the wrong commit and none of the expected results will appear.
+If you are on `main`, stop: you are looking at the wrong commit and none of the expected results will
+appear. If `HEAD` is a commit that is not `5f3cfb6` but the diff above is empty, you are fine — the
+branch has only had documentation added since.
 
 Provenance checks — record each result:
 
@@ -402,6 +408,7 @@ machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
    branch             = <name>
    HEAD               = <hash>
    origin branch tip  = <hash>          identical? yes/no
+   diff vs 5f3cfb6 excluding this file  = empty / <output>
    git status (before/after) = <?> / <?>
    v6.0 tag           = present/absent
    evidence bundles   = <n>   tracked files = <n>
