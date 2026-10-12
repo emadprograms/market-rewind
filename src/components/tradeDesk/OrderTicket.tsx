@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useAccountStore } from '../../store/useAccountStore';
-import { BTCUSD_RULES, createInstrumentRegistry, trainingProfile } from '../../lib/orderSimulator/profiles';
+import { TRADEABLE_INSTRUMENTS, createInstrumentRegistry, trainingProfile } from '../../lib/orderSimulator/profiles';
 import { ORDER_TYPE_COPY, SIMULATED_ACCOUNT_LABEL, ticketModel } from '../../lib/orderSimulator/uiViewModels';
 import type { Side } from '../../lib/orderSimulator/types';
 
@@ -94,7 +94,7 @@ export function OrderTicket({ symbol, onSubmit }: OrderTicketProps) {
   // values are fixtures for that symbol only and are never defaulted onto others.
   const rules = useMemo(() => {
     try {
-      return createInstrumentRegistry([BTCUSD_RULES])(symbol);
+      return createInstrumentRegistry(TRADEABLE_INSTRUMENTS)(symbol);
     } catch {
       return null;
     }
@@ -308,6 +308,18 @@ export function OrderTicket({ symbol, onSubmit }: OrderTicketProps) {
           with no attached exits.
         </p>
       </details>
+
+      {/* Instrument rules carry their own provenance, and an assumed price grid must say so. The
+          equity tick size and size increment are not in the pilot evidence — only BTCUSD's are — so a
+          ticket that quietly presented 0.01 / 1 as observed would be overclaiming. */}
+      <div aria-label="Instrument rules" data-testid="ticket-instrument-provenance"
+           style={{ fontSize: '11px', color: '#94a3b8' }}>
+        Price grid: tick {rules.tickSize}, size step {rules.sizeIncrement} —{' '}
+        <span style={{ opacity: 0.75 }}>({rules.provenance})</span>
+        {rules.provenance === 'TRAINING_ASSUMPTION' && (
+          <span> — the pilot measured BTCUSD, not this instrument.</span>
+        )}
+      </div>
 
       <div aria-label="Estimated delay" style={{ fontSize: '11px', color: '#94a3b8' }}>
         Estimated delay: <strong data-testid="ticket-delay">{model.estimatedDelay.value} ms</strong> —{' '}

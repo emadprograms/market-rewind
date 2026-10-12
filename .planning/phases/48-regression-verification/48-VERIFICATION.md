@@ -126,11 +126,21 @@ each is applied and reverted within a single command block.
    the evidence cards, which correctly read "Single sample: this is a reference point, not a
    distribution." Five of that test's assertions passed; only the last was my error.
 
-   **Still open, and deliberately not decided here:** whether the simulated account should trade the
-   equity universe at all. Doing so requires per-instrument rules that would have to be labelled
-   `TRAINING_ASSUMPTION` (equity tick sizes are not in the pilot evidence) rather than borrowed from
-   BTCUSD. Until that is decided, the thirteen `07` / `08` trading assertions cannot pass, and the
-   four instrument-agnostic failures in `04`-`09` are separate and still unexplained.
+   **The scope question was then decided, and implemented.** The account now trades the equity
+   universe as well, on **assumed** rules held per symbol and labelled `TRAINING_ASSUMPTION` — a
+   whole-cent tick and a whole-share size, which is the ordinary US equity convention. Nothing was
+   borrowed from BTCUSD, and nothing claims to be observed: the ticket now states the price grid it is
+   using alongside its provenance, and adds "the pilot measured BTCUSD, not this instrument" whenever
+   those rules are assumptions. `BTCUSD_RULES` keeps `OBSERVED_SAMPLE` and its own disclaimer-free
+   line, because the pilot did measure it.
+
+   A single `TRADEABLE_INSTRUMENTS` registry is now the one source of truth for the ticket, the
+   activity panel, the chart controls and the account store. The store's default had been the last
+   gate: widening the UI registries changed nothing while `useAccountStore` still held only BTCUSD.
+
+   The refusal path is deliberately still reachable, and still covered: the charting backend serves
+   more symbols than the account is configured for, so the journey mock serves `PLTR` without
+   configuring it, and the browser spec asserts the refusal on that symbol end to end.
 
    Net effect on this milestone: the browser layer is **not verified**, and one of its new specs is
    known-bad as written. Everything else in this document stands.

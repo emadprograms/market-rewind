@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useAccountStore } from '../../store/useAccountStore';
-import { BTCUSD_RULES, createInstrumentRegistry } from '../../lib/orderSimulator/profiles';
+import { TRADEABLE_INSTRUMENTS, createInstrumentRegistry } from '../../lib/orderSimulator/profiles';
 import { activityRows, raceNotices, type ActivityRow } from '../../lib/orderSimulator/uiViewModels';
+import type { InstrumentRules } from '../../lib/orderSimulator/types';
 
 /**
  * SIM-UI-02 and SIM-UI-03 — order and position activity.
@@ -34,16 +35,19 @@ export function ActivityPanel({ symbol }: { symbol: string }) {
   const [amendOrderId, setAmendOrderId] = useState<string | null>(null);
   const [amendText, setAmendText] = useState('');
 
+  // No BTCUSD fallback here either: activity rows for an unconfigured symbol get null rules, which
+  // is what makes them state their own case rather than borrow another instrument's price grid.
   const rulesFor = useMemo(() => {
-    let registry: ((symbol: string) => typeof BTCUSD_RULES) | null = null;
+    let registry: ((symbol: string) => InstrumentRules) | null = null;
     try {
-      registry = createInstrumentRegistry([BTCUSD_RULES]);
+      registry = createInstrumentRegistry(TRADEABLE_INSTRUMENTS);
     } catch {
       registry = null;
     }
     return (wanted: string) => {
+      if (!registry) return null;
       try {
-        return registry ? registry(wanted) : BTCUSD_RULES;
+        return registry(wanted);
       } catch {
         return null;
       }
@@ -181,7 +185,7 @@ export function ActivityPanel({ symbol }: { symbol: string }) {
                       <input
                         id={`amend-${row.id}`}
                         type="number"
-                        step={BTCUSD_RULES.tickSize}
+                        step={rulesFor(row.symbol)?.tickSize ?? 1}
                         value={amendText}
                         onChange={(e) => setAmendText(e.target.value)}
                         style={{ width: '70px', background: '#0f172a', border: '1px solid #334155', color: '#fff', borderRadius: '4px', padding: '2px 4px', fontSize: '11px' }}

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, within, fireEvent, act } from '@testing-library/react';
 import { TradeDesk } from '../../src/components/tradeDesk/TradeDesk';
 import { useAccountStore } from '../../src/store/useAccountStore';
-import { BTCUSD_RULES, trainingProfile } from '../../src/lib/orderSimulator/profiles';
+import { BTCUSD_RULES, TRADEABLE_INSTRUMENTS, trainingProfile } from '../../src/lib/orderSimulator/profiles';
 import type { Quote } from '../../src/lib/orderSimulator/types';
 
 /**
@@ -512,32 +512,33 @@ describe('SIM-UI-06 — labelling and accessibility', () => {
 });
 
 describe('SIM-QUOTE-02 — an instrument with no rules is refused, not approximated', () => {
+  // The account trades BTCUSD plus the equity universe, each with its own rules. A symbol outside
+  // that set is the case this suite is about: the charting backend can serve more symbols than the
+  // simulated account is configured for, and that is exactly when a refusal must be spoken aloud.
+  const UNCONFIGURED = 'PLTR';
+
   it('tells the user plainly instead of rendering a ticket it cannot honour', () => {
-    // The state a browser run found on every equity chart: the account has rules for BTCUSD alone, so
-    // a SPY ticket used to render em dashes for bid and ask and accept a Submit that always failed.
-    render(<TradeDesk symbol="SPY" onClose={() => {}} />);
+    render(<TradeDesk symbol={UNCONFIGURED} onClose={() => {}} />);
 
     const notice = screen.getByTestId('unsupported-instrument');
-    expect(notice).toHaveTextContent(/does not trade SPY/i);
-    expect(notice).toHaveTextContent(/BTCUSD/);
+    expect(notice).toHaveTextContent(/does not trade PLTR/i);
+    expect(notice).toHaveTextContent(/never borrowed from another symbol/i);
   });
 
   it('offers no way to submit an order it would have to refuse', () => {
-    render(<TradeDesk symbol="SPY" onClose={() => {}} />);
+    render(<TradeDesk symbol={UNCONFIGURED} onClose={() => {}} />);
 
     expect(screen.queryByRole('button', { name: /Submit BUY/ })).toBeNull();
     expect(screen.queryByTestId('ticket-bid')).toBeNull();
     expect(screen.queryByTestId('ticket-ask')).toBeNull();
   });
 
-  it('never borrows BTCUSD price decimals or size steps for another instrument', () => {
-    // The old ticket fell back to BTCUSD_RULES for display, showing 0.05 tick steps and 0.0001 size
-    // increments on an instrument that has neither. The refusal replaces that entirely.
-    render(<TradeDesk symbol="AAPL" onClose={() => {}} />);
+  it('never borrows BTCUSD price decimals or size steps for an unconfigured symbol', () => {
+    render(<TradeDesk symbol={UNCONFIGURED} onClose={() => {}} />);
 
-    expect(screen.getByTestId('unsupported-instrument')).toHaveTextContent(/does not trade AAPL/i);
+    expect(screen.getByTestId('unsupported-instrument')).toHaveTextContent(/does not trade PLTR/i);
     expect(screen.queryByText(/0\.0001 increments/)).toBeNull();
-    expect(screen.queryByText(new RegExp(`0\\.0?5 steps`))).toBeNull();
+    expect(screen.queryByText(/0\.05 steps/)).toBeNull();
   });
 
   it('still renders a full ticket for the instrument it does trade', () => {
@@ -546,5 +547,55 @@ describe('SIM-QUOTE-02 — an instrument with no rules is refused, not approxima
     expect(screen.queryByTestId('unsupported-instrument')).toBeNull();
     expect(screen.getByTestId('ticket-bid')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Submit BUY MARKET/ })).toBeInTheDocument();
+  });
+});
+
+describe('SIM-QUOTE-02 — equity charts trade on their own rules, never BTCUSD\'s', () => {
+  // The account must be configured with the same registry the app uses, or this suite would be
+  // testing a configuration the application never has.
+  beforeEach(() => {
+    useAccountStore.getState().configure({ instruments: TRADEABLE_INSTRUMENTS });
+  });
+
+  it('renders a live ticket for an equity symbol', () => {
+    render(<TradeDesk symbol="SPY" onClose={() => {}} />);
+
+    expect(screen.queryByTestId('unsupported-instrument')).toBeNull();
+    expect(screen.getByRole('button', { name: /Submit BUY MARKET/ })).toBeInTheDocument();
+  });
+
+  it('shows the equity price grid, not the Bitcoin one', () => {
+    render(<TradeDesk symbol="SPY" onClose={() => {}} />);
+
+    // Whole-share size increment. If this still read 0.0001, BTCUSD's rules were lent out instead.
+    expect(screen.getByText(/1 increments, min 1/)).toBeInTheDocument();
+    expect(screen.queryByText(/0\.0001 increments/)).toBeNull();
+
+    // The tick size is stated on the level field, which only exists for a level-based order.
+    fireEvent.click(screen.getByRole('radio', { name: 'Limit' }));
+    expect(screen.getByText(/0\.01 steps/)).toBeInTheDocument();
+    expect(screen.queryByText(/0\.05 steps/)).toBeNull();
+  });
+});
+
+describe('SIM-QUOTE-02 — an assumed price grid says that it is assumed', () => {
+  beforeEach(() => {
+    useAccountStore.getState().configure({ instruments: TRADEABLE_INSTRUMENTS });
+  });
+
+  it('labels the equity grid as a training assumption, and says what the pilot did measure', () => {
+    render(<TradeDesk symbol="SPY" onClose={() => {}} />);
+
+    const provenance = screen.getByTestId('ticket-instrument-provenance');
+    expect(provenance).toHaveTextContent('TRAINING_ASSUMPTION');
+    expect(provenance).toHaveTextContent(/the pilot measured BTCUSD, not this instrument/i);
+  });
+
+  it('does not attach that disclaimer to the instrument the pilot did measure', () => {
+    render(<TradeDesk symbol={SYMBOL} onClose={() => {}} />);
+
+    const provenance = screen.getByTestId('ticket-instrument-provenance');
+    expect(provenance).toHaveTextContent('OBSERVED_SAMPLE');
+    expect(provenance).not.toHaveTextContent(/the pilot measured BTCUSD, not this instrument/i);
   });
 });

@@ -179,6 +179,12 @@ The playhead is the account's clock. Nothing happens until time moves.
   artifact of the instrument's tick size, not an observation.
 - **One symbol = one set of instrument rules.** An instrument with no configured rules is refused
   rather than approximated with another symbol's tick size or step.
+- **`TRADEABLE_INSTRUMENTS` is the single source of truth** for what the account can trade: the ticket,
+  the activity panel, the chart controls and the account store all read it, so they cannot disagree.
+  BTCUSD's rules are `OBSERVED_SAMPLE` (the pilot measured it). The equity set — SPY, QQQ, AAPL, MSFT,
+  AMD, NVDA, TSLA, GOOGL, AMZN, MU — carries `TRAINING_ASSUMPTION` rules (whole-cent tick,
+  whole-share size) and the desk says so on the ticket, because the pilot measured none of them.
+  A symbol outside the set is refused in plain language, both on the ticket and on the chart controls.
 - **Currency**: all values are single-currency. Instruments quoting in another currency are not
   converted; there is no FX model here.
 

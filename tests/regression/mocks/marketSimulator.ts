@@ -69,9 +69,13 @@ export interface DayMarket {
 
 /** Realistic base prices so range assertions (e.g. SPY 700–850) hold. */
 export const BASE_PRICES: Record<string, number> = {
-  // BTCUSD is here because it is the one instrument the simulated account has rules for, so the trade
-  // desk journeys need a chart it can actually trade. The level matches the Capital.com demo pilot.
+  // BTCUSD is here because it is the instrument the Capital.com pilot observed, and the trade desk
+  // needs a chart whose rules came from evidence rather than assumption. The level matches the pilot.
   BTCUSD: 82950,
+  // PLTR is deliberately served here but NOT configured in the account's instrument registry. The
+  // charting backend knows about more symbols than the simulated account can trade, and that gap is
+  // the real condition the refusal exists for — so it needs a symbol the journey suite can reach.
+  PLTR: 178,
   SPY: 768,
   QQQ: 515,
   AAPL: 255,

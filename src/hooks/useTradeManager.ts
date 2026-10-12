@@ -5,7 +5,7 @@ import type { TradePlugin } from '../lib/TradePlugin';
 import { usePlaybackStore } from '../store/usePlaybackStore';
 import { useAccountStore } from '../store/useAccountStore';
 import { quotesFromTicks } from '../lib/orderSimulator/playbackBridge';
-import { BTCUSD_RULES, createInstrumentRegistry } from '../lib/orderSimulator/profiles';
+import { BTCUSD_RULES, TRADEABLE_INSTRUMENTS, createInstrumentRegistry } from '../lib/orderSimulator/profiles';
 import type { InstrumentRules } from '../lib/orderSimulator/types';
 
 /**
@@ -85,7 +85,7 @@ export function useTradeManager({
 
   const rulesFor = useMemo(() => {
     try {
-      return createInstrumentRegistry([BTCUSD_RULES]);
+      return createInstrumentRegistry(TRADEABLE_INSTRUMENTS);
     } catch {
       return null;
     }

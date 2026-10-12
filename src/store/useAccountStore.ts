@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { ReplaySession } from '../lib/orderSimulator/replay';
-import { BTCUSD_RULES, createInstrumentRegistry, trainingProfile } from '../lib/orderSimulator/profiles';
+import { TRADEABLE_INSTRUMENTS, createInstrumentRegistry, trainingProfile } from '../lib/orderSimulator/profiles';
 import { projectAccountTotals, type AccountTotals } from '../lib/orderSimulator/accountProjection';
 import type {
   AccountState,
@@ -78,7 +78,10 @@ function rulesFor(list: InstrumentRules[], symbol: string): InstrumentRules | nu
 }
 
 export const useAccountStore = create<AccountStoreState>((set, get) => {
-  let instruments: InstrumentRules[] = [BTCUSD_RULES];
+  // The account trades everything in the registry, not BTCUSD alone. This default was the last gate
+  // that refused an equity chart: the UI registries could be widened all they liked, but an order for
+  // SPY was still rejected here because the account's own instrument list held one symbol.
+  let instruments: InstrumentRules[] = TRADEABLE_INSTRUMENTS;
   let profile: LatencyProfile = trainingProfile();
   let session = new ReplaySession({ sessionId: 'account-1', instruments, profile, startMs: 0 });
 

@@ -26,10 +26,12 @@ const TARGET = '2026-09-25';
 const DESK = '[data-testid="trade-desk"]';
 const ROWS = '[data-testid="activity-rows"]';
 
-/** The one instrument the simulated account has rules for. */
+/** The instrument whose rules came from the Capital.com pilot rather than from an assumption. */
 const TRADEABLE = 'BTCUSD';
-/** A chart symbol the simulated account does NOT trade — the app's ordinary equity universe. */
-const UNTRADEABLE = 'SPY';
+/** An equity the mock serves and the account also trades, on its own assumed rules. */
+const EQUITY = 'SPY';
+/** A symbol the mock serves but the account has no rules for: the refusal case, reachable in a browser. */
+const UNTRADEABLE = 'PLTR';
 
 async function openDesk(
   page: import('@playwright/test').Page,
@@ -68,7 +70,7 @@ test.describe('JOURNEY 15 — the simulated trading terminal', () => {
 
     const notice = page.getByTestId('unsupported-instrument');
     await expect(notice).toBeVisible();
-    await expect(notice).toContainText('does not trade SPY');
+    await expect(notice).toContainText('does not trade PLTR');
     // It names the reason and the instrument that IS configured, rather than leaving the user to guess.
     await expect(notice).toContainText('never borrowed from another symbol');
     await expect(notice).toContainText('BTCUSD');
@@ -76,6 +78,21 @@ test.describe('JOURNEY 15 — the simulated trading terminal', () => {
     // And there is no way to submit an instruction it would have to refuse.
     await expect(page.getByRole('button', { name: /Submit BUY/ })).toHaveCount(0);
     await expect(page.getByTestId('ticket-bid')).toHaveCount(0);
+  });
+
+  test('an equity chart trades on its own price grid, never Bitcoin's', async ({ page }) => {
+    // The other half of the pair above. This spec used to run everything on SPY and fail, because the
+    // account had rules for BTCUSD alone; equities are now configured with their own rules, so a SPY
+    // chart must work — and must show a whole-cent tick and whole-share size rather than BTCUSD's
+    // 0.05 and 0.0001 borrowed for display.
+    await openDesk(page, EQUITY);
+
+    await expect(page.getByTestId('unsupported-instrument')).toHaveCount(0);
+    await expect(page.getByTestId('ticket-bid')).not.toHaveText('—');
+    await expect(page.getByLabel(/Quantity/)).toHaveValue(1);
+
+    await page.getByRole('radio', { name: 'Limit' }).click();
+    await expect(page.getByText(/0\.01 steps/)).toBeVisible();
   });
 
   test('submitting shows a sending instruction, and a position only after the fill confirms', async ({ page }) => {

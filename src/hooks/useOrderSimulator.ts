@@ -7,7 +7,7 @@ import {
   syncSessionToPlayback,
   type PlaybackSnapshot,
 } from '../lib/orderSimulator/playbackBridge';
-import { BTCUSD_RULES, createInstrumentRegistry, trainingProfile } from '../lib/orderSimulator/profiles';
+import { TRADEABLE_INSTRUMENTS, createInstrumentRegistry, trainingProfile } from '../lib/orderSimulator/profiles';
 import type { AccountState, InstrumentRules, LatencyProfile, MovementReason } from '../lib/orderSimulator/types';
 
 /**
@@ -43,7 +43,7 @@ export interface UseOrderSimulatorResult {
 export function useOrderSimulator(options: UseOrderSimulatorOptions = {}): UseOrderSimulatorResult {
   const { symbols, instruments, profile, sessionId, onAdvance } = options;
 
-  const instrumentList = useMemo(() => instruments ?? [BTCUSD_RULES], [instruments]);
+  const instrumentList = useMemo(() => instruments ?? TRADEABLE_INSTRUMENTS, [instruments]);
 
   const session = useMemo(
     () =>
@@ -72,7 +72,7 @@ export function useOrderSimulator(options: UseOrderSimulatorOptions = {}): UseOr
   // tape or the symbol list changes, and is idempotent because tapes are keyed by quote identity.
   const bufferedTicks = usePlaybackStore((s) => s.bufferedTicks);
   const ticksBySymbol = usePlaybackStore((s) => s.ticksBySymbol);
-  const watched = useMemo(() => symbols ?? [BTCUSD_RULES.symbol], [symbols]);
+  const watched = useMemo(() => symbols ?? TRADEABLE_INSTRUMENTS.map((r) => r.symbol), [symbols]);
 
   useEffect(() => {
     for (const symbol of watched) {

@@ -119,6 +119,51 @@ export const BTCUSD_RULES: InstrumentRules = {
   provenance: 'OBSERVED_SAMPLE',
 };
 
+/**
+ * US equity instrument rules.
+ *
+ * These are TRAINING ASSUMPTIONS, not observations. The Capital.com pilot captured a single
+ * instrument — BTCUSD — so nothing below comes from that evidence, and nothing below is copied from
+ * `BTCUSD_RULES` either: an equity has neither a 0.05 tick nor a 0.0001 size increment, and lending
+ * it BTCUSD's numbers is exactly what SIM-QUOTE-02 forbids.
+ *
+ * What they encode is the ordinary US equity convention: prices move in whole cents and size moves in
+ * whole shares. The reason each symbol gets its own object rather than one shared constant is that
+ * the registry's contract is per symbol — a symbol with no rules is refused rather than approximated,
+ * and that guarantee is only meaningful if the rules are genuinely held per symbol.
+ */
+const equityRules = (symbol: string): InstrumentRules => ({
+  symbol,
+  tickSize: 0.01,
+  minSize: 1,
+  sizeIncrement: 1,
+  priceDecimals: 2,
+  contractMultiplier: 1,
+  currency: 'USD',
+  provenance: 'TRAINING_ASSUMPTION',
+});
+
+/** The equity universe the charting side displays, tradeable under the assumed rules above. */
+export const EQUITY_RULES: InstrumentRules[] = [
+  'SPY',
+  'QQQ',
+  'AAPL',
+  'MSFT',
+  'AMD',
+  'NVDA',
+  'TSLA',
+  'GOOGL',
+  'AMZN',
+  'MU',
+].map(equityRules);
+
+/**
+ * Everything the simulated account can trade: the one instrument the pilot actually observed, plus
+ * the assumed equity set. A single source of truth, so the ticket, the activity panel, the chart
+ * controls and the account store cannot disagree about what is tradeable.
+ */
+export const TRADEABLE_INSTRUMENTS: InstrumentRules[] = [BTCUSD_RULES, ...EQUITY_RULES];
+
 export class UnsupportedSymbolError extends Error {
   constructor(symbol: string) {
     super(
