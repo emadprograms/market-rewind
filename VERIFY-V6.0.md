@@ -146,13 +146,15 @@ Breakdown, to be reported as-is:
 | Directory | Tests |
 |---|---|
 | `tests/unit` | 698 |
-| `tests/regression` | 83 |
-| `tests/integration` | 81 |
+| `tests/regression` | 84 |
+| `tests/integration` | 85 |
 | `tests/codex` | 48 |
 | `tests/performance` | 32 |
 | `tests/hooks` | 26 |
 | `tests/verification` | 9 |
 | `tests/helpers` | 5 |
+
+(The per-directory counts move as the suite grows; the total above is the figure that matters.)
 
 ---
 
