@@ -47,19 +47,24 @@ Provenance checks — record each result:
 git tag -l v6.0                                             # expect: v6.0
 
 # 2. The evidence directory is TRACKED (it once was not) and holds exactly 11 bundles
-git ls-files docs/research/capital-demo-order-data | wc -l   # expect: 42 files
-ls docs/research/capital-demo-order-data | wc -l             # expect: 11
+git ls-files docs/research/capital-demo-order-data | wc -l   # expect: 38 files
+git ls-files docs/research | wc -l                           # expect: 42 (38 data + 4 documents)
+ls docs/research/capital-demo-order-data | wc -l             # expect: 11 directories
 ls docs/research/capital-demo-order-data | sort             # expect 6 × 2026-10-11T11-*, 4 × 2026-10-11T23-42-*, 1 × 2026-10-12T01-00-22
+#    The 38 files: the primary run holds 8 (it captured quotes and orders), the other ten hold 3 each.
 
 # 3. The six original PILOT bundles are byte-identical to the commit that introduced them
 git diff --stat b5aaa21 HEAD -- 'docs/research/capital-demo-order-data/2026-10-11T11-0*'
 #    expect: NO OUTPUT. Any output means recorded evidence was rewritten — stop and report it.
 
 # 4. The five clock-probe directories contain no evidence (they are test byproducts)
-for d in 2026-10-11T23-42-* 2026-10-12T01-00-22-910Z; do
-  echo "$d: $(wc -l < docs/research/capital-demo-order-data/$d/events.jsonl) event(s), \
-$(wc -c < docs/research/capital-demo-order-data/$d/quotes.jsonl) bytes quotes, \
-$(wc -c < docs/research/capital-demo-order-data/$d/mutation-ledger.jsonl) bytes ledger"
+for d in docs/research/capital-demo-order-data/2026-10-11T23-42-* \
+         docs/research/capital-demo-order-data/2026-10-12T01-00-22-910Z; do
+  printf '%s: %s event(s), %s bytes quotes, %s bytes ledger\n' \
+    "$(basename "$d")" \
+    "$(wc -l < "$d/events.jsonl")" \
+    "$(wc -c < "$d/quotes.jsonl")" \
+    "$(wc -c < "$d/mutation-ledger.jsonl")"
 done
 #    expect every one: 1 event, 0 bytes quotes, 0 bytes ledger.
 #    1 event with `"status": null` and `"error_message": "fetch failed"` = no HTTP response was
@@ -276,7 +281,7 @@ performance finding; anything in the same order of magnitude is fine.
 
 ```bash
 node tools/research/analyze-capital-demo-observations.mjs --check 2>&1 | tail -3   # expect: 19/19 passed
-node tools/research/test-observer-repairs.mjs 2>&1 | tail -3                        # expect: 39 passed, 0 failed
+node tools/research/test-observer-repairs.mjs 2>&1 | tail -3                        # expect: 42 passed, 0 failed
 node tools/research/test-demo-guard.mjs 2>&1 | tail -3                              # expect: 16/16 passed
 ```
 
@@ -289,20 +294,33 @@ echo "bundles before=$before after=$(ls docs/research/capital-demo-order-data | 
 git status --short   # must be empty — no new bundle directories, no modified artifacts
 ```
 
-This is a check on a defect that really happened: the collector's test suite used to issue clock probes,
-and five bundle directories in the evidence path were created by them (four in the original build, one
-more later). Inside those, the observer now enforces `CAPITAL_DEMO_OFFLINE=1` at the transport boundary
-and spawns only from a throwaway working directory. Record (a) the three tallies, (b) that the bundle
-count did not change, and (c) `grep -c OFFLINE_MODE` style evidence if a sub-test reports it.
+Why this section exists: the collector's tests used to make network calls while claiming to be
+offline. Five bundle directories in the tracked evidence path were created by clock probes — four in
+the original build, one more later. Those five are still there and are documented (see §1); what must
+not happen is a sixth. The observer now enforces `CAPITAL_DEMO_OFFLINE=1` at the transport boundary and
+the suite spawns only from a throwaway working directory.
 
-Also confirm the kill switch really exists and really fires:
+A subtler version of the same defect was found while writing this brief, and is now covered by checks
+`1c`/`1d`: the observer created its bundle directory **in its constructor**, before it knew whether the
+run was allowed to collect anything. A run that was refused outright therefore still left an empty
+directory in the evidence path — and so did merely constructing an observer.
+
+That class of bug is invisible from a sandbox working directory, because the directory simply lands
+somewhere else. So run the probe below **from the repository root**, where it belongs:
 
 ```bash
-grep -n 'CAPITAL_DEMO_OFFLINE' tools/research/capital-demo-order-observer.mjs | head
-CAPITAL_DEMO_OFFLINE=1 node tools/research/capital-demo-order-observer.mjs --calibrate 2>&1 | grep -i 'OFFLINE_MODE' | head -3
-# expect a refusal naming CAPITAL_DEMO_OFFLINE=1. No connection may be attempted, and no bundle may appear.
-ls docs/research/capital-demo-order-data | wc -l   # still 11
+grep -n 'CAPITAL_DEMO_OFFLINE' tools/research/capital-demo-order-observer.mjs | head -4
+
+before=$(ls docs/research/capital-demo-order-data | wc -l)
+CAPITAL_DEMO_OFFLINE=1 node tools/research/capital-demo-order-observer.mjs --calibrate >/tmp/offline.log 2>&1
+echo "exit=$?  (expect non-zero)"
+grep -i 'OFFLINE_MODE' /tmp/offline.log | head -3
+echo "bundles before=$before after=$(ls docs/research/capital-demo-order-data | wc -l)  (both must be 11)"
+git status --short   # must be empty: a refused run leaves no directory, no file, no trace
 ```
+
+Record (a) the three tallies, (b) both bundle counts, (c) the refusal line, and (d) that `git status`
+stayed empty.
 
 ---
 
@@ -402,6 +420,8 @@ machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
    analyzer = <?>/19     repair suite = <?> passed / <?> failed     demo guard = <?>/16
    bundles before/after the repair suite = <?> / <?>
    CAPITAL_DEMO_OFFLINE=1 probe refusal = <observed? yes/no + the line>
+   bundles before/after the offline probe = <?> / <?>   (both 11)
+   git status after the offline probe = <must be empty>
 
 7. TYPECHECK / BUILD
    tsc --noEmit = clean / <errors>

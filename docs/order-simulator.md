@@ -242,7 +242,7 @@ Two controls exist so that testing the collector never becomes trading with it:
 - **The demo guard** (`tools/research/demo-guard.mjs`) rejects non-demo URLs and records every
   intended mutation to a ledger before it is attempted.
 
-Run the collector's tests with `node tools/research/test-observer-repairs.mjs` (39 checks) and
+Run the collector's tests with `node tools/research/test-observer-repairs.mjs` (42 checks) and
 `node tools/research/test-demo-guard.mjs` (16 checks); neither needs credentials and neither should
 be given any.
 

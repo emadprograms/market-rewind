@@ -170,8 +170,9 @@ console.log('\n1c. Running the repair suite cannot pollute the evidence director
   // A guard against the defect this section was written for: the suite itself created five bundle
   // directories in the tracked evidence path before the offline switch and the sandbox cwd existed.
   const before = listEvidenceDirs();
+  const sandbox = sandboxDir();
   const res = spawnSync(process.execPath, [OBSERVER, '--calibrate'], {
-    cwd: sandboxDir(),
+    cwd: sandbox,
     env: { PATH: process.env.PATH, HOME: process.env.HOME, CAPITAL_DEMO_OFFLINE: '1' },
     encoding: 'utf8',
     timeout: 30000,
@@ -181,6 +182,59 @@ console.log('\n1c. Running the repair suite cannot pollute the evidence director
     'the evidence directory gained no bundle from a probe run',
     after.length === before.length && after.every((d, i) => d === before[i]),
     `before=${before.length} after=${after.length} out=${`${res.stdout || ''}${res.stderr || ''}`.slice(0, 160)}`,
+  );
+
+  // The check above runs from a sandbox cwd, so on its own it would MISS a bundle written relative
+  // to the working directory — which is exactly how the defect was found the second time, by running
+  // the observer from the repository root. Assert the stronger property: an offline run writes
+  // nothing anywhere, in any directory.
+  const leftovers = fs.existsSync(sandbox)
+    ? fs.readdirSync(sandbox, { recursive: true }).map(String).filter((e) => e !== 'node_modules')
+    : [];
+  check(
+    'an offline run leaves no directory or file behind in its working directory',
+    leftovers.length === 0,
+    `leftovers=${JSON.stringify(leftovers).slice(0, 160)}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+console.log('\n1d. Constructing an observer does not create a bundle');
+// ---------------------------------------------------------------------------
+{
+  // Regression: the constructor used to mkdir the run directory before it knew whether the run was
+  // allowed to talk to anything, so a refused run still left an empty bundle in the evidence path.
+  // Any caller that merely builds the object (a guard, a dry run, a test) would do the same.
+  const sandbox = sandboxDir();
+  const probe = `
+    import fs from 'node:fs';
+    import { CapitalDemoOrderObserver } from ${JSON.stringify(OBSERVER)};
+    const o = new CapitalDemoOrderObserver({ runId: 'constructor-probe' });
+    const dir = 'docs/research/capital-demo-order-data/constructor-probe';
+    console.log(JSON.stringify({ created: fs.existsSync(dir), artifactsEnabled: o.artifactsEnabled }));
+  `;
+  const res = spawnSync(process.execPath, ['--input-type=module', '-e', probe], {
+    cwd: sandbox,
+    env: { PATH: process.env.PATH, HOME: process.env.HOME, CAPITAL_DEMO_OFFLINE: '1' },
+    encoding: 'utf8',
+    timeout: 30000,
+  });
+  let parsed = null;
+  try {
+    parsed = JSON.parse((res.stdout || '').trim().split('\n').pop());
+  } catch {
+    parsed = null;
+  }
+  check(
+    'an offline observer writes no artifact directory when constructed',
+    parsed !== null && parsed.created === false && parsed.artifactsEnabled === false,
+    `parsed=${JSON.stringify(parsed)} out=${`${res.stdout || ''}${res.stderr || ''}`.slice(0, 160)}`,
+  );
+  const leftovers = fs.readdirSync(sandbox, { recursive: true }).map(String);
+  check(
+    'the constructor probe left no directory behind either',
+    leftovers.length === 0,
+    `leftovers=${JSON.stringify(leftovers).slice(0, 160)}`,
   );
 }
 

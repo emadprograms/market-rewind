@@ -71,7 +71,7 @@ with real numbers. It has been executed once here, by its author:
 | Independent probes (`tests/verification/independentProbes.test.ts`) | **9/9**, every value matched its hand-derivation; `TZ`-independent digest `536e096d` for both the one-frame and 39-frame runs |
 | Mutation testing | All six deliberate defects caught: M1 trigger side → 8 tests, M2 equality dropped → 10, M3 notification delay zeroed → 3, M4 out-of-order quote accepted → 1, M5 future-quote validation (the phase-48 bug) → 1, M6 no-quote fill → 3. Each reverted cleanly, tree empty afterwards. |
 | Performance | 20,000 quotes in a single batch **16.7 ms** (~1.2 M quotes/s); rewind + re-advance **5.5 ms**; 20,000-quote run with three live instructions **21.3 ms**, 2 fills |
-| Offline tooling | analyzer 19/19, repair suite **39/39**, demo guard 16/16; bundle count unchanged by the repair suite; `CAPITAL_DEMO_OFFLINE=1` refuses the probe |
+| Offline tooling | analyzer 19/19, repair suite **42/42**, demo guard 16/16; bundle count unchanged by the repair suite; `CAPITAL_DEMO_OFFLINE=1` refuses the probe |
 
 The mutation patches are not kept in the repository: they exist only inside the verification brief, and
 each is applied and reverted within a single command block.

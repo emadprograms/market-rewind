@@ -429,7 +429,6 @@ export class CapitalDemoOrderObserver {
   constructor(options = {}) {
     this.runId = options.runId || new Date().toISOString().replace(/[:.]/g, '-');
     this.outDir = path.resolve(`docs/research/capital-demo-order-data/${this.runId}`);
-    fs.mkdirSync(this.outDir, { recursive: true });
 
     this.eventsPath = path.join(this.outDir, 'events.jsonl');
     this.quotesPath = path.join(this.outDir, 'quotes.jsonl');
@@ -440,9 +439,23 @@ export class CapitalDemoOrderObserver {
     this.finalStatePath = path.join(this.outDir, 'final-state.json');
     this.readmePath = path.join(this.outDir, 'README.md');
 
-    this.ledger = new MutationLedger(this.ledgerPath);
-    this.eventsFd = fs.openSync(this.eventsPath, 'a');
-    this.quotesFd = fs.openSync(this.quotesPath, 'a');
+    // SAFETY: the run directory and its append targets are created only when this observer is
+    // actually allowed to collect evidence. Creating them in the constructor meant that merely
+    // constructing an observer — including one refused by the offline switch, or one that never got
+    // past its first request — left an empty bundle directory sitting in the tracked evidence path.
+    // A run that collects nothing must leave nothing behind.
+    this.artifactsEnabled = options.collectArtifacts !== false && !isOffline();
+    if (this.artifactsEnabled) {
+      fs.mkdirSync(this.outDir, { recursive: true });
+      this.ledger = new MutationLedger(this.ledgerPath);
+      this.eventsFd = fs.openSync(this.eventsPath, 'a');
+      this.quotesFd = fs.openSync(this.quotesPath, 'a');
+    } else {
+      // A no-op ledger keeps every caller unchanged while writing nothing.
+      this.ledger = { record: () => {} };
+      this.eventsFd = null;
+      this.quotesFd = null;
+    }
 
     this.client = new DemoHttpClient({
       eventLogger: (event) => this.logEvent(event)
@@ -465,6 +478,7 @@ export class CapitalDemoOrderObserver {
   }
 
   logEvent(record) {
+    if (this.eventsFd === null) return; // no artifacts: nothing to write to
     const entry = {
       event_id: crypto.randomUUID(),
       timestamp_utc: new Date().toISOString(),
@@ -475,6 +489,7 @@ export class CapitalDemoOrderObserver {
   }
 
   logQuote(record) {
+    if (this.quotesFd === null) return; // no artifacts: nothing to write to
     fs.writeSync(this.quotesFd, JSON.stringify(record) + '\n');
   }
 
