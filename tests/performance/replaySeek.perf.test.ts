@@ -38,6 +38,13 @@ describe('dense replay', () => {
     const report = session.advanceTo(END_MS, 'PLAY');
     const elapsed = performance.now() - started;
 
+    // Reported, not asserted: the verifier needs the actual throughput to judge headroom, and the
+    // ceiling below is deliberately loose so a slow machine does not fail the guard spuriously.
+    console.log(
+      `PERF dense-batch quotes=${report.quotesFed} batchMs=${elapsed.toFixed(1)} ` +
+        `quotesPerSecond=${Math.round((report.quotesFed / elapsed) * 1000)}`,
+    );
+
     expect(report.frozen).toBe(false);
     expect(report.quotesFed).toBe(QUOTE_COUNT);
     expect(report.quotesSkipped).toBe(0);
@@ -84,6 +91,11 @@ describe('dense seek', () => {
     const forward = session.advanceTo(END_MS, 'PLAY');
     const forwardMs = performance.now() - started - rewindMs;
 
+    console.log(
+      `PERF dense-seek quotes=${QUOTE_COUNT} rewindToMs=${END_MS / 4} rewindMs=${rewindMs.toFixed(1)} ` +
+        `forwardMs=${forwardMs.toFixed(1)} totalMs=${(rewindMs + forwardMs).toFixed(1)}`,
+    );
+
     expect(rewindMs).toBeLessThan(4_000);
     expect(forwardMs).toBeLessThan(4_000);
     expect(forward.frozen).toBe(false);
@@ -106,8 +118,14 @@ describe('dense seek', () => {
     // The last quote in the tape is one step before END_MS: an exposed symbol is clamped to the
     // data that exists, so the run ends there rather than being declared exhausted.
     const lastQuoteMs = END_MS - STEP_MS;
+    const startedAt = performance.now();
     const report = session.advanceTo(lastQuoteMs, 'PLAY');
     const state = session.state();
+    const elapsed = performance.now() - startedAt;
+
+    console.log(
+      `PERF instruction-batch quotes=${report.quotesFed} fills=${state.fills.length} ms=${elapsed.toFixed(1)}`,
+    );
 
     expect(report.frozen).toBe(false);
     // No duplicate economics: one fill per fill id, and one id per fill.

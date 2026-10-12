@@ -268,3 +268,8 @@ Tests that matter most for this feature:
 | `tests/unit/orderSimulator/protectiveGroup.test.ts` | One close, ever |
 | `tests/integration/sharedAccountCharts.test.tsx` | Two charts, one account, no double counting |
 | `tests/integration/tradeDeskUi.test.tsx` | What the terminal tells the user, and what it refuses to claim |
+| `tests/verification/independentProbes.test.ts` | Eight probes whose expected values are derived by hand from the documented rules, plus a timezone-independent determinism digest — written to be re-run by an external verifier |
+
+An external verifier brief lives at [`VERIFY-V6.0.md`](../VERIFY-V6.0.md): it re-runs the suite, the
+probes, the offline tooling and the build, and deliberately breaks six engine behaviours to check that
+the tests actually catch them.
