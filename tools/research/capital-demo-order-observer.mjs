@@ -18,6 +18,26 @@ import {
   MutationLedger
 } from './demo-guard.mjs';
 
+/**
+ * OFFLINE KILL SWITCH — `CAPITAL_DEMO_OFFLINE=1`.
+ *
+ * When set, this process is forbidden from opening any connection to the demo API: REST requests
+ * throw before they are issued and the streaming socket refuses to connect. It exists because the
+ * collector's own test suite has to exercise the transport's failure paths, and that must be possible
+ * without any chance of reaching Capital.com. It is a defence in depth, not a replacement for the
+ * demo-only URL validation in `demo-guard.mjs`: the mutation guard decides *what* may be sent, this
+ * decides *whether anything may be sent at all*.
+ *
+ * Read at call time (not import time) so a parent process can set it for a child.
+ */
+export function isOffline() {
+  return String(process.env.CAPITAL_DEMO_OFFLINE || '').trim() === '1';
+}
+
+const OFFLINE_ERROR =
+  'OFFLINE_MODE: CAPITAL_DEMO_OFFLINE=1 forbids network access. No request was issued and no ' +
+  'connection was opened. Unset it only when a human intends to talk to the demo API.';
+
 // Environment & Credential loader
 export function loadDemoCredentials() {
   const envSources = [
@@ -148,6 +168,12 @@ class DemoHttpClient {
     let json = null;
     let error = null;
 
+    // SAFETY: the last point before a socket is opened. Everything above this line — argument
+    // handling, the request budget, the rate-limit wait and demo-URL validation — runs exactly as it
+    // does online, so an offline test still exercises those paths and still fails if one of them
+    // breaks. Below this line, nothing may touch the network.
+    if (isOffline()) throw new Error(OFFLINE_ERROR);
+
     try {
       response = await fetch(validatedUrl, {
         method,
@@ -254,6 +280,7 @@ class DemoStreamingObserver {
 
     return new Promise((resolve, reject) => {
       try {
+        if (isOffline()) throw new Error(OFFLINE_ERROR);
         this.ws = new WebSocket(this.wsUrl);
       } catch (err) {
         return reject(err);

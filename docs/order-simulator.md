@@ -226,7 +226,25 @@ To turn the current assumptions into measurements, Stage 2 needs to capture:
    sequence of requests having been sent.
 
 Raw artifacts under `docs/research/` are immutable: corrections live in derived documents and derived
-fixtures, never by rewriting what was recorded.
+fixtures, never by rewriting what was recorded. (One nuance worth knowing: the evidence directory
+contains eleven bundle directories, six of which are pilot runs and five of which are
+clock-probe-only byproducts of the collector's own test suite. §0 of the audit document catalogues
+them.)
+
+### Running the collector safely
+
+`tools/research/capital-demo-order-observer.mjs` sends real trading mutations when run as `--pilot`.
+Two controls exist so that testing the collector never becomes trading with it:
+
+- **`CAPITAL_DEMO_OFFLINE=1`** makes the transport throw at the last moment before a socket is opened.
+  `tools/research/test-observer-repairs.mjs` always sets it and always spawns from a throwaway working
+  directory, so not even a bundle can be written into the repository.
+- **The demo guard** (`tools/research/demo-guard.mjs`) rejects non-demo URLs and records every
+  intended mutation to a ledger before it is attempted.
+
+Run the collector's tests with `node tools/research/test-observer-repairs.mjs` (39 checks) and
+`node tools/research/test-demo-guard.mjs` (16 checks); neither needs credentials and neither should
+be given any.
 
 ---
 

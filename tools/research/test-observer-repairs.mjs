@@ -2,14 +2,23 @@
 /**
  * Tests for the collector repairs in `capital-demo-order-observer.mjs`.
  *
- * These tests NEVER contact the network. The collector is only ever invoked in ways that are
- * guaranteed to fail before any transport is constructed — specifically with unusable credentials,
- * which `loadDemoCredentials()` rejects inside the client constructor.
+ * These tests must never contact the network, and that is now enforced rather than asserted:
+ * every spawn of the collector sets `CAPITAL_DEMO_OFFLINE=1`, which makes the transport throw at the
+ * last moment before a socket is opened (see the observer's `isOffline`), and every spawn runs in a
+ * throwaway working directory so nothing can be written into the tracked evidence directory.
+ *
+ * This was a real defect: group 1b spawned `--calibrate`, which issued clock probes before the
+ * offline switch existed. Five bundle directories in docs/research/capital-demo-order-data were
+ * created by those probes (four on 2026-10-11, one on 2026-10-12); in this environment every one of
+ * them failed with `fetch failed` before any HTTP response, and none contained a mutation. They are
+ * catalogued in docs/research/capital-demo-pilot-evidence-audit.md. Group 1c below now fails if the
+ * suite ever leaves a new bundle behind again.
  *
  * Run: node tools/research/test-observer-repairs.mjs
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +27,24 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const OBSERVER = path.join(HERE, 'capital-demo-order-observer.mjs');
 const ANALYZER = path.join(HERE, 'analyze-capital-demo-observations.mjs');
+
+const EVIDENCE_DIR = path.join(REPO, 'docs', 'research', 'capital-demo-order-data');
+
+/** A throwaway working directory, so a probe run cannot write into the repository. */
+function sandboxDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'observer-repair-'));
+  return dir;
+}
+
+/** Bundle directory names currently in the evidence path. */
+function listEvidenceDirs() {
+  if (!fs.existsSync(EVIDENCE_DIR)) return [];
+  return fs
+    .readdirSync(EVIDENCE_DIR, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .sort();
+}
 
 let passed = 0;
 let failed = 0;
@@ -100,8 +127,15 @@ console.log('\n1b. The clock probe issues requests before credentials are set');
     !/setCredentials\(creds\)[\s\S]{0,300}?options\.maxRequests/.test(source),
   );
   const res = spawnSync(process.execPath, [OBSERVER, '--calibrate'], {
-    cwd: REPO,
-    env: { PATH: process.env.PATH, HOME: process.env.HOME, HOME_FALLBACK: '1' },
+    // A throwaway cwd: the observer resolves its bundle directory relative to cwd, so a probe run
+    // cannot write into the repository's tracked evidence directory.
+    cwd: sandboxDir(),
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      HOME_FALLBACK: '1',
+      CAPITAL_DEMO_OFFLINE: '1',
+    },
     encoding: 'utf8',
     timeout: 30000,
   });
@@ -110,6 +144,43 @@ console.log('\n1b. The clock probe issues requests before credentials are set');
     'the probe no longer crashes on an undefined delay argument',
     !/ERR_INVALID_ARG_TYPE/.test(out),
     out.slice(0, 300),
+  );
+  // The offline switch is what makes this suite safe to run at all: prove it fired, rather than
+  // trusting that no request happened.
+  check(
+    'the clock probe is refused by the offline switch',
+    /OFFLINE_MODE/.test(out),
+    out.slice(0, 300),
+  );
+  check(
+    'the offline refusal names the switch that caused it',
+    /CAPITAL_DEMO_OFFLINE=1/.test(out),
+    out.slice(0, 300),
+  );
+  check(
+    'the switch is enforced at the transport boundary, not before argument handling',
+    /let error = null;[\s\S]{0,400}?if \(isOffline\(\)\) throw new Error\(OFFLINE_ERROR\);[\s\S]{0,200}?await fetch\(/.test(source),
+  );
+}
+
+// ---------------------------------------------------------------------------
+console.log('\n1c. Running the repair suite cannot pollute the evidence directory');
+// ---------------------------------------------------------------------------
+{
+  // A guard against the defect this section was written for: the suite itself created five bundle
+  // directories in the tracked evidence path before the offline switch and the sandbox cwd existed.
+  const before = listEvidenceDirs();
+  const res = spawnSync(process.execPath, [OBSERVER, '--calibrate'], {
+    cwd: sandboxDir(),
+    env: { PATH: process.env.PATH, HOME: process.env.HOME, CAPITAL_DEMO_OFFLINE: '1' },
+    encoding: 'utf8',
+    timeout: 30000,
+  });
+  const after = listEvidenceDirs();
+  check(
+    'the evidence directory gained no bundle from a probe run',
+    after.length === before.length && after.every((d, i) => d === before[i]),
+    `before=${before.length} after=${after.length} out=${`${res.stdout || ''}${res.stderr || ''}`.slice(0, 160)}`,
   );
 }
 

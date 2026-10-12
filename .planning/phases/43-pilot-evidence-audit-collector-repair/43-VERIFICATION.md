@@ -42,6 +42,17 @@ undefined delay; credential loading is unit-tested through `loadDemoCredentials(
 
 ## Notes
 
-- 10 bundles exist (6 pilot runs + 4 clock-probe-only runs), not 8 as earlier recorded.
+- 11 bundle directories exist, not 8 as earlier recorded and not 10 as this document first said:
+  **6 pilot runs** (the evidence) plus **5 clock-probe-only directories**, four of which this phase's
+  own repair suite created and one of which was created during phase 48 (see the correction below).
+- **Correction (phase 48):** those five probe directories are byproducts of
+  `test-observer-repairs.mjs` spawning `--calibrate`, not pilot observations. At the time this
+  document was written only four existed and the suite's header claimed it never contacted the
+  network; both statements were wrong about a group that did issue `GET /api/v1/time` probes. Every
+  probe failed before any HTTP response and no mutation ledger entry was ever written, so nothing
+  reached the demo API — but the attempt was real. The observer now enforces
+  `CAPITAL_DEMO_OFFLINE=1` at the transport boundary, the suite always spawns offline in a throwaway
+  cwd, and a regression test fails if a probe run ever leaves a bundle behind. Full provenance is in
+  `docs/research/capital-demo-pilot-evidence-audit.md` §0.
 - The manifest contradiction is retained in the raw data as evidence; only the derived audit and the
   collector's future behaviour change.

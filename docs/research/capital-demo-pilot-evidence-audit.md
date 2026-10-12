@@ -23,6 +23,41 @@ All **19** claim checks pass. No network call is made; the script reads only fil
 
 ---
 
+## 0. Provenance of the eleven bundle directories
+
+`docs/research/capital-demo-order-data/` contains **eleven** directories, and they are not all the
+same kind of thing. Being precise about which is which matters, because six of them are evidence and
+five are byproducts of testing.
+
+| Directories | Count | What they are |
+|---|---|---|
+| `2026-10-11T11-00-50`, `11-00-58`, `11-01-06`, `11-02-15`, `11-03-46`, `11-05-33` | 6 | **The pilot runs.** Collected by the observer against the demo account. These are the evidence this audit is derived from. Byte-identical to their state in commit `b5aaa21`. |
+| `2026-10-11T23-42-28`, `23-42-34`, `23-42-52`, `23-42-57` (4) and `2026-10-12T01-00-22` (1) | 5 | **Test byproducts, not observations.** Each was written when `tools/research/test-observer-repairs.mjs` spawned the observer with `--calibrate` to pin a repair. Each contains exactly one event: a `GET /api/v1/time` clock probe that failed. |
+
+### What the five byproducts prove, and what they do not
+
+Each of the five contains a single `REST_REQUEST` event with `status: null`, a 0-byte body and
+`error_message: "fetch failed"`, recorded 68 ms after dispatch, plus an empty `quotes.jsonl` and an
+empty `mutation-ledger.jsonl`. In other words:
+
+- **No request completed.** No HTTP response was received, so nothing was read from the demo API.
+- **Nothing was mutated.** The mutation ledger — the artifact that exists specifically to record
+  orders, closes and cancellations — is empty in all five, and each has no quotes.
+- **No credential was present.** The test spawns with a sanitised environment containing no Capital
+  variables, and `--calibrate` never calls `authenticate()`.
+
+They are nevertheless a real defect in this project's history, and are recorded as one: the suite's
+header claimed it "NEVER contacts the network" while one of its groups was issuing network requests.
+The observer now has an explicit offline switch (`CAPITAL_DEMO_OFFLINE=1`) that makes the transport
+throw at the last moment before a socket is opened, the suite spawns only with that switch set and
+only in a throwaway working directory, and a new test fails if a probe run ever leaves a bundle
+behind again. See `tools/research/test-observer-repairs.mjs` groups 1b and 1c.
+
+**No existing artifact was modified to produce this section.** The six pilot bundles and the original
+report remain byte-identical.
+
+---
+
 ## 1. What the script verifies
 
 | # | Claim | Result |
