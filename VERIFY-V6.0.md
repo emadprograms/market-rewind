@@ -56,9 +56,9 @@ git rev-parse HEAD                             # record this
 git ls-remote origin refs/heads/arena/d6be95e4-market-rewind
 git status --short                             # expect EMPTY
 
-# Every number below was measured at commit 78d5ef7. Commits after it should touch only
+# Every number below was measured at commit 2b9a704. Commits after it should touch only
 # documentation. Prove that, so you know the numbers still describe the code in front of you:
-git diff --stat 78d5ef7 HEAD -- src tools tests
+git diff --stat 2b9a704 HEAD -- src tools tests
 #    expect: NO OUTPUT. Anything listed here is code or a test that changed after the measurements
 #    were taken — say so, and treat any mismatch below as unexplained until it is accounted for.
 #    (This deliberately ignores documentation paths: comments about the numbers cannot invalidate
@@ -69,7 +69,7 @@ git diff --stat 78d5ef7 HEAD -- src tools tests
 `git ls-remote`, the post-measurement diff above is empty, and `git status` is clean.
 
 If you are on `main`, stop: you are looking at the wrong commit and none of the expected results will
-appear. If `HEAD` is a commit that is not `78d5ef7` but the diff above is empty, you are fine — the
+appear. If `HEAD` is a commit that is not `2b9a704` but the diff above is empty, you are fine — the
 branch has only had documentation added since.
 
 Provenance checks — record each result:
@@ -134,7 +134,7 @@ PY
 | Metric | Expected |
 |---|---|
 | Test files | 121 |
-| Tests | 997 total = **995 passed, 2 skipped, 0 failed** |
+| Tests | 1001 total = **999 passed, 2 skipped, 0 failed** |
 | Suite duration | roughly 150–260 s on a normal machine |
 
 **The 2 skips must be explainable, not mysterious.** They are in
@@ -145,9 +145,9 @@ Breakdown, to be reported as-is:
 
 | Directory | Tests |
 |---|---|
-| `tests/unit` | 698 |
-| `tests/regression` | 84 |
-| `tests/integration` | 95 |
+| `tests/unit` | 699 |
+| `tests/regression` | 85 |
+| `tests/integration` | 97 |
 | `tests/codex` | 48 |
 | `tests/performance` | 32 |
 | `tests/hooks` | 26 |
@@ -428,6 +428,36 @@ rebuilt, with no source change at all. The suite now starts its own server on **
 rather than a silent substitution. If you are re-running an older checkout, check which port the
 config names before trusting any result.
 
+**And check that the two ports agree.** Moving the server to 3100 while the browser's `baseURL` still
+said 3000 changed nothing: Playwright booted the right server and then navigated to the other one. Both
+now derive from a single constant (`JOURNEY_PORT`), and `tests/regression/journeyDiscovery.test.ts`
+asserts that `use.baseURL` and `webServer.url` share an origin and that the port is not 3000. Note what
+that guard is: a **vitest** test. `npx playwright test` never runs it, so a config drift is caught only
+if you run both suites — run both, and treat the browser run as the authority.
+
+**The last browser run before this one (at an earlier commit) gave 20 failed / 4 skipped / 58 passed,
+and every one of those 20 has a named cause fixed since.** Six were the two defects above (the unpriced
+ticket and the order that could never fill, both now guarded), two were a tape that could not be closed
+because the trade desk sat over the button, and the rest were specs that asserted a fill without ever
+advancing replay time — a paused clock cannot fill an order, and that is the simulator working as
+designed. Four of them (`04`, `05`, `06` ×2) are spec bugs, listed below with the specific
+mistake in each. If you still see any of them, the fix did not take, and that is exactly the report
+that matters most.
+
+**Two defects behind the `—` ticket and the never-filling order are now fixed, and one of them was
+only found because a fix for the other broke two tests.** (1) A tape arriving while the playhead stood
+still was never read — quotes reach the engine through *movement*, and the bridge returns early when
+the playhead has not moved, which is the ordinary case (the replay starts paused and ticks load
+asynchronously). `refreshFromTape()` now reads the tape at the instant the session is already at: no
+clock moves, no history is replayed. (2) The delivery floor was one number for the whole session, so a
+tape registered *after* another instrument had delivered was measured against the other instrument's
+progress, and its quote at the already-consumed instant was unreachable (`0 > 0` is false). The second
+instrument then silently had no market data at all. Delivery is now tracked **per symbol**. Both are
+guarded: `tests/unit/orderSimulator/replay.test.ts` has a two-instrument test that fails if the cursors
+are collapsed back into one, and `tests/integration/accountPlaybackSync.test.tsx` has a late-tape
+reproducer. Reintroducing a shared floor fails three tests (the unit guard,
+`behaviouralMatrix` §10.18, `tradeDeskUi` SIM-UI-02) — the builder verified this by reintroduction.
+
 **Expect the trading specs to work now.** Until recently the simulated account had no clock at all:
 the chart playhead advanced and the account sat still, because the only code that ever moved a session
 from the playhead had no call site in the application. Orders were accepted and never filled, so no
@@ -444,14 +474,28 @@ most valuable thing you can add. Report:
 - the pass/fail counts;
 - the titles of every failure, verbatim.
 
+Four spec bugs were found and fixed by inspecting the last round's failures. They are listed here so
+you can tell a recurrence from a new problem:
+
+| Spec | What it asserted | Why that could never pass |
+|---|---|---|
+| `04-temporal-isolation` | five "step forward" clicks land on a display clock of `09:10:05` | "1 tick" is menu option **0**, not the default: the default step is 3 minutes, so five clicks are 09:15. The spec now selects the tick step explicitly. |
+| `05-playback-transport` | one click of "step" advances one tick | same default: the button reads `Step 3m Forward`. Fixed the same way. |
+| `06-live-replay` (price badge) | a price and a `$` sign appear in `.playback-bar` | the playback bar never carries a price; the badge lives elsewhere in the chart. |
+| `06-live-replay` (tape close) | `Close Tape` is clickable | the trade desk's overlay panel (`zIndex 4000`) sat over the button (`zIndex 20`). |
+
 Two things are already known and should not be mistaken for new bugs:
 
 1. Four tests in `tests/regression/journey/07-trading.spec.ts` are marked `test.fixme` on purpose.
    They assert the **old netting behaviour** (buying twice accumulates one position; an opposite order
    closes or flips it), which v6.0 deliberately replaced with independent positions. They are disabled
    rather than left failing because their replacement cannot be verified without a browser.
-2. The badge/PnL assertions in `07` and `08` may need re-baselining for the same reason: the badge now
-   shows the most recent open position, and PnL is account-wide rather than per chart.
+2. The badge/PnL failures in `07` and `08` had a shared root cause and are expected to **pass now**: no
+   order could fill at all, because the account never received a quote (see the two defects above). If
+   a badge still never appears, or a fill never happens, that is the regression to report — not a
+   re-baselined assertion. One caveat remains true: the badge shows the most recent open position and
+   PnL is account-wide rather than per chart, so assert what the feature promises, not what an older
+   build did.
 
 ---
 
@@ -483,7 +527,7 @@ machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
    branch             = <name>
    HEAD               = <hash>
    origin branch tip  = <hash>          identical? yes/no
-   src/tools/tests vs 78d5ef7            = empty / <output>
+   src/tools/tests vs 2b9a704            = empty / <output>
    git status (before/after) = <?> / <?>
    v6.0 tag           = present/absent
    evidence bundles   = <n>   tracked files = <n>
@@ -528,6 +572,9 @@ machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
 
 8. BROWSER (optional)
    installed? yes/no        tests = <?> passed / <?> failed / <?> fixme
+   which port the suite started, and which port it browsed = <?>
+   `04` five steps land on = <?>     `05` one step = <?>     `06` badge/tape-close = <?>
+   `07` / `08` fills and badges = <?>     `15` ticket bid/ask and Filled = <?>
    failing titles: <…>
 
 9. ANYTHING ELSE THAT LOOKED WRONG
