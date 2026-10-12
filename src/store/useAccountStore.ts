@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { ReplaySession } from '../lib/orderSimulator/replay';
 import { TRADEABLE_INSTRUMENTS, createInstrumentRegistry, trainingProfile } from '../lib/orderSimulator/profiles';
+import {
+  syncSessionToPlayback,
+  type PlaybackSnapshot,
+  type SyncResult,
+} from '../lib/orderSimulator/playbackBridge';
 import { projectAccountTotals, type AccountTotals } from '../lib/orderSimulator/accountProjection';
 import type {
   AccountState,
@@ -58,6 +63,17 @@ export interface AccountStoreState {
   protect: (positionId: PositionId, protection: { stopLoss?: number | null; takeProfit?: number | null }) => void;
   /** Advance the shared account with the replay playhead. */
   advanceTo: (targetMs: number, reason?: Parameters<ReplaySession['advanceTo']>[1]) => void;
+  /**
+   * Follow the chart playhead.
+   *
+   * The account and the chart are separate stores with separate clocks, and for a long time nothing
+   * connected them: `useOrderSimulator` was the only thing that ever advanced a session from the
+   * playhead, and it had no call site in the application. Every unit test drives the engine by hand,
+   * so the suite stayed green while the running app never moved the account clock at all — orders
+   * were accepted and then sat unfilled forever, the ticket never received a quote, and no position
+   * ever opened. This action is the connection.
+   */
+  syncFromPlayback: (prev: PlaybackSnapshot | null, next: PlaybackSnapshot) => SyncResult;
   seekTo: (targetMs: number) => void;
   reset: (newSessionId?: string) => void;
   /** Re-read the engine. Safe to call any number of times: it never mutates economics. */
@@ -183,6 +199,23 @@ export const useAccountStore = create<AccountStoreState>((set, get) => {
       // condition, so a stall stops being announced once it is over.
       set({ notices: [...session.notices], frozen: report.frozen, frozenReason: report.frozenReason });
       publish();
+    },
+
+    syncFromPlayback: (prev, next) => {
+      const result = syncSessionToPlayback(session, prev, next);
+      if (!result.acted || !result.report) return result;
+      const report = result.report;
+
+      // A playhead that moves every frame must not re-render the app every frame. The session is the
+      // source of truth; React only needs to hear about it when something actually changed — quotes
+      // were consumed, the movement was not an ordinary play step, or the freeze lifted or landed.
+      const wasFrozen = get().frozen;
+      const meaningful = report.quotesFed > 0 || report.reason !== 'PLAY' || report.frozen !== wasFrozen;
+      if (!meaningful) return result;
+
+      set({ notices: [...session.notices], frozen: report.frozen, frozenReason: report.frozenReason });
+      publish();
+      return result;
     },
 
     seekTo: (targetMs) => {

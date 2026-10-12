@@ -18,6 +18,7 @@ import { SessionConfig } from './components/SessionConfig';
 import { ChartWorkspace } from './components/ChartWorkspace';
 import { PlaybackBar } from './components/PlaybackBar';
 import { PlaybackManager } from './components/PlaybackManager';
+import { useAccountPlaybackSync } from './hooks/useAccountPlaybackSync';
 import { TimeAndSales } from './components/TimeAndSales';
 import { ConnectionSetupCard } from './components/ConnectionSetupCard';
 import { TradeDesk } from './components/tradeDesk/TradeDesk';
@@ -214,6 +215,9 @@ export default function App() {
       loadStreamingTicks();
     }
   }, [isSessionStarted, sessionTicker, selectedDate, loadStreamingTicks]);
+
+  // The account follows the chart. Without this the simulated clock never moves.
+  useAccountPlaybackSync();
 
   return (
     <div className="app-container">
