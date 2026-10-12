@@ -24,6 +24,11 @@ quietly made to pass.
 4. **Report what happened, not what you expected.** Copy full command output, including failures.
 5. If this is not a scratch clone, work in one (`git clone` the repo fresh) so nothing you do touches
    a working copy someone cares about.
+6. **Get onto the right branch before judging anything.** The milestone is on
+   `arena/d6be95e4-market-rewind` and in pull request #6; `main` does **not** contain it. A fresh clone
+   gives you `main`, which is the *pre-milestone* state — tests, docs and evidence will all appear to
+   be missing if you skip step 6's checkout in §1. Do not `--depth 1` either: §1 compares against an
+   older commit, and a shallow clone cannot resolve it.
 
 ---
 
@@ -32,13 +37,21 @@ quietly made to pass.
 ```bash
 cd market-rewind
 node -v                       # expect v22.x
-git rev-parse HEAD
+
+git fetch origin
+git checkout arena/d6be95e4-market-rewind     # REQUIRED: main does not have v6.0
+git rev-parse --abbrev-ref HEAD                # expect: arena/d6be95e4-market-rewind
+git rev-parse HEAD                             # expect: 5f3cfb6678af2d731b950e34c37cd55e31e84cca
 git ls-remote origin refs/heads/arena/d6be95e4-market-rewind
-git status --short            # expect EMPTY
+git status --short                             # expect EMPTY
 ```
 
-**Requirement:** the first hash and the `ls-remote` hash must be **identical** (the working copy is at
-the published branch tip), and `git status` must be clean. Record both hashes.
+**Requirement:** you are on the milestone branch, the `HEAD` hash and the `ls-remote` hash are
+**identical** (the working copy is at the published branch tip), and `git status` is clean.
+
+If `HEAD` differs from the value above, that is not automatically a failure — but say so clearly in
+your report, because every number in this document was measured at the hash above. If you are on
+`main`, stop: you are looking at the wrong commit and none of the expected results will appear.
 
 Provenance checks — record each result:
 
@@ -386,6 +399,7 @@ VERIFICATION REPORT — market-rewind v6.0
 machine: <CPU> / <cores> / <RAM> / <OS>        node: <version>
 
 1. PROVENANCE
+   branch             = <name>
    HEAD               = <hash>
    origin branch tip  = <hash>          identical? yes/no
    git status (before/after) = <?> / <?>
