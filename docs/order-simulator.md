@@ -174,6 +174,14 @@ The playhead is the account's clock. Nothing happens until time moves.
   position in an array, so merging pages cannot create duplicate economics.
 - **Monotonic, non-decreasing replay time per symbol.** A quote older than the playhead is recorded
   as a late-tape notice and ignored; history is never replayed as live.
+- **Delivery is tracked per symbol, and a tape is read when it arrives.** Quotes reach the engine
+  through movement, so a tape that turns up while the playhead stands still — the ordinary case, since
+  the replay starts paused and ticks load asynchronously — is read by `refreshFromTape()` at the
+  instant the session is already at; no clock moves and no history is replayed. Each tape has its own
+  delivery cursor, so one instrument's progress never gates another's data: a single shared cursor once
+  swallowed the opening quote of every tape registered after the first, leaving the ticket unpriced and
+  an accepted order waiting on a clock that could not move. The cursor also advances past quotes
+  refused as history, so a late tape page is scanned once, not on every later advance.
 - **Two-sided quotes.** Where only a single price is recorded, the bridge derives a bid/ask using the
   instrument's tick size and marks the quote `derived: true`. The spread you see from such data is an
   artifact of the instrument's tick size, not an observation.
@@ -277,6 +285,7 @@ Tests that matter most for this feature:
 | `tests/regression/behaviouralMatrix.test.ts` | The §10 scenario matrix from the implementation plan |
 | `tests/performance/replaySeek.perf.test.ts` | Dense replay and seek: no freeze, no dropped or duplicated fills |
 | `tests/unit/orderSimulator/engine.test.ts` | Trigger sides, equality, latching, clock discipline |
+| `tests/unit/orderSimulator/replay.test.ts` | Tape delivery: a per-symbol cursor, late history refused rather than replayed, seek and rebranch |
 | `tests/unit/orderSimulator/protectiveGroup.test.ts` | One close, ever |
 | `tests/integration/sharedAccountCharts.test.tsx` | Two charts, one account, no double counting |
 | `tests/integration/tradeDeskUi.test.tsx` | What the terminal tells the user, and what it refuses to claim |
