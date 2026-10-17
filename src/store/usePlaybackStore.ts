@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { RawBar, MarketTick } from '../types';
+import { sessionLabelFor } from '../lib/timezones';
 
 export type ReplayMode = 'bar' | 'tick';
 
@@ -191,7 +192,10 @@ const computeSeekPatch = (
           price: Number(price.toFixed(4)),
           volume: bar.volume || 1,
           symbol: sym,
-          session: (bar.session as any) || 'REG',
+          // A synthesized tick must not inherit a session the source bar never reported: derive it
+          // from the timestamp, otherwise an overnight/pre-market minute fabricates an RTH print and
+          // leaks into RTH-only aggregates (1D candle).
+          session: (bar.session as any) || sessionLabelFor(targetMs, sym),
           source: 'STREAMING',
           isSynthesized: true,
         };
@@ -222,7 +226,10 @@ const computeSeekPatch = (
           price: Number(price.toFixed(4)),
           volume: bar.volume || 1,
           symbol: sym,
-          session: (bar.session as any) || 'REG',
+          // A synthesized tick must not inherit a session the source bar never reported: derive it
+          // from the timestamp, otherwise an overnight/pre-market minute fabricates an RTH print and
+          // leaks into RTH-only aggregates (1D candle).
+          session: (bar.session as any) || sessionLabelFor(targetMs, sym),
           source: 'STREAMING',
           isSynthesized: true,
         };
@@ -474,7 +481,10 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             price: Number(price.toFixed(4)),
             volume: bar.volume || 1,
             symbol: sym,
-            session: (bar.session as any) || 'REG',
+            // A synthesized tick must not inherit a session the source bar never reported: derive it
+            // from the timestamp, otherwise an overnight/pre-market minute fabricates an RTH print and
+            // leaks into RTH-only aggregates (1D candle).
+            session: (bar.session as any) || sessionLabelFor(targetTimeMs, sym),
             source: 'STREAMING',
             isSynthesized: true,
           } as any;
@@ -505,7 +515,10 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
             price: Number(price.toFixed(4)),
             volume: bar.volume || 1,
             symbol: sym,
-            session: (bar.session as any) || 'REG',
+            // A synthesized tick must not inherit a session the source bar never reported: derive it
+            // from the timestamp, otherwise an overnight/pre-market minute fabricates an RTH print and
+            // leaks into RTH-only aggregates (1D candle).
+            session: (bar.session as any) || sessionLabelFor(targetTimeMs, sym),
             source: 'STREAMING',
             isSynthesized: true,
           } as any;

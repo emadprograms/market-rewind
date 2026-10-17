@@ -8,7 +8,7 @@ import { applyTickToCandles, getBucketTimestamp } from '../lib/candleSynthesizer
 import { buildCandleFromTickSlice } from '../lib/tickSynthesizer';
 import { usePlaybackStore, isoToMs } from '../store/usePlaybackStore';
 import { useWorkspaceStore } from '../store/useWorkspaceStore';
-import { getUtcTimeFromEt, isRthBar, isRthTick } from '../lib/timezones';
+import { getUtcTimeFromEt, isRthBar, isRthConstituentBar, isRthTick, sessionLabelForTime } from '../lib/timezones';
 import type { MarketTick } from '../types';
 
 const EMPTY_TICKS: MarketTick[] = [];
@@ -508,7 +508,10 @@ export function useChartData({
           : localMasterData;
 
         const todayBars = candidateBars.filter(b => {
-          if (!isRthBar(b, ticker)) return false;
+          // candidateBars are the constituent 1-minute bars of the session, so they need the
+          // constituent predicate: `isRthBar` would wave through any bar shaped like a daily bar
+          // (00:00/04:00/05:00/12:00 UTC) and let extended-hours minutes into the RTH-only candle.
+          if (!isRthConstituentBar(b, ticker)) return false;
           const bMs = new Date(b.time.replace(' ', 'T') + (b.time.includes('Z') ? '' : 'Z')).getTime();
           return bMs >= rthOpenMs && bMs <= Math.min(effectiveCutoff, rthCloseMs);
         }).map(b => {
@@ -644,7 +647,7 @@ export function useChartData({
                 0,
                 currentBucketTicks.length - 1,
                 bTime,
-                currentBucketTicks[0]?.session || 'REG'
+                currentBucketTicks[0]?.session || sessionLabelForTime(currentBucketTicks[0]?.time || '', ticker)
               );
               if (candle) {
                 if (resampled.length > 0 && resampled[resampled.length - 1].time === bTime) {
@@ -677,7 +680,7 @@ export function useChartData({
             0,
             currentBucketTicks.length - 1,
             bTime,
-            latestTick.session || 'REG'
+            latestTick.session || sessionLabelForTime(latestTick.time || '', ticker)
           );
           if (candle) {
             if (resampled.length > 0 && resampled[resampled.length - 1].time === bTime) {
