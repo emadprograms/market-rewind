@@ -5,7 +5,7 @@
  */
 import type { MarketTick, RawBar, Timeframe } from '../types';
 import { TF_SECONDS } from '../types';
-import { isRthTick } from './timezones';
+import { isRthTick, sessionLabelForTime } from './timezones';
 
 export function getBucketTimestamp(time: string | number, timeframe: Timeframe): string {
   const date = typeof time === 'number' 
@@ -49,7 +49,10 @@ export function applyTickToCandles(
 
   const bucketTime = getBucketTimestamp(tick.time, timeframe);
   const tickVol = tick.volume !== undefined && tick.volume !== null ? tick.volume : 1.0;
-  const session = timeframe === '1D' ? 'REG' : (tick.session || 'REG');
+  // 1D candles here are built only from RTH ticks (guarded above), so 'REG' is a fact, not a guess.
+  // Intraday candles inherit the tick's label, and derive it from the tick's own timestamp when the
+  // source reported none.
+  const session = timeframe === '1D' ? 'REG' : (tick.session || sessionLabelForTime(tick.time, tick.symbol));
 
   if (!candles || candles.length === 0) {
     return [

@@ -2,6 +2,7 @@ import type { MarketTick, RawBar, Timeframe } from '../types';
 import { TF_SECONDS } from '../types';
 import { isoToMs, msToIso } from '../store/usePlaybackStore';
 import { getBucketTimestamp } from './candleSynthesizer';
+import { sessionLabelFor } from './timezones';
 
 /**
  * Synthesizes 4 realistic micro-ticks per minute from 1-minute OHLCV bars.
@@ -19,7 +20,10 @@ export function synthesizeTicksFromBars(bars: RawBar[], symbol: string): MarketT
 
     const vol = Math.max(1, bar.volume || 1);
     const quarterVol = Number((vol / 4).toFixed(2));
-    const session = bar.session || 'REG';
+    // Derive the session from the bar's own timestamp when the source did not report one.
+    // Inheriting a fabricated 'REG' would mark overnight/pre-market bars as RTH prints and let
+    // them into RTH-only aggregates (the 1D candle).
+    const session = bar.session || sessionLabelFor(baseMs, sym);
 
     // Intraminute price path: Open -> First Extreme -> Second Extreme -> Close
     const isBullish = bar.close >= bar.open;
