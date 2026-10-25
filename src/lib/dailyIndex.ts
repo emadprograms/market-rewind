@@ -38,7 +38,10 @@
  * SEMANTICS
  *
  * The index preserves the original behaviour exactly:
- *   * bars are filtered by the same symbol and `isRthBar` predicates,
+ *   * bars are filtered by symbol and by `isRthConstituentBar(bar, ticker)`. The constituents are
+ *     1-minute bars, so they are classified as intraday bars — that is what actually enforces the
+ *     RTH-only daily policy on this path (passing the chart's '1D' timeframe to `isRthBar` exempts
+ *     every constituent from the RTH test and imports overnight/pre/post data into the candle),
  *   * bars are grouped by the same `getBucketTime(barMs, timeframe)` value,
  *   * within a bucket, bars keep their original `masterData` order, so
  *     `firstBarOpen` (first match wins) and `lastBarClose` (last match wins) are
@@ -49,7 +52,7 @@
  * wholesale (`setMasterData`) and never mutated in place.
  */
 import type { RefObject } from 'react';
-import { isRthBar } from './timezones';
+import { isRthConstituentBar } from './timezones';
 import { isoToMs } from '../store/usePlaybackStore';
 import { TF_SECONDS, type RawBar, type Timeframe } from '../types';
 
@@ -88,7 +91,11 @@ export function buildDailyIndex(
   const byBucket = new Map<number, DailyBucketEntry[]>();
   for (const bar of masterData) {
     if (bar.symbol && bar.symbol.toUpperCase() !== sym) continue;
-    if (!isRthBar(bar, ticker, timeframe)) continue;
+    // `masterData` holds the CONSTITUENT 1-minute bars of the day, not daily bars. Classifying them
+    // with `isRthBar(bar, ticker, '1D')` marked every constituent as an already-aggregated daily bar
+    // and exempted it from the RTH test, so overnight/pre/post minutes set the daily open, high, low
+    // and volume. Constituent bars get the constituent predicate.
+    if (!isRthConstituentBar(bar, ticker)) continue;
     const barMs = isoToMs(bar.time);
     const bucketTime = getBucketTime(barMs, timeframe);
     let list = byBucket.get(bucketTime);

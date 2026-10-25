@@ -86,6 +86,33 @@ export function getSessionType(timestamp: number, ticker?: string): 'PRE' | 'RTH
 }
 
 /**
+ * Session label for a timestamp, in the vocabulary bars and ticks use ('REG' for regular hours).
+ *
+ * Use this whenever a session label has to be *produced* rather than read — synthesized ticks and
+ * any bar whose source does not report a session. Inheriting or defaulting a label to 'REG'
+ * fabricates an RTH claim for overnight/pre/post data, and every downstream `isRthBar` /
+ * `isRthTick` fast-path then trusts it.
+ */
+export function sessionLabelFor(timestampMs: number, ticker?: string): 'REG' | 'PRE' | 'POST' | 'OTHER' {
+  const session = getSessionType(Math.floor(timestampMs / 1000), ticker);
+  return session === 'RTH' ? 'REG' : session;
+}
+
+/**
+ * Same as `sessionLabelFor`, for producers that only hold a bar/tick time STRING
+ * ('2026-10-14 13:30:00' or the ISO variant). Parsing matches `isIntradayRth`, so a label produced
+ * here can never disagree with the classification that later consumes it. Unparseable times fall
+ * back to 'REG' rather than dropping data.
+ */
+export function sessionLabelForTime(timeStr: string, ticker?: string): 'REG' | 'PRE' | 'POST' | 'OTHER' {
+  if (!timeStr) return 'REG';
+  const rawTime = timeStr.includes('T') ? timeStr : timeStr.replace(' ', 'T') + (timeStr.includes('Z') ? '' : 'Z');
+  const ms = new Date(rawTime).getTime();
+  if (isNaN(ms)) return 'REG';
+  return sessionLabelFor(ms, ticker);
+}
+
+/**
  * Determines if a bar belongs to Regular Trading Hours (RTH).
  * Checks the session field first ('REG' or 'RTH'), then falls back to timestamp-based session calculation.
  */
@@ -114,7 +141,14 @@ export function isRthBar(bar: { time: string; session?: string }, ticker?: strin
     return true;
   }
 
-  // Intraday bars: check session first
+  return isIntradayRth(bar, ticker);
+}
+
+/**
+ * Session classification for an INTRADAY bar: trust an explicit session label, otherwise derive the
+ * session from the timestamp. Shared by `isRthBar` (intraday branch) and `isRthConstituentBar`.
+ */
+function isIntradayRth(bar: { time: string; session?: string }, ticker?: string): boolean {
   if (bar.session) {
     const s = bar.session.toUpperCase();
     if (s.includes('PRE') || s.includes('POST') || s.includes('ETH') || s === 'OTHER') {
@@ -129,6 +163,23 @@ export function isRthBar(bar: { time: string; session?: string }, ticker?: strin
   const ms = new Date(rawTime).getTime();
   if (isNaN(ms)) return true;
   return getSessionType(Math.floor(ms / 1000), ticker) === 'RTH';
+}
+
+/**
+ * RTH test for a CONSTITUENT bar — one of the intraday bars a daily candle is aggregated FROM.
+ *
+ * Never use `isRthBar(bar, ticker, '1D')` for these. The chart's timeframe describes the *series*,
+ * not the bar, and passing '1D' marks every constituent as an already-aggregated daily bar, which
+ * exempts all of them from the RTH test. That is how overnight (00:00 UTC = 20:00 ET), pre-market
+ * (12:00 UTC = 08:00 ET) and post-market minutes set the daily open/high/low and inflated the daily
+ * volume to a 24h total, while the snapshot path — which filters by an explicit RTH time window —
+ * produced a different candle. Same day, two answers, depending on whether the chart was playing.
+ *
+ * The daily-shape heuristic is deliberately skipped here, so a session-less constituent stamped
+ * 00:00/04:00/05:00/12:00 UTC is classified by timestamp instead of being waved through.
+ */
+export function isRthConstituentBar(bar: { time: string; session?: string }, ticker?: string): boolean {
+  return isIntradayRth(bar, ticker);
 }
 
 /**

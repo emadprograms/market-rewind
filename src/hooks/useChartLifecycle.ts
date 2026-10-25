@@ -9,6 +9,7 @@ import { useChartPlugins } from './chart/useChartPlugins';
 import { useChartDrawings } from './chart/useChartDrawings';
 import { useChartViewport } from './chart/useChartViewport';
 import { getBucketTime, resolveDailyIndex, type DailyIndex } from '../lib/dailyIndex';
+import { isRthConstituentBar } from '../lib/timezones';
 
 const getTickMs = (t: any): number => {
   if (!t) return 0;
@@ -753,8 +754,13 @@ export function useChartLifecycle({
 
         for (const bar of masterData) {
           if (bar.symbol && bar.symbol.toUpperCase() !== symUpper) continue;
-          if (timeframe === '1D' && !isRthBar(bar, ticker, timeframe)) continue;
-          if (!showEth && !isRthBar(bar, ticker, timeframe)) continue;
+          // masterData holds constituent 1-minute bars, never daily bars, so they are classified as
+          // intraday bars. Passing the chart's timeframe to `isRthBar` marks a '1D' chart's
+          // constituents as already-aggregated daily bars and exempts them from the RTH test, which
+          // is how pre-market volume was imported into the RTH-only daily candle
+          // (see src/lib/dailyIndex.ts).
+          if (timeframe === '1D' && !isRthConstituentBar(bar, ticker)) continue;
+          if (!showEth && !isRthConstituentBar(bar, ticker)) continue;
           const barMs = isoToMs(bar.time);
           if (getBucketTime(barMs, timeframe) === bucketTime) {
             if (barMs + 60000 <= currentCutoffMs) {

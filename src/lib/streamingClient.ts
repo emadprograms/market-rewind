@@ -4,6 +4,7 @@
  * lake through isolated in-memory DuckDB sessions (no disk database).
  */
 import type { MarketTick, RawBar, Timeframe } from '../types';
+import { sessionLabelForTime } from './timezones';
 
 declare const process: any;
 
@@ -368,7 +369,10 @@ export class StreamingClient {
         bid: t.bid !== undefined && t.bid !== null ? Number(t.bid) : undefined,
         ask: t.ask !== undefined && t.ask !== null ? Number(t.ask) : undefined,
         symbol: t.symbol || symbol.toUpperCase(),
-        session: t.session || 'REG',
+        // A tick whose source reports no session must not be claimed as RTH: the label feeds
+        // isRthTick, and a fabricated 'REG' lets an overnight/pre/post print into RTH-only
+        // aggregates (the daily candle). Derive it from the tick's own timestamp instead.
+        session: t.session || sessionLabelForTime(timeStr, t.symbol || symbol.toUpperCase()),
         source: t.source || 'STREAMING',
       };
     }).filter(t => Boolean(t.time) && !isNaN(t.price));
@@ -393,7 +397,7 @@ export class StreamingClient {
         bid: t.bid !== undefined && t.bid !== null ? Number(t.bid) : undefined,
         ask: t.ask !== undefined && t.ask !== null ? Number(t.ask) : undefined,
         symbol: t.symbol || symbol.toUpperCase(),
-        session: t.session || 'REG',
+        session: t.session || sessionLabelForTime((t.timestamp || t.time || '').replace('T', ' '), t.symbol || symbol.toUpperCase()),
         source: t.source || 'CAPITAL',
       })).filter((t: any) => Boolean(t.time) && !isNaN(t.price))
         .sort((a: any, b: any) => a.time.localeCompare(b.time));
@@ -543,8 +547,14 @@ export class StreamingClient {
         timeStr = row.time_str;
       }
 
-      let session = row.session || 'REG';
+      // The service's candle projection returns time/symbol/OHLCV/tick_count and NO session column.
+      // For daily candles the service already enforced `session='REG'` in SQL (tf=1d), so the label
+      // is known and safe to assert. For intraday candles the session is genuinely unknown:
+      // defaulting it to 'REG' labelled pre-market, post-market and overnight bars as RTH, which
+      // short-circuited every downstream `isRthBar` session check and corrupted the 1D aggregate.
+      // Leave it undefined so consumers derive the session from the timestamp instead.
       const isDailyCandle = tf === '1D' || apiTf === '1d';
+      let session: string | undefined = row.session || (isDailyCandle ? 'REG' : undefined);
       if (isDailyCandle && session === 'PRE' && (Number(row.volume || 0) > 0 || Number(row.tick_count || 0) > 1)) {
         session = 'PRE, REG';
       }

@@ -31,7 +31,14 @@ export interface RawBar {
   low: number;
   close: number;
   volume: number;
-  session: 'REG' | 'PRE' | 'POST' | string;
+  /**
+   * Session label. OPTIONAL on purpose: the tick lake's candle projection returns no `session`
+   * column, so for intraday candles the session is genuinely unknown and must be derived from the
+   * timestamp (`sessionLabelFor`). Asserting `'REG'` here used to fabricate an RTH label for
+   * pre/post/overnight bars and silently disabled every downstream RTH filter.
+   * Daily (`tf=1d`) candles are RTH-filtered in SQL by the service, so they do carry a label.
+   */
+  session?: 'REG' | 'PRE' | 'POST' | string;
   tickCount?: number;
   symbol?: string;
 }
