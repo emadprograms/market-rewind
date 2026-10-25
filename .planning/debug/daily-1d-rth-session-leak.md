@@ -1,9 +1,15 @@
 ---
-status: resolved
+status: awaiting_human_verify
 trigger: "1D daily chart construction is wrong: live/forming daily candle leaks premarket/postmarket OHLCV because candle rows carry no session and the client defaults them to REG"
 created: 2026-10-25T16:05:00+03:00
-updated: 2026-10-25T16:30:00+03:00
+updated: 2026-10-25T16:45:00+03:00
 ---
+
+> Human verification PENDING (2026-10-25): user has NOT accepted the fix. PR #8
+> was opened so the branch can be pulled and tested on the user's local machine.
+> Do not archive to resolved/ or treat the KB entry as confirmed until the user
+> reports end-to-end verification. Self-verification guardrail signals below
+> remain valid but are not a substitute for human acceptance.
 
 ## Current Focus
 <!-- OVERWRITE on each update - reflects NOW -->
