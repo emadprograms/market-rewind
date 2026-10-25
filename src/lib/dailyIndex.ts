@@ -37,8 +37,11 @@
  *
  * SEMANTICS
  *
- * The index preserves the original behaviour exactly:
- *   * bars are filtered by the same symbol and `isRthBar` predicates,
+ * The index preserves the original aggregation behaviour, with RTH isolation
+ * enforced by two predicates instead of one:
+ *   * bars are filtered by symbol, `isRthBar`, and `isRthIntradayBar`
+ *     (the wall-clock RTH window that prevents sessionless/mislabeled
+ *     pre/post-market tape bars from leaking into daily OHLCV),
  *   * bars are grouped by the same `getBucketTime(barMs, timeframe)` value,
  *   * within a bucket, bars keep their original `masterData` order, so
  *     `firstBarOpen` (first match wins) and `lastBarClose` (last match wins) are
@@ -49,7 +52,7 @@
  * wholesale (`setMasterData`) and never mutated in place.
  */
 import type { RefObject } from 'react';
-import { isRthBar } from './timezones';
+import { isRthBar, isRthIntradayBar } from './timezones';
 import { isoToMs } from '../store/usePlaybackStore';
 import { TF_SECONDS, type RawBar, type Timeframe } from '../types';
 
@@ -89,6 +92,12 @@ export function buildDailyIndex(
   for (const bar of masterData) {
     if (bar.symbol && bar.symbol.toUpperCase() !== sym) continue;
     if (!isRthBar(bar, ticker, timeframe)) continue;
+    // RTH wall-clock guard. masterData here is the 1-minute replay tape; candle
+    // feeds may omit session (or mislabel it REG), so labels alone cannot keep
+    // pre/post-market bars out of the daily bucket. Mirrors the snapshot path's
+    // rthOpen..rthClose window (useChartData) and isRthTick's tick-level gate.
+    // UTC assets trade around the clock and always pass.
+    if (!isRthIntradayBar(bar, ticker)) continue;
     const barMs = isoToMs(bar.time);
     const bucketTime = getBucketTime(barMs, timeframe);
     let list = byBucket.get(bucketTime);

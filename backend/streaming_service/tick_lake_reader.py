@@ -809,7 +809,18 @@ class TickLakeReader:
                     -- lake promises makes the reported volume deterministic while keeping
                     -- the exact total for every representable input.
                     round(sum({projection.volume_expr}), 6) AS volume,
-                    count(*) AS tick_count
+                    count(*) AS tick_count,
+                    -- Truthful per-bucket session label. Ticks already carry the
+                    -- session column; candles must not drop it, or clients cannot
+                    -- tell pre/post-market minute bars from regular-session ones
+                    -- (LAKE-RESAMPLE-04 RTH isolation). Distinct sessions inside a
+                    -- wider bucket (e.g. a 1h bucket spanning the 09:30 open) are
+                    -- emitted as the deterministic composite 'PRE, REG', which the
+                    -- client isRthBar parser already understands. NULL-only
+                    -- projections (lakes without the column) aggregate to ''.
+                    array_to_string(
+                        array_sort(array_agg(DISTINCT upper({projection.session_expr}))), ', '
+                    ) AS session
                 FROM {self._read_parquet_source(projection)}
                 {where_sql}
                 GROUP BY bucket_time, symbol
@@ -830,6 +841,7 @@ class TickLakeReader:
                     "close": float(row[5]),
                     "volume": float(row[6]),
                     "tick_count": int(row[7]),
+                    "session": row[8] or None,
                 }
                 for row in rows
             ]
