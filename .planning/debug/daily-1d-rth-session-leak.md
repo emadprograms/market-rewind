@@ -2,39 +2,76 @@
 status: awaiting_human_verify
 trigger: "1D daily chart construction is wrong: live/forming daily candle leaks premarket/postmarket OHLCV because candle rows carry no session and the client defaults them to REG"
 created: 2026-10-25T16:05:00+03:00
-updated: 2026-10-25T16:45:00+03:00
+updated: 2026-10-26T12:45:00+03:00
 ---
 
-> Human verification PENDING (2026-10-25): user has NOT accepted the fix. PR #8
-> was opened so the branch can be pulled and tested on the user's local machine.
-> Do not archive to resolved/ or treat the KB entry as confirmed until the user
-> reports end-to-end verification. Self-verification guardrail signals below
-> remain valid but are not a substitute for human acceptance.
+> Human verification REJECTED the first fix cycle (2026-10-26). Local testing on
+> the real data-harvester lake shows the 1D chart is still built from the full
+> 16-hour extended session. Cycle 1 fixed the live forming-candle path only;
+> historical daily bars come straight from the backend 1d endpoint, whose
+> session='REG' filter trusts labels that the harvester fabricates. Session
+> reopened; see Evidence entries 8-10 and the new reasoning_checkpoint below.
 
 ## Current Focus
 <!-- OVERWRITE on each update - reflects NOW -->
 
-status: fixing (RED phase complete — 10 frontend + 3 backend regression tests fail as predicted)
+status: investigating (cycle 2 — human verification of cycle 1 rejected against real lake data)
 
-reasoning_checkpoint:
-  hypothesis: "PRE/POST 1-minute tape bars enter the live 1D daily bucket because candle rows lose session identity at the backend SELECT and the client relabels them REG, while the live aggregation has no wall-clock RTH gate."
+reasoning_checkpoint_cycle2:
+  hypothesis: "Historical 1D bars bypass every frontend gate: useChartData loads timeframe-shaped daily bars directly from the backend 1d endpoint, whose only RTH enforcement is WHERE upper(session)='REG'. The data-harvester writes tick.get('session','REG'), so ALL real-lake ticks (04:00-20:00 ET) are labeled REG and the endpoint aggregates the full 16-hour day."
   confirming_evidence:
-    - "Backend probe: query_candles 1m rows return keys [time,symbol,ohlcv,tick_count] with no session while query_ticks rows include session; SQL at tick_lake_reader L797-817 never selects projection.session_expr."
-    - "streamingClient L546 maps row.session || 'REG'; probe tests/probe-1d-session-leak.test.ts shows all four PRE/REG/POST bars then pass isRthBar and aggregate to O10/L5/V1102 vs RTH oracle O100/L100/V3."
-    - "Snapshot memo useChartData L503-513 stays clean thanks to its explicit rthOpenMs..rthCloseMs window, proving the missing gate in buildDailyIndex is the live-path differentiator."
-    - "RED tests: tests/unit/dailyRthSessionGuard.test.ts 10 failing; backend test_candle_session_labels.py 3 failing with KeyError 'session'."
-  falsification_test: "If the hypothesis is wrong, adding a truthful session column to candles plus a wall-clock RTH gate on tape bars would NOT make the RTH-oracle assertions pass; if PRE/POST bars still appear in the daily bucket after both changes, the mechanism is elsewhere."
-  fix_rationale: "Backend fix restores the lost data contract (truthful per-bucket session) at the source; the frontend wall-clock gate makes daily RTH isolation independent of label quality and aligns the live path with the already-correct snapshot window; the mapping fix removes fabricated REG; the suffix narrowing prevents 12:00Z intraday bars from hijacking daily-bar preservation. Each targets a confirmed link in the causal chain, not the symptom."
-  blind_spots: "Anchored daily history bars (UTC midnight/noon) must never hit the wall-clock gate — verified by data-flow audit that buildDailyIndex only indexes 1-minute playback tape; full existing suites will re-confirm. Crypto/UTC assets must remain 24/7 — getSessionType early-returns RTH for UTC tickers."
+    - "User's real-lake inspection (TSLA 2026-10-22): all 70,920 ticks stored session='REG', zero PRE/POST; 1d candle O366.93/H388.65/L364.95/C373.20/V70920 vs RTH truth O374.05/H388.65/L373.53/C374.51/V56002."
+    - "Open 366.93 is the 04:00 ET (08:00 UTC) premarket print; close 373.20 is the 19:59 ET (23:59 UTC) postmarket print; extended-hours volume delta = 14,918."
+    - "tick_lake_reader L746-785: daily path adds session_filter REG but has no timestamp/wall-clock window; no backend symbol-timezone metadata exists."
+    - "Cycle-1 backend tests passed only because tick_lake_factory writes truthful PRE/REG/POST tags — synthetic fixtures cannot reproduce label fabrication (evidence of test-harness blind spot)."
+  falsification_test: "If labels are not the cause, a backend wall-clock RTH predicate (09:30 <= ET time < 16:00) applied to an all-REG 04:00-20:00 ET lake would NOT reduce the daily candle to O374.05/V56002-class RTH values; and a UTC symbol (EUR/USD, BTC) under the same predicate would lose ticks if the symbol classifier is wrong."
+  fix_rationale: "Enforce RTH by wall-clock at the daily aggregation chokepoint for America/New_York session symbols, so correctness no longer depends on harvester label quality; UTC/24h symbols skip the gate (mirrors frontend getTzForTicker). Also flag the harvester default (separate repo, not in this sandbox) as the upstream data-quality fix."
+  blind_spots: "Backend has no symbol metadata service — classifier must mirror the frontend heuristic (USD/'/'/crypto set/^/= prefixes); half-day holidays need no special handling (ticks simply stop early); explicit session='ALL' must remain a true opt-out; DST correctness relies on DuckDB's bundled tz database (verified 2026-10 EDT and 2026-11 EST conversions)."
   candidate_causes:
-    - "code: backend candle SELECT/transform omits session; client defaults missing session to REG"
-    - "data: real lake partitions contain PRE/POST ticks while frontend fixtures and Playwright mocks only ever contain REG-session minute bars"
-  and_gate: "yes — contamination requires BOTH the missing session contract AND the label-only live filter; either fix alone closes the main vector (backend truth + existing label logic, or wall-clock gate alone), but both are needed for defense-in-depth and for legacy/sessionless sources."
+    - "data: data-harvester runner.py fabricates session='REG' for unlabeled Capital.com ticks (upstream, separate repository)"
+    - "code: backend 1d query enforces RTH via a trusted label only, with no wall-clock backstop"
+  and_gate: "yes — the wrong candle requires fabricated labels AND a label-only filter. Fixing either alone would make THIS lake correct; the wall-clock gate is the durable fix because it also repairs already-ingested partitions, while the harvester fix only protects future ingestion."
 
-hypothesis: see reasoning_checkpoint
-test: GREEN phase — implement four targeted fixes, rerun new tests then full suites
-expecting: New tests pass; full vitest (618 baseline) and pytest (232 baseline) remain green; tsc clean
-next_action: Apply backend session projection first, then timezones helper + suffix narrowing, dailyIndex gate, useChartLifecycle volume-reconstruction gate, streamingClient mapping.
+hypothesis: see reasoning_checkpoint_cycle2
+test: TDD red — backend test on an all-REG 04:00-20:00 ET lake asserting 1d equals the RTH oracle, plus UTC-symbol no-gate and winter-DST cases; then implement the wall-clock predicate in query_candles.
+expecting: RED first (current code returns full-day values), GREEN after the predicate; full backend suite stays at 235 passing.
+next_action: Awaiting human re-verification of PR #8 on the real local lake (TSLA 2026-10-22 and neighbors). Upstream data-harvester runner.py session-label fix remains a separate-repo follow-up to communicate.
+
+## Cycle 2 update (2026-10-26, after human rejection of cycle 1)
+
+Cycle-1 resolution below remains valid for the LIVE forming-candle path but
+was incomplete: historical 1D bars are served directly by the backend 1d
+endpoint, whose label-only filter cannot resist fabricated REG labels.
+
+fix_cycle2: >
+  tick_lake_reader.query_candles daily branch now applies a wall-clock RTH
+  predicate for America/New_York session symbols when the effective session
+  filter is REG: CAST(timestamp AT TIME ZONE 'UTC' AT TIME ZONE
+  'America/New_York' AS TIME) in [09:30, 16:00). New _is_utc_session_symbol()
+  mirrors frontend getTzForTicker (USD substring, '/', crypto set, ^/=/ prefix)
+  so forex/crypto keep 24/7 daily aggregation; explicit session='ALL' remains
+  a full-day opt-out. DST is handled by DuckDB's tz database.
+verification_cycle2:
+  target_test: { result: pass, detail: "test_daily_rth_wallclock.py 6/6 green; RED before fix (3 equity cases failed, UTC/ALL/crypto pins already passed)" }
+  faithful_repro: "All-REG lake with the user's exact TSLA prints returns O374.05/H388.65/L373.53/C374.51/V2500 (RTH truth); session=ALL still returns full-day O366.93/C373.20/V3100"
+  mutation_check: { result: skipped, reason_if_skipped: "Stryker not configured; Python mutation tooling absent — revert-and-reconfirm plus metamorphic truthful-vs-mislabeled equivalence test substitute" }
+  no_op_deletion: { result: pass, detail: "Purely additive: two module helpers + one conditional WHERE clause; no existing behavior removed (ALL opt-out and UTC instruments explicitly pinned)" }
+  adjacent_tests: { result: pass, suites_run: ["pytest 241 passed / 2 skipped (235 + 6 new)", "vitest 630 passed / 2 skipped (unchanged, backend-only cycle)", "tsc --noEmit clean", "vite build success"] }
+  revert_and_reconfirm: { result: pass, bug_returned_on_revert: true, fixed_on_reapply: true, detail: "git stash of tick_lake_reader restored the 3 equity-test failures; pop restored all 9 backend candle tests green" }
+  guardrail_verdict: accepted
+files_changed_cycle2:
+  - backend/streaming_service/tick_lake_reader.py
+  - backend/streaming_service/tests/test_daily_rth_wallclock.py (new)
+
+upstream_followup: >
+  data-harvester (separate repository, not present in this sandbox): runner.py
+  persists tick.get("session", "REG"), fabricating REG for every unlabeled
+  Capital.com tick. Recommended change — derive the session from the tick's
+  America/New_York wall time (PRE 04:00-09:30, REG 09:30-16:00, POST 16:00-20:00,
+  matching getSessionType minute boundaries 240/570/960/1200) and only honor an
+  explicit native tag when present. The backend wall-clock gate makes this
+  non-blocking (it also corrects already-ingested partitions), but fixing the
+  harvester restores truthful labels for every consumer.
 
 ## Symptoms
 <!-- Written during gathering, then IMMUTABLE -->
@@ -63,6 +100,9 @@ started: Always broken against the real tick-lake backend; invisible in frontend
 - hypothesis: direction='desc' backend ordering anomaly contributes.
   evidence: Server honors ORDER BY but streamingClient L563 force-sorts every response ascending; benign, no semantic effect.
   timestamp: 2026-10-25
+- hypothesis: (cycle-1 elimination, REOPENED) "Backend 1d endpoint is RTH-correct because it filters session='REG'."
+  evidence: 2026-10-26 real-lake verification refutes it: the harvester fabricates session='REG' for every tick, so the label filter passes all 70,920 ticks across 04:00-20:00 ET. The original elimination was an artifact of synthetic fixtures with truthful tags — fixture bias, not product proof. Replaced by the wall-clock hypothesis in reasoning_checkpoint_cycle2.
+  timestamp: 2026-10-26
 
 ## Evidence
 <!-- APPEND only - facts discovered -->
@@ -95,6 +135,22 @@ started: Always broken against the real tick-lake backend; invisible in frontend
   checked: tests/regression/mocks/marketSimulator.ts L238
   found: Mock minute bars are built from 09:30 ET onward only — fixtures can never reproduce the leak; explains 618 green tests despite the defect.
   implication: Regression test must use sessionless real-backend row shapes explicitly.
+- timestamp: 2026-10-26
+  checked: Human local verification on the real data-harvester lake (TSLA, date=2026-10-22)
+  found: 1D chart shows O366.93/H388.65/L364.95/C373.20/V70920; true RTH is O374.05/H388.65/L373.53/C374.51/V56002. Open = 04:00 ET premarket print, low = 04:35 ET print, close = 19:59 ET postmarket print, +14,918 extended-hours volume.
+  implication: Cycle-1 fixes are necessary but insufficient — the visible 1D history is still wrong end-to-end.
+- timestamp: 2026-10-26
+  checked: data-harvester runner.py ingestion path (user inspection; repository not present in this sandbox)
+  found: Capital.com ticks carry no native session tag and are persisted with tick.get("session", "REG"); direct parquet inspection shows all 70,920 TSLA ticks for 2026-10-22 (04:00-20:00 ET) stored session='REG', zero PRE/POST.
+  implication: Upstream data defect — the session column exists but its values are fabricated. Reopens the cycle-1 Eliminated hypothesis "backend 1d endpoint is REG-clean": that conclusion came from synthetic mini-lakes with truthful tags and does not generalize.
+- timestamp: 2026-10-26
+  checked: tick_lake_reader.py query_candles daily branch (L737-785) plus data flow from useChartData.load (timeframe-shaped 1D fetch)
+  found: Historical daily bars are served directly by the backend 1d endpoint; the only RTH enforcement is WHERE upper(session)='REG' — there is no timestamp/wall-clock window. Frontend historical 1D rendering cannot re-gate an already-aggregated bar; cycle-1 gates only protect the live 1-minute-tape path.
+  implication: The durable in-repo fix is a backend wall-clock RTH predicate for NY-session symbols on daily aggregation; DuckDB 2.0 AT TIME ZONE 'America/New_York' verified for EDT (13:30Z->09:30) and EST (14:30Z->09:30), 16:00 ET exclusive, 09:29:59 excluded.
+- timestamp: 2026-10-26
+  checked: backend symbol metadata availability
+  found: No symbol/timezone inventory exists in the streaming service; the mini lake mixes equities (AAPL, NVDA, JPM, BRK.B) with UTC instrument EUR/USD. Frontend getTzForTicker (src/lib/timezones.ts) is the only classifier: UTC when symbol contains USD or '/', is in the crypto set, or starts with ^/=/; otherwise America/New_York.
+  implication: Backend needs a mirrored, independently tested classifier so EUR/USD/crypto daily buckets remain 24/7 while equities get the 09:30-16:00 ET gate.
 
 ## Resolution
 <!-- OVERWRITE as understanding evolves -->
