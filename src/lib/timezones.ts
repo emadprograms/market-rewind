@@ -91,12 +91,18 @@ export function getSessionType(timestamp: number, ticker?: string): 'PRE' | 'RTH
  */
 export function isRthBar(bar: { time: string; session?: string }, ticker?: string, timeframe?: string): boolean {
   const normalizedTime = bar.time.includes('T') ? bar.time.replace('T', ' ') : bar.time;
-  const isDaily = timeframe === '1D' ||
-                  /^\d{4}-\d{2}-\d{2}$/.test(bar.time.trim()) || 
-                  normalizedTime.endsWith(' 00:00:00') || 
-                  normalizedTime.endsWith(' 12:00:00') ||
-                  normalizedTime.endsWith(' 04:00:00') ||
-                  normalizedTime.endsWith(' 05:00:00');
+  // The anchor-suffix shortcuts (midnight/noon/04:00/05:00 timestamps and
+  // date-only strings identify already-aggregated daily bars) apply only when
+  // no explicit intraday timeframe was supplied. A real 1-minute bar can share
+  // the 12:00:00 UTC suffix (08:00 ET premarket) and must then be classified by
+  // its session label / wall-clock time instead of being preserved as daily.
+  const looksLikeAnchoredDailyBar =
+    /^\d{4}-\d{2}-\d{2}$/.test(bar.time.trim()) ||
+    normalizedTime.endsWith(' 00:00:00') ||
+    normalizedTime.endsWith(' 12:00:00') ||
+    normalizedTime.endsWith(' 04:00:00') ||
+    normalizedTime.endsWith(' 05:00:00');
+  const isDaily = timeframe === '1D' || (timeframe === undefined && looksLikeAnchoredDailyBar);
 
   if (isDaily) {
     if (bar.session) {
@@ -125,6 +131,28 @@ export function isRthBar(bar: { time: string; session?: string }, ticker?: strin
     }
   }
 
+  const rawTime = bar.time.includes('T') ? bar.time : bar.time.replace(' ', 'T') + (bar.time.includes('Z') ? '' : 'Z');
+  const ms = new Date(rawTime).getTime();
+  if (isNaN(ms)) return true;
+  return getSessionType(Math.floor(ms / 1000), ticker) === 'RTH';
+}
+
+/**
+ * Authoritative wall-clock RTH gate for INTRADAY constituent bars (e.g. the
+ * 1-minute replay tape) that feed a daily (1D) aggregation.
+ *
+ * Session labels on candle rows are advisory: the tick lake's candle endpoint
+ * historically omitted the session column and clients defaulted missing labels
+ * to REG, which let pre/post-market minute bars leak into daily OHLCV. This is
+ * the same authoritative check used for raw ticks (isRthTick): UTC-listed
+ * assets trade around the clock (getSessionType returns RTH for every
+ * timestamp), while equity bars must fall inside 09:30-16:00 America/New_York.
+ *
+ * Do NOT use this on already-aggregated daily bars — their anchor timestamps
+ * (UTC midnight/noon) sit outside the equity wall-clock window by design; those
+ * go through isRthBar's daily branch instead.
+ */
+export function isRthIntradayBar(bar: { time: string }, ticker?: string): boolean {
   const rawTime = bar.time.includes('T') ? bar.time : bar.time.replace(' ', 'T') + (bar.time.includes('Z') ? '' : 'Z');
   const ms = new Date(rawTime).getTime();
   if (isNaN(ms)) return true;

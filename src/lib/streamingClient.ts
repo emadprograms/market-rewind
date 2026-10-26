@@ -543,7 +543,11 @@ export class StreamingClient {
         timeStr = row.time_str;
       }
 
-      let session = row.session || 'REG';
+      // Preserve the backend's truthful label (including composite 'PRE, REG').
+      // An absent label means "unknown" — never fabricate REG: pre/post-market
+      // bars would then pass every label-based RTH check and leak into the 1D
+      // daily candle. Sessionless bars fall through to wall-clock RTH checks.
+      let session = row.session ? String(row.session) : '';
       const isDailyCandle = tf === '1D' || apiTf === '1d';
       if (isDailyCandle && session === 'PRE' && (Number(row.volume || 0) > 0 || Number(row.tick_count || 0) > 1)) {
         session = 'PRE, REG';
