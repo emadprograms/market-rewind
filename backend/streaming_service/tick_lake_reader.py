@@ -104,6 +104,48 @@ DEFAULT_INTERVAL = "1 minute"
 #: Timeframes whose candles are daily (Regular Trading Hours policy applies).
 DAILY_TIMEFRAMES = frozenset({"1d", "1 day"})
 
+#: Crypto tickers without a '/' or 'USD' substring that still trade around the
+#: clock. Mirrors src/lib/timezones.ts getTzForTicker — keep the two in sync.
+_KNOWN_UTC_TICKERS = frozenset(
+    {"BTC", "ETH", "SOL", "ADA", "XRP", "DOT", "DOGE", "AVAX", "LINK", "LTC"}
+)
+
+#: Wall-clock RTH window for America/New_York session symbols (half-open).
+_RTH_NY_OPEN = "09:30:00"
+_RTH_NY_CLOSE = "16:00:00"
+
+
+def _is_utc_session_symbol(symbol: str) -> bool:
+    """Classifier mirroring the frontend ``getTzForTicker`` heuristic.
+
+    UTC instruments (forex, crypto, indices) trade around the clock and must
+    never pass through the equity RTH wall-clock gate. Everything else is an
+    America/New_York session instrument.
+    """
+    t = (symbol or "").upper()
+    if not t:
+        return True
+    return (
+        "USD" in t
+        or "/" in t
+        or t in _KNOWN_UTC_TICKERS
+        or t.startswith(("^", "/", "="))
+    )
+
+
+def _rth_wallclock_predicate(timestamp_expr: str = "timestamp") -> str:
+    """DuckDB predicate restricting ticks to 09:30 <= ET < 16:00.
+
+    Timestamps are naive UTC; the double ``AT TIME ZONE`` first interprets them
+    as UTC and then renders America/New_York wall time, so DST is handled by
+    DuckDB's bundled tz database.
+    """
+    ny_time = (
+        f"CAST({timestamp_expr} AT TIME ZONE 'UTC' "
+        f"AT TIME ZONE 'America/New_York' AS TIME)"
+    )
+    return f"({ny_time} >= TIME '{_RTH_NY_OPEN}' AND {ny_time} < TIME '{_RTH_NY_CLOSE}')"
+
 #: DuckDB session bounds (contract §4.1 / LAKE-RESAMPLE-01).
 DEFAULT_THREADS = 4
 DEFAULT_MAX_MEMORY = "2GB"
@@ -731,7 +773,10 @@ class TickLakeReader:
         ``direction='desc'`` (or ``end_time`` without ``start_time``) selects the most recent
         ``limit`` buckets; results are always returned in ascending bucket order.
         ``1d`` candles enforce ``session = 'REG'`` unless an explicit session is given
-        (``session='ALL'`` disables the filter).
+        (``session='ALL'`` disables the filter). For America/New_York session symbols the
+        daily path additionally applies a wall-clock 09:30 <= ET < 16:00 predicate, so RTH
+        isolation holds even when ingested session labels are unreliable; UTC instruments
+        (forex/crypto, see ``_is_utc_session_symbol``) aggregate the full day.
         """
         self.ensure_ready()
         normalized = (timeframe or "1m").lower()
@@ -783,6 +828,18 @@ class TickLakeReader:
             if session_filter is not None:
                 where.append("upper(session) = ?")
                 params.append(session_filter)
+            # Wall-clock RTH backstop for daily equity candles. The session
+            # label is only as trustworthy as the ingester: the production
+            # data-harvester lake labels every tick 'REG' (including 04:00-20:00
+            # ET extended hours), so a label-only filter would return a
+            # full-day daily candle. UTC/24h instruments and an explicit
+            # session='ALL' opt out; see LAKE-RESAMPLE-04.
+            if (
+                normalized in DAILY_TIMEFRAMES
+                and session_filter == "REG"
+                and not _is_utc_session_symbol(symbol)
+            ):
+                where.append(_rth_wallclock_predicate())
             if start_dt is not None:
                 where.append("timestamp >= ?")
                 params.append(start_dt)
